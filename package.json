@@ -1,0 +1,16 @@
+{
+  "name": "prevfam",
+  "version": "1.0.0",
+  "description": "App de Previsibilidade Financeira Familiar",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

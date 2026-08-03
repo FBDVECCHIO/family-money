@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAMILY MONEY - Controle Financeiro Familiar</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Supabase Client SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ================= TELA DE SETUP SUPABASE ================= -->
+  <div id="supabase-setup-container" class="fade-in hide">
+    <div class="login-card glass">
+      <div class="login-header">
+        <div class="logo">
+          <i data-lucide="database" class="logo-icon green-neon"></i>
+          <span>FAMILY <span class="green-neon">MONEY</span></span>
+        </div>
+        <p>Configuração de Conexão com o Supabase</p>
+      </div>
+      
+      <form id="setup-form">
+        <div class="form-group">
+          <label for="setup-url">URL do Projeto Supabase</label>
+          <input type="url" id="setup-url" placeholder="https://xxxx.supabase.co" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="setup-key">Anon Key (Chave Pública API)</label>
+          <input type="password" id="setup-key" placeholder="eyJhbGciOiJIUzI1Ni..." required>
+        </div>
+        
+        <button type="submit" class="btn btn-primary btn-block">
+          Salvar e Conectar <i data-lucide="check"></i>
+        </button>
+      </form>
+      <div class="login-footer">
+        <p>Estas credenciais serão salvas de forma segura apenas no seu navegador.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TELA DE LOGIN ================= -->
+  <div id="login-container" class="fade-in">
+    <div class="login-card glass">
+      <div class="login-header">
+        <div class="logo">
+          <i data-lucide="trending-up" class="logo-icon green-neon"></i>
+          <span>FAMILY <span class="green-neon">MONEY</span></span>
+        </div>
+        <p>Controle Financeiro e Previsibilidade Familiar</p>
+      </div>
+      
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">Quem é você?</label>
+          <select id="username" required>
+            <option value="" disabled selected>Selecione seu usuário</option>
+            <option value="fbdv1202@gmail.com">Fábio (Pai)</option>
+            <option value="joycesiqueirafs@gmail.com">Joyce (Mãe)</option>
+            <option value="filha@familia.com">Filha (Beatriz)</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Senha de Acesso</label>
+          <input type="password" id="password" placeholder="Digite sua senha" required>
+        </div>
+        
+        <div id="login-error" class="error-msg hide">Usuário ou senha inválidos.</div>
+        
+        <button type="submit" class="btn btn-primary btn-block">
+          Entrar no Painel <i data-lucide="arrow-right"></i>
+        </button>
+      </form>
+      <div class="login-footer">
+        <p>Dica: A senha padrão inicial de demonstração é <code class="green-neon">123</code></p>
+        <p style="margin-top: 10px;"><a href="#" id="reset-supabase-config-link" style="color: var(--pastel-red); text-decoration: underline; font-size: 0.85rem;">Alterar credenciais de conexão</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CONTAINER PRINCIPAL (APÓS LOGIN) ================= -->
+  <div id="app-container" class="hide">
+    
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo">
+        <i data-lucide="trending-up" class="logo-icon green-neon"></i>
+        <span>FAMILY <span class="green-neon">MONEY</span></span>
+      </div>
+      
+      <nav class="main-nav">
+        <button class="nav-link active" data-tab="dashboard">
+          <i data-lucide="layout-dashboard"></i> Dashboard
+        </button>
+        <button class="nav-link" data-tab="new-tx">
+          <i data-lucide="plus-circle"></i> Novo Lançamento
+        </button>
+        <button class="nav-link" data-tab="admin">
+          <i data-lucide="settings"></i> Administração
+        </button>
+      </nav>
+      
+      <div class="header-profile">
+        <span class="user-badge" id="user-display-name">Carregando...</span>
+        <button id="logout-btn" title="Sair do App">
+          <i data-lucide="log-out"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="app-content">
+      
+      <!-- Lado Esquerdo: Resumo de Contas e Cartões -->
+      <aside class="sidebar-info">
+        
+        <!-- Saldos Bancários -->
+        <section class="info-section glass">
+          <div class="section-header">
+            <h3><i data-lucide="wallet" class="green-neon"></i> Nossas Contas</h3>
+          </div>
+          <div class="accounts-list" id="sidebar-accounts">
+            <!-- Inserido dinamicamente -->
+          </div>
+          <div class="accounts-total">
+            <span>Saldo Líquido Total</span>
+            <span class="amount positive" id="sidebar-total-balance">R$ 0,00</span>
+          </div>
+        </section>
+
+        <!-- Cartões de Crédito -->
+        <section class="info-section glass">
+          <div class="section-header">
+            <h3><i data-lucide="credit-card" class="purple-neon"></i> Cartões de Crédito</h3>
+          </div>
+          <div class="cards-list" id="sidebar-cards">
+            <!-- Inserido dinamicamente -->
+          </div>
+        </section>
+
+      </aside>
+
+      <!-- Lado Direito: Telas Ativas -->
+      <div class="view-container">
+
+        <!-- TELA 1: DASHBOARD -->
+        <div id="view-dashboard" class="tab-view active-view">
+          
+          <!-- Cabeçalho Dashboard -->
+          <div class="view-header">
+            <div>
+              <h2>Previsão para os Próximos 6 Meses</h2>
+              <p class="subtitle text-pastel-purple">Simulação de receitas recorrentes, despesas fixas e parcelamentos de faturas</p>
+            </div>
+            <div class="actions">
+              <button id="export-csv-btn" class="btn btn-outline">
+                <i data-lucide="download"></i> Exportar Lançamentos
+              </button>
+            </div>
+          </div>
+
+          <!-- Cards de Previsão por Mês -->
+          <div class="forecast-grid" id="forecast-cards-container">
+            <!-- Preenchido dinamicamente com 6 meses de projeção -->
+          </div>
+
+          <!-- Detalhamento Inline do Mês Selecionado (Abaixo dos cards) -->
+          <div id="inline-month-detail" class="inline-detail-card glass">
+            <div class="inline-detail-header">
+              <h3 id="inline-month-title">Detalhamento Financeiro - Selecione um mês</h3>
+            </div>
+            
+            <div class="inline-summary-row">
+              <!-- Resumo Geral -->
+              <div class="summary-box glass">
+                <h4>Resumo Mensal Geral</h4>
+                <div class="summary-bar-wrapper">
+                  <div class="summary-bar-row">
+                    <span>Receitas (Entradas):</span>
+                    <span class="green-neon" id="inline-total-income">R$ 0,00</span>
+                  </div>
+                  <div class="summary-bar-row">
+                    <span>Despesas (Saídas):</span>
+                    <span class="red-neon" id="inline-total-expense">R$ 0,00</span>
+                  </div>
+                  <div class="summary-bar-row border-top">
+                    <span>Sobra Líquida:</span>
+                    <span id="inline-total-surplus" class="green-neon">R$ 0,00</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Gasto por Categoria -->
+              <div class="summary-box glass">
+                <h4>Gastos por Categoria</h4>
+                <div class="category-breakdown-list" id="inline-category-breakdown">
+                  <!-- Inserido dinamicamente -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabelas Detalhadas -->
+            <div class="inline-detail-lists">
+              <!-- Faturas de Cartão -->
+              <div class="detail-list-box">
+                <h4><i data-lucide="credit-card" class="red-neon"></i> Faturas de Cartões</h4>
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Cartão</th>
+                        <th>Descrição</th>
+                        <th>Data Compra</th>
+                        <th>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody id="inline-cards-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <!-- Contas e Lançamentos Fixos -->
+              <div class="detail-list-box">
+                <h4><i data-lucide="list" class="green-neon"></i> Contas e Lançamentos Fixos</h4>
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Descrição</th>
+                        <th>Vencimento</th>
+                        <th>Tipo</th>
+                        <th>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody id="inline-fixed-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+          <!-- Gráfico de Tendência e Detalhes -->
+          <div class="dashboard-details-row">
+            <!-- Gráfico de Tendência -->
+            <div class="details-chart-card glass">
+              <h3><i data-lucide="line-chart" class="green-neon"></i> Tendência do Saldo Projetado</h3>
+              <div class="chart-wrapper">
+                <canvas id="projected-trend-chart"></canvas>
+              </div>
+            </div>
+
+            <!-- Resumo e Alertas de Previsibilidade -->
+            <div class="details-summary-card glass">
+              <h3><i data-lucide="alert-triangle" class="purple-neon"></i> Diagnóstico de Previsibilidade</h3>
+              <div class="diagnostic-content" id="diagnostic-box">
+                <!-- Preenchido dinamicamente -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabela de Lançamentos Recentes -->
+          <div class="recent-transactions-card glass">
+            <div class="card-header">
+              <h3><i data-lucide="list" class="green-neon"></i> Últimos Lançamentos Realizados</h3>
+              <div class="search-filter-row">
+                <input type="text" id="tx-search-input" placeholder="Buscar lançamento...">
+                <select id="tx-filter-user">
+                  <option value="">Todos os usuários</option>
+                  <option value="1">Alexandre</option>
+                  <option value="2">Mariana</option>
+                  <option value="3">Beatriz</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Lançamento</th>
+                    <th>Categoria</th>
+                    <th>Quem Lançou</th>
+                    <th>Forma de Pagamento</th>
+                    <th>Parcelamento</th>
+                    <th>Valor</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="transactions-tbody">
+                  <!-- Inserido dinamicamente -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- TELA 2: NOVO LANÇAMENTO -->
+        <div id="view-new-tx" class="tab-view">
+          <div class="view-header">
+            <h2>Novo Lançamento de Gastos / Entradas</h2>
+            <p class="subtitle text-pastel-green">Lançamento rápido e objetivo para controle no dia a dia</p>
+          </div>
+
+          <div class="new-tx-form-wrapper glass">
+            <form id="new-transaction-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="tx-description">Descrição / Estabelecimento</label>
+                  <input type="text" id="tx-description" placeholder="Ex: Supermercado, Posto Ipiranga, Uber" required>
+                </div>
+                <div class="form-group">
+                  <label for="tx-amount">Valor (R$)</label>
+                  <input type="number" step="0.01" id="tx-amount" placeholder="0,00" required>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="tx-date">Data da Compra / Lançamento</label>
+                  <input type="date" id="tx-date" required>
+                </div>
+                <div class="form-group">
+                  <label for="tx-category">Categoria</label>
+                  <select id="tx-category" required>
+                    <!-- Preenchido via API -->
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label>Método de Pagamento</label>
+                  <div class="payment-method-toggle">
+                    <label class="toggle-option active">
+                      <input type="radio" name="tx-payment-method" value="card" checked>
+                      <i data-lucide="credit-card"></i> Cartão de Crédito
+                    </label>
+                    <label class="toggle-option">
+                      <input type="radio" name="tx-payment-method" value="account">
+                      <i data-lucide="wallet"></i> Débito / Pix (Conta)
+                    </label>
+                  </div>
+                </div>
+                
+                <!-- Condicional: Cartão de Crédito -->
+                <div class="form-group" id="card-selection-group">
+                  <label for="tx-card">Qual Cartão de Crédito?</label>
+                  <select id="tx-card">
+                    <!-- Preenchido via API -->
+                  </select>
+                </div>
+
+                <!-- Condicional: Débito em Conta -->
+                <div class="form-group hide" id="account-selection-group">
+                  <label for="tx-account">Qual Conta Bancária?</label>
+                  <select id="tx-account">
+                    <!-- Preenchido via API -->
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row-2" id="installments-row">
+                <div class="form-group">
+                  <label for="tx-installments">Parcelamento (Quantas vezes?)</label>
+                  <select id="tx-installments">
+                    <option value="1" selected>À vista (1x)</option>
+                    <option value="2">2x</option>
+                    <option value="3">3x</option>
+                    <option value="4">4x</option>
+                    <option value="5">5x</option>
+                    <option value="6">6x</option>
+                    <option value="7">7x</option>
+                    <option value="8">8x</option>
+                    <option value="9">9x</option>
+                    <option value="10">10x</option>
+                    <option value="12">12x</option>
+                    <option value="18">18x</option>
+                    <option value="24">24x</option>
+                  </select>
+                </div>
+                <div class="form-group" style="justify-content: flex-end; display: flex; align-items: flex-end;">
+                  <div class="installment-calc-preview" id="installment-preview-text">
+                    Valor da Parcela: <span class="green-neon" id="preview-installment-amount">R$ 0,00</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-submit-row">
+                <button type="submit" class="btn btn-primary">
+                  <i data-lucide="check"></i> Confirmar Lançamento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- TELA 3: ADMINISTRAÇÃO -->
+        <div id="view-admin" class="tab-view">
+          <div class="view-header">
+            <div>
+              <h2>Área Administrativa Familiar</h2>
+              <p class="subtitle text-pastel-purple">Configuração de contas bancárias, cartões, despesas fixas e categorias</p>
+            </div>
+            <div class="actions">
+              <button id="death-button" class="btn btn-death">
+                <i data-lucide="skull"></i> Botão da Morte
+              </button>
+            </div>
+          </div>
+
+
+          <!-- Abas Admin -->
+          <div class="admin-tabs">
+            <button class="admin-tab-btn active" data-admin-tab="admin-accounts">Contas</button>
+            <button class="admin-tab-btn" data-admin-tab="admin-cards">Cartões</button>
+            <button class="admin-tab-btn" data-admin-tab="admin-fixed">Contas Fixas / Recorrentes</button>
+            <button class="admin-tab-btn" data-admin-tab="admin-categories">Categorias</button>
+          </div>
+
+          <!-- SUB-TELA ADMIN: CONTAS -->
+          <div id="admin-accounts" class="admin-tab-content active-admin-content">
+            <div class="admin-grid-layout">
+              <div class="admin-form-side glass">
+                <h3 id="account-form-title">Nova Conta Bancária</h3>
+                <form id="account-form">
+                  <input type="hidden" id="account-id">
+                  <div class="form-group">
+                    <label for="account-name">Nome da Conta / Banco</label>
+                    <input type="text" id="account-name" placeholder="Ex: Itaú Corrente, Nubank Conta" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="account-balance">Saldo Inicial Atual (R$)</label>
+                    <input type="number" step="0.01" id="account-balance" placeholder="0,00" required>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block">Salvar Conta</button>
+                  <button type="button" id="clear-account-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
+                </form>
+              </div>
+              <div class="admin-table-side glass">
+                <h3>Contas Cadastradas</h3>
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Nome / Banco</th>
+                        <th>Saldo Atual</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-accounts-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA ADMIN: CARTÕES -->
+          <div id="admin-cards" class="admin-tab-content">
+            <div class="admin-grid-layout">
+              <div class="admin-form-side glass">
+                <h3 id="card-form-title">Cadastrar Novo Cartão</h3>
+                <form id="card-form">
+                  <input type="hidden" id="card-id">
+                  <div class="form-group">
+                    <label for="card-name">Nome do Cartão</label>
+                    <input type="text" id="card-name" placeholder="Ex: XP Visa, Nubank Roxinho" required>
+                  </div>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="card-closing">Dia de Fechamento</label>
+                      <input type="number" min="1" max="31" id="card-closing" placeholder="Ex: 5" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="card-due">Dia de Vencimento</label>
+                      <input type="number" min="1" max="31" id="card-due" placeholder="Ex: 12" required>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="card-account">Conta de Débito da Fatura</label>
+                    <select id="card-account" required>
+                      <!-- Preenchido via API -->
+                    </select>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block">Salvar Cartão</button>
+                  <button type="button" id="clear-card-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
+                </form>
+              </div>
+              <div class="admin-table-side glass">
+                <h3>Cartões Cadastrados</h3>
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Cartão</th>
+                        <th>Fechamento</th>
+                        <th>Vencimento</th>
+                        <th>Conta para Débito</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-cards-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA ADMIN: CONTAS FIXAS -->
+          <div id="admin-fixed" class="admin-tab-content">
+            <div class="admin-grid-layout">
+              <div class="admin-form-side glass">
+                <h3 id="fixed-form-title">Nova Receita/Despesa Fixa</h3>
+                <form id="fixed-form">
+                  <input type="hidden" id="fixed-id">
+                  <div class="form-group">
+                    <label for="fixed-desc">Descrição do Item</label>
+                    <input type="text" id="fixed-desc" placeholder="Ex: Aluguel, Salário, Internet" required>
+                  </div>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="fixed-amount">Valor (R$)</label>
+                      <input type="number" step="0.01" id="fixed-amount" placeholder="0,00" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="fixed-day">Dia de Vencimento</label>
+                      <input type="number" min="1" max="31" id="fixed-day" placeholder="Ex: 10" required>
+                    </div>
+                  </div>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="fixed-type">Tipo de Lançamento</label>
+                      <select id="fixed-type" required>
+                        <option value="expense">Despesa Fixa (Saída)</option>
+                        <option value="income">Receita Recorrente (Entrada)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="fixed-category">Categoria</label>
+                      <select id="fixed-category">
+                        <option value="" selected>Sem Categoria (Receitas)</option>
+                        <!-- Preenchido via API -->
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="fixed-account">Conta Associada</label>
+                    <select id="fixed-account" required>
+                      <!-- Preenchido via API -->
+                    </select>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block">Salvar Item Fixo</button>
+                  <button type="button" id="clear-fixed-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
+                </form>
+              </div>
+              <div class="admin-table-side glass">
+                <h3>Contas Fixas Cadastradas</h3>
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Descrição</th>
+                        <th>Valor</th>
+                        <th>Dia</th>
+                        <th>Tipo</th>
+                        <th>Categoria</th>
+                        <th>Conta</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-fixed-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA ADMIN: CATEGORIAS -->
+          <div id="admin-categories" class="admin-tab-content">
+            <div class="admin-grid-layout">
+              <div class="admin-form-side glass">
+                <h3 id="category-form-title">Nova Categoria</h3>
+                <form id="category-form">
+                  <input type="hidden" id="category-id">
+                  <div class="form-group">
+                    <label for="category-name">Nome da Categoria</label>
+                    <input type="text" id="category-name" placeholder="Ex: Alimentação, Viagem" required>
+                  </div>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="category-icon">Ícone Lucide</label>
+                      <select id="category-icon">
+                        <option value="home">Casa (home)</option>
+                        <option value="shopping-cart" selected>Mercado (shopping-cart)</option>
+                        <option value="car">Carro (car)</option>
+                        <option value="activity">Saúde (activity)</option>
+                        <option value="book-open">Educação (book-open)</option>
+                        <option value="smile">Lazer (smile)</option>
+                        <option value="credit-card">Cartão (credit-card)</option>
+                        <option value="tv">Assinatura (tv)</option>
+                        <option value="help-circle">Outro (help-circle)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="category-color">Cor Hex</label>
+                      <input type="color" id="category-color" value="#8b5cf6">
+                    </div>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block">Salvar Categoria</button>
+                  <button type="button" id="clear-category-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
+                </form>
+              </div>
+              <div class="admin-table-side glass">
+                <h3>Categorias Cadastradas</h3>
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Categoria</th>
+                        <th>Cor</th>
+                        <th>Ícone</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-categories-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
