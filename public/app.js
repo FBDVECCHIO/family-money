@@ -928,6 +928,10 @@ function renderAdminTables() {
       `;
     }).join('');
   }
+
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
 }
 
 async function deleteTransaction(id) {

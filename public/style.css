@@ -1,11 +1,11 @@
 /* ================= SISTEMA DE CORES E VARIÁVEIS ================= */
 :root {
-  /* Cores Base Escuras (Sólidos) */
-  --bg-main: #0c0c0e; /* Preto suave/carbono */
+  /* Cores Base (Sólidos) */
+  --bg-main: #f3f4f6; /* Cinza claro suave */
   --bg-card: #18181b; /* Cinza escuro médio (Zinc-900) */
-  --bg-card-hover: #27272a; /* Cinza mais claro (Zinc-800) */
+  --bg-card-hover: #222226; /* Cinza escuro card hover */
   --bg-input: #27272a; /* Cinza input */
-  --border-color: rgba(255, 255, 255, 0.1); /* Borda branca suave */
+  --border-color: rgba(255, 255, 255, 0.08); /* Borda branca suave */
   
   /* Cores de Destaque */
   --neon-green: #ffffff; /* Branco puro */
@@ -17,8 +17,8 @@
   --neon-red-glow: 0 0 8px rgba(255, 59, 48, 0.3);
   
   /* Tons Pastéis e Auxiliares */
-  --pastel-purple: #d4d4d8; /* Cinza claro/prata */
-  --pastel-green: #f4f4f5; /* Branco suave */
+  --pastel-purple: #a1a1aa; /* Cinza médio para subtítulos */
+  --pastel-green: #ffffff; /* Branco suave */
   --pastel-red: #fda4af; /* Vermelho pastel suave para alertas */
   --pastel-text: #f4f4f5; /* Texto claro */
   --text-muted: #71717a; /* Cinza escuro para textos secundários */
@@ -29,9 +29,9 @@
   
   /* Fontes e Sombras */
   --font-family: 'Outfit', sans-serif;
-  --shadow-glow-purple: 0 0 10px rgba(255, 255, 255, 0.1);
-  --shadow-glow-green: 0 0 10px rgba(255, 255, 255, 0.15);
-  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.7);
+  --shadow-glow-purple: 0 0 10px rgba(0, 0, 0, 0.05);
+  --shadow-glow-green: 0 0 10px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
   --radius: 12px;
   --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -52,11 +52,8 @@ html {
 
 body {
   background-color: var(--bg-main);
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
-  background-attachment: fixed;
-  color: #f3f4f6;
+  background-image: none;
+  color: #18181b;
   font-family: var(--font-family);
   line-height: 1.5;
   min-height: 100vh;
@@ -79,9 +76,9 @@ button, input, select {
   display: none !important;
 }
 
-/* Glassmorphism */
+/* Glassmorphism / Dark Cards */
 .glass {
-  background: rgba(13, 7, 28, 0.7);
+  background: #18181b; /* Cinza escuro sólido */
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
@@ -294,7 +291,7 @@ button, input, select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(13, 7, 28, 0.85);
+  background: #18181b; /* Cinza escuro sólido */
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border-color);
   padding: 16px 40px;
@@ -1434,4 +1431,40 @@ tr:hover td {
   gap: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   padding-bottom: 8px;
+}
+
+/* ================= CONTEXTO DE CONTRASTE (TEXTOS CLAROS EM CARDS ESCUROS, TEXTOS ESCUROS NO FUNDO CLARO) ================= */
+
+/* Cabeçalhos e subtítulos das telas que ficam no fundo cinza claro */
+.view-header h2,
+.view-header p.subtitle,
+.admin-tab-btn,
+.view-container > div > h2,
+.view-container > div > p {
+  color: #1e293b !important;
+}
+
+.view-header p.subtitle {
+  color: #52525b !important;
+}
+
+.admin-tab-btn {
+  color: #71717a !important;
+}
+
+.admin-tab-btn:hover {
+  color: #09090b !important;
+}
+
+.admin-tab-btn.active {
+  color: #18181b !important;
+  border-bottom-color: #18181b !important;
+}
+
+/* Forçar textos de cards glass, sidebar e modals a continuarem brancos/claros */
+.glass, .glass h1, .glass h2, .glass h3, .glass h4, .glass p, .glass span, .glass td, .glass th, .glass label, .glass code,
+.app-header, .app-header span, .app-header a, .app-header button,
+.main-nav button, .main-nav span,
+.modal-content, .modal-content h1, .modal-content h2, .modal-content h3, .modal-content h4, .modal-content p, .modal-content span, .modal-content td, .modal-content th, .modal-content label {
+  color: #f4f4f5;
 }
