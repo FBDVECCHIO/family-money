@@ -439,6 +439,7 @@
             <button class="admin-tab-btn" data-admin-tab="admin-fixed">Contas Fixas / Recorrentes</button>
             <button class="admin-tab-btn" data-admin-tab="admin-categories">Categorias</button>
             <button class="admin-tab-btn" data-admin-tab="admin-users">Usuários</button>
+            <button class="admin-tab-btn" data-admin-tab="admin-backups">Backups</button>
           </div>
 
           <!-- SUB-TELA ADMIN: CONTAS -->
@@ -696,6 +697,38 @@
                       </tr>
                     </thead>
                     <tbody id="admin-users-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA ADMIN: BACKUPS -->
+          <div id="admin-backups" class="admin-tab-content">
+            <div class="admin-grid-layout" style="grid-template-columns: 1fr;">
+              <div class="glass" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                  <div>
+                    <h3>Backups e Histórico de Restauração</h3>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Os backups diários são gerados automaticamente. Você também pode forçar a geração de um backup agora.</p>
+                  </div>
+                  <button id="create-backup-btn" class="btn btn-primary" style="width: auto; padding: 10px 20px;">
+                    <i data-lucide="database"></i> Gerar Backup Agora
+                  </button>
+                </div>
+                
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Data do Backup</th>
+                        <th>Horário</th>
+                        <th>Status</th>
+                        <th>Ações / Restauração</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-backups-tbody">
                       <!-- Inserido dinamicamente -->
                     </tbody>
                   </table>

