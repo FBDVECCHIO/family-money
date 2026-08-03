@@ -1073,21 +1073,193 @@ tr:hover td {
 }
 
 @media (max-width: 600px) {
+  /* Reduzir o espaçamento geral */
+  html {
+    font-size: 14px; /* Reduz fonte mais 1px no mobile para compactar */
+  }
+  
+  .container {
+    padding: 10px !important;
+  }
+  
+  .app-header {
+    padding: 10px !important;
+    gap: 8px !important;
+  }
+  
+  .logo span {
+    font-size: 1.1rem !important;
+  }
+  
+  .main-nav {
+    gap: 4px !important;
+    margin-top: 5px;
+  }
+  
+  .nav-link {
+    padding: 6px 10px !important;
+    font-size: 0.8rem !important;
+    border-radius: 8px !important;
+  }
+  
+  .nav-link i {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  
+  /* Cards de Previsão Compactos */
+  .forecast-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  
+  .forecast-card {
+    padding: 12px !important;
+    border-radius: 12px !important;
+  }
+  
+  .forecast-month-label {
+    font-size: 0.95rem !important;
+    margin-bottom: 8px !important;
+  }
+  
+  .forecast-values {
+    gap: 6px !important;
+  }
+  
+  .forecast-val-row {
+    font-size: 0.82rem !important;
+  }
+  
+  .forecast-card-sobra {
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+    font-size: 0.9rem !important;
+  }
+  
+  .forecast-card-projected {
+    margin-top: 4px !important;
+    font-size: 0.78rem !important;
+  }
+
+  /* Detalhamento Inline Compacto */
+  .inline-detail-card {
+    padding: 12px !important;
+    border-radius: 12px !important;
+    margin-top: 15px !important;
+    margin-bottom: 15px !important;
+  }
+  
+  .inline-detail-header {
+    margin-bottom: 12px !important;
+    padding-bottom: 8px !important;
+  }
+  
+  .inline-detail-header h3 {
+    font-size: 1.05rem !important;
+  }
+  
+  .inline-summary-row {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    margin-bottom: 15px !important;
+  }
+  
+  .summary-box {
+    padding: 12px !important;
+    border-radius: 10px !important;
+  }
+  
+  .summary-box h4 {
+    font-size: 0.88rem !important;
+    margin-bottom: 10px !important;
+    padding-bottom: 6px !important;
+  }
+  
+  .summary-bar-row {
+    font-size: 0.82rem !important;
+    margin-bottom: 8px !important;
+  }
+  
+  .category-progress-item {
+    gap: 2px !important;
+  }
+  
+  .category-progress-labels {
+    font-size: 0.78rem !important;
+  }
+  
+  .category-progress-bar-bg {
+    height: 6px !important;
+  }
+
+  .inline-detail-lists {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+  }
+  
+  .detail-list-box {
+    padding: 12px !important;
+    border-radius: 10px !important;
+  }
+  
+  .detail-list-box h4 {
+    font-size: 0.88rem !important;
+    margin-bottom: 10px !important;
+    padding-bottom: 6px !important;
+  }
+  
+  /* Tabelas Responsivas de Banco */
+  th, td {
+    padding: 8px 6px !important;
+    font-size: 0.78rem !important;
+  }
+  
+  .table-responsive {
+    border-radius: 8px !important;
+  }
+  
+  /* Sidebar/Topo no celular */
+  .sidebar-info {
+    gap: 10px !important;
+    margin-bottom: 15px !important;
+  }
+  
+  .info-section {
+    padding: 12px !important;
+    border-radius: 12px !important;
+  }
+  
+  .info-section h3 {
+    font-size: 0.82rem !important;
+    margin-bottom: 8px !important;
+  }
+  
+  .total-balance-box .amount {
+    font-size: 1.4rem !important;
+  }
+  
+  .account-item {
+    padding: 6px 0 !important;
+    font-size: 0.82rem !important;
+  }
+  
+  .card-item {
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+  
+  .card-item-name {
+    font-size: 0.82rem !important;
+  }
+
   .form-row-2 {
     grid-template-columns: 1fr;
     gap: 15px;
   }
+  
   .modal-summary-badges {
     grid-template-columns: 1fr 1fr;
-  }
-  .forecast-grid {
-    grid-template-columns: 1fr !important;
-  }
-  .inline-summary-row {
-    grid-template-columns: 1fr;
-  }
-  .inline-detail-lists {
-    grid-template-columns: 1fr;
   }
 }
 

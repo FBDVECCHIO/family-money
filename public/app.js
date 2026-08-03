@@ -34,12 +34,12 @@ function formatDate(dateStr) {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
-// ================= CONEXÃO COM O SUPABASE =================
+// ================= CONEXÃO COM O SUPABASE (FIXADA) =================
+const HARDCODED_SB_URL = 'https://bfsliahvbzddlminbpdq.supabase.co';
+const HARDCODED_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmc2xpYWh2YnpkZGxtaW5icGRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3ODE3NTcsImV4cCI6MjEwMTM1Nzc1N30.foGxWytjJLG7TJ66moq3EkPrlYsq0fvZeO5z83ber8c';
+
 function getSupabaseConfig() {
-  const url = localStorage.getItem('familymoney_sb_url');
-  const key = localStorage.getItem('familymoney_sb_key');
-  if (url && key) return { url, key };
-  return null;
+  return { url: HARDCODED_SB_URL, key: HARDCODED_SB_KEY };
 }
 
 function initSupabase() {
@@ -1018,15 +1018,7 @@ document.getElementById('setup-form').addEventListener('submit', async (e) => {
   }
 });
 
-// Alterar credenciais link
-document.getElementById('reset-supabase-config-link').addEventListener('click', (e) => {
-  e.preventDefault();
-  if (confirm('Deseja realmente limpar as credenciais de conexão do Supabase?')) {
-    localStorage.removeItem('familymoney_sb_url');
-    localStorage.removeItem('familymoney_sb_key');
-    logout();
-  }
-});
+
 
 // Submit Login via Supabase Auth
 document.getElementById('login-form').addEventListener('submit', async (e) => {
