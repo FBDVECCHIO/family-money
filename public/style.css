@@ -1,39 +1,39 @@
 /* ================= SISTEMA DE CORES E VARIÁVEIS ================= */
 :root {
   /* Cores Base Escuras (Sólidos) */
-  --bg-main: #06020d;
-  --bg-card: #0d071c;
-  --bg-card-hover: #150b2c;
-  --bg-input: #1b1233;
-  --border-color: rgba(168, 85, 247, 0.15);
+  --bg-main: #0c0c0e; /* Preto suave/carbono */
+  --bg-card: #18181b; /* Cinza escuro médio (Zinc-900) */
+  --bg-card-hover: #27272a; /* Cinza mais claro (Zinc-800) */
+  --bg-input: #27272a; /* Cinza input */
+  --border-color: rgba(255, 255, 255, 0.1); /* Borda branca suave */
   
-  /* Cores de Destaque Neon */
-  --neon-green: #39ff14;
-  --neon-green-dim: #10b981;
-  --neon-purple: #c084fc;
-  --neon-purple-bright: #bc13fe;
-  --neon-red: #ff3b30;
+  /* Cores de Destaque */
+  --neon-green: #ffffff; /* Branco puro */
+  --neon-green-dim: #e4e4e7; /* Cinza claro */
+  --neon-purple: #a1a1aa; /* Cinza médio */
+  --neon-purple-bright: #ffffff; /* Branco puro */
+  --neon-red: #ff3b30; /* Mantém vermelho para alertas financeiros */
   --neon-red-dim: #ef4444;
-  --neon-red-glow: 0 0 8px rgba(255, 59, 48, 0.5);
+  --neon-red-glow: 0 0 8px rgba(255, 59, 48, 0.3);
   
-  /* Tons Pastéis */
-  --pastel-purple: #d8b4fe;
-  --pastel-green: #a7f3d0;
-  --pastel-red: #fca5a5;
-  --pastel-text: #e9d5ff;
-  --text-muted: #9ca3af;
+  /* Tons Pastéis e Auxiliares */
+  --pastel-purple: #d4d4d8; /* Cinza claro/prata */
+  --pastel-green: #f4f4f5; /* Branco suave */
+  --pastel-red: #fda4af; /* Vermelho pastel suave para alertas */
+  --pastel-text: #f4f4f5; /* Texto claro */
+  --text-muted: #71717a; /* Cinza escuro para textos secundários */
   
   /* Status */
-  --color-positive: #10b981;
+  --color-positive: #ffffff;
   --color-negative: #ff3b30;
   
   /* Fontes e Sombras */
   --font-family: 'Outfit', sans-serif;
-  --shadow-glow-purple: 0 0 15px rgba(188, 19, 254, 0.35);
-  --shadow-glow-green: 0 0 15px rgba(57, 255, 20, 0.35);
-  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-  --radius: 16px;
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-glow-purple: 0 0 10px rgba(255, 255, 255, 0.1);
+  --shadow-glow-green: 0 0 10px rgba(255, 255, 255, 0.15);
+  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.7);
+  --radius: 12px;
+  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ================= RESET & BASE ================= */
@@ -91,18 +91,18 @@ button, input, select {
 }
 
 .glass:hover {
-  border-color: rgba(168, 85, 247, 0.3);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* Neons */
 .green-neon {
   color: var(--neon-green) !important;
-  text-shadow: 0 0 8px rgba(57, 255, 20, 0.5);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
 }
 
 .purple-neon {
   color: var(--neon-purple-bright) !important;
-  text-shadow: 0 0 8px rgba(188, 19, 254, 0.5);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
 }
 
 .red-neon {
@@ -144,23 +144,25 @@ button, input, select {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #8b5cf6, #10b981);
-  color: #fff;
+  background: #ffffff;
+  color: #000000;
   font-weight: 600;
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
+  background: #e4e4e7;
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
 }
 
 .btn-outline {
   background: transparent;
   border: 1px solid var(--border-color);
+  color: #ffffff;
 }
 
 .btn-outline:hover {
-  background: rgba(168, 85, 247, 0.1);
+  background: rgba(255, 255, 255, 0.05);
   border-color: var(--neon-purple);
 }
 
@@ -196,8 +198,8 @@ button, input, select {
   width: 100%;
   max-width: 420px;
   padding: 40px 30px;
-  border: 1px solid rgba(168, 85, 247, 0.25);
-  box-shadow: 0 0 30px rgba(188, 19, 254, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
 }
 
 .login-header {
@@ -313,7 +315,7 @@ button, input, select {
 
 .nav-link {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   padding: 10px 20px;
   font-size: 0.95rem;
   font-weight: 500;
@@ -326,20 +328,28 @@ button, input, select {
   color: var(--text-muted);
 }
 
-.nav-link svg {
+.nav-link svg, .nav-logout-btn svg {
   width: 18px;
   height: 18px;
 }
 
 .nav-link:hover {
   color: #fff;
-  background: rgba(168, 85, 247, 0.1);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .nav-link.active {
   color: #fff;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(16, 185, 129, 0.2));
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.nav-text-mobile {
+  display: none;
+}
+
+.nav-logout-btn {
+  display: none;
 }
 
 .header-profile {
@@ -1073,86 +1083,163 @@ tr:hover td {
 }
 
 @media (max-width: 600px) {
-  /* Reduzir o espaçamento geral */
+  /* Otimizar todas as fontes do celular para 8px */
   html {
-    font-size: 14px; /* Reduz fonte mais 1px no mobile para compactar */
+    font-size: 8px !important;
+  }
+  
+  body, p, span, td, th, input, select, button, label, .nav-link, .user-badge, .account-item, .card-item-name {
+    font-size: 8px !important;
+  }
+  
+  body {
+    padding-bottom: 70px !important; /* Espaço para o menu inferior fixo */
   }
   
   .container {
-    padding: 10px !important;
+    padding: 8px !important;
   }
   
+  /* Top Header Compacto (Apenas Logo e Usuário) */
   .app-header {
-    padding: 10px !important;
-    gap: 8px !important;
+    padding: 8px !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 0 !important;
+    position: relative !important;
   }
   
   .logo span {
     font-size: 1.1rem !important;
   }
   
+  .header-profile {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  
+  #logout-btn {
+    display: none !important; /* Esconde o botão de logout de cima no celular */
+  }
+  
+  /* Menu Inferior Fixo em Destaque */
   .main-nav {
-    gap: 4px !important;
-    margin-top: 5px;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    background: #111113 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important; /* 4 Colunas */
+    padding: 6px 0 !important;
+    margin-top: 0 !important;
+    z-index: 9999 !important;
+    box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.6) !important;
+    border-radius: 0 !important;
   }
   
+  /* Botões do Menu Inferior */
   .nav-link {
-    padding: 6px 10px !important;
-    font-size: 0.8rem !important;
-    border-radius: 8px !important;
+    flex-direction: column !important;
+    gap: 3px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 6px 0 !important;
+    color: var(--text-muted) !important;
+    border-radius: 0 !important;
+    width: 100% !important;
   }
   
-  .nav-link i {
-    width: 14px !important;
-    height: 14px !important;
+  .nav-link.active {
+    color: #ffffff !important;
+    background: transparent !important;
+    border: none !important;
+  }
+  
+  .nav-link i, .nav-logout-btn i {
+    width: 16px !important;
+    height: 16px !important;
+  }
+  
+  /* Exibição de Textos Otimizados para Celular */
+  .nav-text-desktop {
+    display: none !important; /* Oculta textos de desktop */
+  }
+  
+  .nav-text-mobile {
+    display: inline-block !important; /* Mostra "Dash" e "Adm" */
+  }
+  
+  /* Botão de Logout Fixo no Rodapé do Celular */
+  .nav-logout-btn {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: none !important;
+    color: var(--text-muted) !important;
+    padding: 6px 0 !important;
+    width: 100% !important;
+    cursor: pointer !important;
+  }
+  
+  .nav-logout-btn:active {
+    color: var(--neon-red) !important;
   }
   
   /* Cards de Previsão Compactos */
   .forecast-grid {
     grid-template-columns: 1fr !important;
-    gap: 10px !important;
+    gap: 8px !important;
   }
   
   .forecast-card {
-    padding: 12px !important;
-    border-radius: 12px !important;
+    padding: 10px !important;
+    border-radius: 8px !important;
   }
   
   .forecast-month-label {
-    font-size: 0.95rem !important;
-    margin-bottom: 8px !important;
+    font-size: 1rem !important;
+    margin-bottom: 6px !important;
   }
   
   .forecast-values {
-    gap: 6px !important;
+    gap: 4px !important;
   }
   
   .forecast-val-row {
-    font-size: 0.82rem !important;
+    font-size: 0.85rem !important;
   }
   
   .forecast-card-sobra {
-    margin-top: 8px !important;
-    padding-top: 8px !important;
+    margin-top: 6px !important;
+    padding-top: 6px !important;
     font-size: 0.9rem !important;
   }
   
   .forecast-card-projected {
     margin-top: 4px !important;
-    font-size: 0.78rem !important;
+    font-size: 0.8rem !important;
   }
 
   /* Detalhamento Inline Compacto */
   .inline-detail-card {
-    padding: 12px !important;
-    border-radius: 12px !important;
-    margin-top: 15px !important;
-    margin-bottom: 15px !important;
+    padding: 10px !important;
+    border-radius: 8px !important;
+    margin-top: 10px !important;
+    margin-bottom: 10px !important;
   }
   
   .inline-detail-header {
-    margin-bottom: 12px !important;
-    padding-bottom: 8px !important;
+    margin-bottom: 10px !important;
+    padding-bottom: 6px !important;
   }
   
   .inline-detail-header h3 {
@@ -1161,24 +1248,24 @@ tr:hover td {
   
   .inline-summary-row {
     grid-template-columns: 1fr !important;
-    gap: 10px !important;
-    margin-bottom: 15px !important;
+    gap: 8px !important;
+    margin-bottom: 10px !important;
   }
   
   .summary-box {
-    padding: 12px !important;
-    border-radius: 10px !important;
+    padding: 10px !important;
+    border-radius: 8px !important;
   }
   
   .summary-box h4 {
     font-size: 0.88rem !important;
-    margin-bottom: 10px !important;
-    padding-bottom: 6px !important;
+    margin-bottom: 8px !important;
+    padding-bottom: 4px !important;
   }
   
   .summary-bar-row {
     font-size: 0.82rem !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 6px !important;
   }
   
   .category-progress-item {
@@ -1195,67 +1282,61 @@ tr:hover td {
 
   .inline-detail-lists {
     grid-template-columns: 1fr !important;
-    gap: 15px !important;
+    gap: 10px !important;
   }
   
   .detail-list-box {
-    padding: 12px !important;
-    border-radius: 10px !important;
+    padding: 10px !important;
+    border-radius: 8px !important;
   }
   
   .detail-list-box h4 {
     font-size: 0.88rem !important;
-    margin-bottom: 10px !important;
-    padding-bottom: 6px !important;
+    margin-bottom: 8px !important;
+    padding-bottom: 4px !important;
   }
   
-  /* Tabelas Responsivas de Banco */
+  /* Tabelas Responsivas */
   th, td {
-    padding: 8px 6px !important;
-    font-size: 0.78rem !important;
+    padding: 6px 4px !important;
   }
   
   .table-responsive {
-    border-radius: 8px !important;
+    border-radius: 6px !important;
   }
   
-  /* Sidebar/Topo no celular */
+  /* Sidebar/Topo */
   .sidebar-info {
-    gap: 10px !important;
-    margin-bottom: 15px !important;
+    gap: 8px !important;
+    margin-bottom: 10px !important;
   }
   
   .info-section {
-    padding: 12px !important;
-    border-radius: 12px !important;
+    padding: 10px !important;
+    border-radius: 8px !important;
   }
   
   .info-section h3 {
     font-size: 0.82rem !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 6px !important;
   }
   
   .total-balance-box .amount {
-    font-size: 1.4rem !important;
+    font-size: 1.3rem !important;
   }
   
   .account-item {
-    padding: 6px 0 !important;
-    font-size: 0.82rem !important;
+    padding: 4px 0 !important;
   }
   
   .card-item {
-    padding: 10px !important;
-    border-radius: 10px !important;
-  }
-  
-  .card-item-name {
-    font-size: 0.82rem !important;
+    padding: 8px !important;
+    border-radius: 8px !important;
   }
 
   .form-row-2 {
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 12px;
   }
   
   .modal-summary-badges {

@@ -1041,10 +1041,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     errorMsg.textContent = 'Erro ao fazer login: ' + err.message;
     errorMsg.classList.remove('hide');
   }
-});
-
-// Logout click
+// Logout click (Desktop & Mobile)
 document.getElementById('logout-btn').addEventListener('click', logout);
+const logoutBtnMobile = document.getElementById('logout-btn-mobile');
+if (logoutBtnMobile) {
+  logoutBtnMobile.addEventListener('click', logout);
+}
 
 // Abas Principais
 document.querySelectorAll('.nav-link').forEach(btn => {
