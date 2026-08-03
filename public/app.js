@@ -1,6 +1,5 @@
 // FAMILY MONEY - Lógica de Negócio do Cliente com Supabase (SPA)
 
-// ================= ESTADO GLOBAL =================
 let state = {
   supabase: null,
   session: null,
@@ -13,8 +12,9 @@ let state = {
   forecast: [],
   trendChart: null,
   activeTab: 'dashboard',
+  users: [],
   editingEntity: {
-    type: null, // 'account', 'card', 'fixed', 'category'
+    type: null,
     id: null
   }
 };
@@ -52,6 +52,34 @@ function initSupabase() {
 }
 
 // ================= CONTROLE DE PÁGINAS E AUTENTICAÇÃO =================
+async function loadUsersOnly() {
+  if (!state.supabase) return;
+  try {
+    const { data, error } = await state.supabase.from('app_users').select('*').order('name');
+    if (error) throw error;
+    state.users = data;
+  } catch (err) {
+    console.warn('Erro ao carregar usuários (usando fallback local):', err);
+    state.users = [
+      { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123' },
+      { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123' },
+      { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123' }
+    ];
+  }
+  
+  // Renderizar o select dropdown do login
+  const emailSelect = document.getElementById('username');
+  if (emailSelect) {
+    emailSelect.innerHTML = '<option value="" disabled selected>Selecione seu usuário</option>';
+    state.users.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.email;
+      opt.textContent = u.name;
+      emailSelect.appendChild(opt);
+    });
+  }
+}
+
 async function initApp() {
   const hasConfig = initSupabase();
   
@@ -66,34 +94,28 @@ async function initApp() {
 
   document.getElementById('supabase-setup-container').classList.add('hide');
 
-  // Verificar sessão ativa
-  const { data: { session } } = await state.supabase.auth.getSession();
-  state.session = session;
+  // Verificar sessão ativa localmente
+  const activeUserEmail = localStorage.getItem('familymoney_user_email');
+  const activeUserName = localStorage.getItem('familymoney_user_name');
 
-  if (session) {
-    state.user = session.user;
+  if (activeUserEmail && activeUserName) {
+    state.user = { email: activeUserEmail, name: activeUserName };
     document.getElementById('login-container').classList.add('hide');
     document.getElementById('app-container').classList.remove('hide');
     
-    // Nome a exibir no painel: usa o email ou o metadata
-    const displayName = state.user.email === 'fbdv1202@gmail.com' ? 'Fábio (Pai)' :
-                        state.user.email === 'joycesiqueirafs@gmail.com' ? 'Joyce (Mãe)' :
-                        state.user.email === 'filha@familia.com' ? 'Filha (Beatriz)' : 
-                        state.user.email;
-                        
-    document.getElementById('user-display-name').textContent = displayName;
+    document.getElementById('user-display-name').textContent = activeUserName;
     loadAllData();
   } else {
     document.getElementById('login-container').classList.remove('hide');
     document.getElementById('app-container').classList.add('hide');
+    await loadUsersOnly();
   }
   lucide.createIcons();
 }
 
 async function logout() {
-  if (state.supabase) {
-    await state.supabase.auth.signOut();
-  }
+  localStorage.removeItem('familymoney_user_email');
+  localStorage.removeItem('familymoney_user_name');
   state.session = null;
   state.user = null;
   if (state.trendChart) {
@@ -128,6 +150,19 @@ async function loadAllData() {
     state.categories = categoriesRes.data;
     state.fixedItems = fixedRes.data;
     state.transactions = transactionsRes.data;
+
+    try {
+      const { data, error } = await state.supabase.from('app_users').select('*').order('name');
+      if (error) throw error;
+      state.users = data;
+    } catch (err) {
+      console.warn('Erro ao carregar usuários em loadAllData (tabela pode não existir):', err);
+      state.users = state.users.length ? state.users : [
+        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123' },
+        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123' },
+        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123' }
+      ];
+    }
 
     // Calcular a previsão de 6 meses no lado do cliente
     const forecastResult = calculateForecast(state.accounts, state.cards, state.fixedItems, state.transactions);
@@ -811,9 +846,23 @@ function renderAdminTables() {
       </td>
     </tr>
   `).join('');
-}
 
-// ================= SUPABASE CRUD OPERATORS =================
+  // Usuários
+  const usersTbody = document.getElementById('admin-users-tbody');
+  if (usersTbody) {
+    usersTbody.innerHTML = state.users.map(u => `
+      <tr>
+        <td style="font-weight: 500;">${u.name}</td>
+        <td><code>${u.email}</code></td>
+        <td><code>${u.password}</code></td>
+        <td>
+          <button class="btn-edit" onclick="editUser(${u.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+          <button class="btn-delete" onclick="deleteUser(${u.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+        </td>
+      </tr>
+    `).join('');
+  }
+}
 async function deleteTransaction(id) {
   if (!confirm('Deseja realmente remover esta transação? Isso reajustará os saldos.')) return;
   try {
@@ -982,6 +1031,47 @@ function clearCategoryForm() {
   state.editingEntity = { type: null, id: null };
 }
 
+function editUser(id) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+
+  document.getElementById('user-id').value = u.id;
+  document.getElementById('user-name').value = u.name;
+  document.getElementById('user-email').value = u.email;
+  document.getElementById('user-password').value = u.password;
+
+  document.getElementById('user-form-title').textContent = 'Editar Usuário';
+  document.getElementById('clear-user-form-btn').classList.remove('hide');
+  state.editingEntity = { type: 'user', id: u.id };
+}
+
+function clearUserForm() {
+  document.getElementById('user-id').value = '';
+  document.getElementById('user-form').reset();
+  document.getElementById('user-form-title').textContent = 'Cadastrar Novo Usuário';
+  document.getElementById('clear-user-form-btn').classList.add('hide');
+  state.editingEntity = { type: null, id: null };
+}
+
+async function deleteUser(id) {
+  if (!confirm('Excluir este usuário?')) return;
+  
+  const userToDelete = state.users.find(u => u.id === id);
+  if (userToDelete && userToDelete.email === localStorage.getItem('familymoney_user_email')) {
+    alert('Você não pode excluir o usuário que está logado atualmente!');
+    return;
+  }
+
+  try {
+    const { error } = await state.supabase.from('app_users').delete().eq('id', id);
+    if (error) throw error;
+    loadAllData();
+  } catch (err) {
+    state.users = state.users.filter(u => u.id !== id);
+    renderAdminTables();
+  }
+}
+
 // ================= SUBMISSÃO DE FORMULÁRIOS =================
 
 // Submit Setup Supabase
@@ -1020,7 +1110,7 @@ document.getElementById('setup-form').addEventListener('submit', async (e) => {
 
 
 
-// Submit Login via Supabase Auth
+// Submit Login via Custom Users Table
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const emailSelect = document.getElementById('username');
@@ -1029,18 +1119,23 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 
   errorMsg.classList.add('hide');
 
-  try {
-    const { data, error } = await state.supabase.auth.signInWithPassword({
-      email: emailSelect.value,
-      password: passwordInput.value
-    });
+  const selectedEmail = emailSelect.value;
+  const typedPassword = passwordInput.value;
 
-    if (error) throw error;
+  const foundUser = state.users.find(u => u.email === selectedEmail && u.password === typedPassword);
+
+  if (foundUser) {
+    localStorage.setItem('familymoney_user_email', foundUser.email);
+    localStorage.setItem('familymoney_user_name', foundUser.name);
+    
+    errorMsg.classList.add('hide');
+    passwordInput.value = '';
     initApp();
-  } catch (err) {
-    errorMsg.textContent = 'Erro ao fazer login: ' + err.message;
+  } else {
+    errorMsg.textContent = 'Senha incorreta para o usuário selecionado.';
     errorMsg.classList.remove('hide');
   }
+});
 // Logout click (Desktop & Mobile)
 document.getElementById('logout-btn').addEventListener('click', logout);
 const logoutBtnMobile = document.getElementById('logout-btn-mobile');
@@ -1141,7 +1236,7 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       card_id: paymentMethod === 'card' ? parseInt(cardId) : null,
       installments: paymentMethod === 'card' ? parseInt(installments) : 1,
       account_id: paymentMethod === 'account' ? parseInt(accountId) : null,
-      user_id: state.user ? state.user.id : null
+      user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
     };
 
     const { error: insertError } = await state.supabase.from('transactions').insert([newTx]);
@@ -1280,6 +1375,38 @@ document.getElementById('category-form').addEventListener('submit', async (e) =>
   }
 });
 document.getElementById('clear-category-form-btn').addEventListener('click', clearCategoryForm);
+
+// SUBMIT ADMIN: USUÁRIOS
+document.getElementById('user-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('user-id').value;
+  const name = document.getElementById('user-name').value;
+  const email = document.getElementById('user-email').value;
+  const password = document.getElementById('user-password').value;
+
+  try {
+    const payload = { name, email, password };
+    if (id) {
+      const { error } = await state.supabase.from('app_users').update(payload).eq('id', id);
+      if (error) throw error;
+    } else {
+      const { error } = await state.supabase.from('app_users').insert([payload]);
+      if (error) throw error;
+    }
+    clearUserForm();
+    loadAllData();
+  } catch (err) {
+    alert(err.message);
+    // Fallback em memória para teste
+    if (!id) {
+      const tempId = Date.now();
+      state.users.push({ id: tempId, name, email, password });
+      clearUserForm();
+      renderAdminTables();
+    }
+  }
+});
+document.getElementById('clear-user-form-btn').addEventListener('click', clearUserForm);
 
 // BUSCA E FILTROS
 document.getElementById('tx-search-input').addEventListener('input', renderTransactionsTable);

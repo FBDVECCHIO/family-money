@@ -1083,15 +1083,6 @@ tr:hover td {
 }
 
 @media (max-width: 600px) {
-  /* Otimizar todas as fontes do celular para 8px */
-  html {
-    font-size: 8px !important;
-  }
-  
-  body, p, span, td, th, input, select, button, label, .nav-link, .user-badge, .account-item, .card-item-name {
-    font-size: 8px !important;
-  }
-  
   body {
     padding-bottom: 70px !important; /* Espaço para o menu inferior fixo */
   }

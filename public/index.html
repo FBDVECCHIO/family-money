@@ -66,10 +66,7 @@
         <div class="form-group">
           <label for="username">Quem é você?</label>
           <select id="username" required>
-            <option value="" disabled selected>Selecione seu usuário</option>
-            <option value="fbdv1202@gmail.com">Fábio (Pai)</option>
-            <option value="joycesiqueirafs@gmail.com">Joyce (Mãe)</option>
-            <option value="filha@familia.com">Filha (Beatriz)</option>
+            <option value="" disabled selected>Carregando usuários...</option>
           </select>
         </div>
         
@@ -441,6 +438,7 @@
             <button class="admin-tab-btn" data-admin-tab="admin-cards">Cartões</button>
             <button class="admin-tab-btn" data-admin-tab="admin-fixed">Contas Fixas / Recorrentes</button>
             <button class="admin-tab-btn" data-admin-tab="admin-categories">Categorias</button>
+            <button class="admin-tab-btn" data-admin-tab="admin-users">Usuários</button>
           </div>
 
           <!-- SUB-TELA ADMIN: CONTAS -->
@@ -654,6 +652,50 @@
                       </tr>
                     </thead>
                     <tbody id="admin-categories-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA ADMIN: USUÁRIOS -->
+          <div id="admin-users" class="admin-tab-content">
+            <div class="admin-grid-layout">
+              <div class="admin-form-side glass">
+                <h3 id="user-form-title">Cadastrar Novo Usuário</h3>
+                <form id="user-form">
+                  <input type="hidden" id="user-id">
+                  <div class="form-group">
+                    <label for="user-name">Nome do Usuário</label>
+                    <input type="text" id="user-name" placeholder="Ex: Fábio (Pai)" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="user-email">Email (Login)</label>
+                    <input type="email" id="user-email" placeholder="Ex: fbdv1202@gmail.com" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="user-password">Senha de Acesso</label>
+                    <input type="text" id="user-password" placeholder="Ex: 123" required>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block">Salvar Usuário</button>
+                  <button type="button" id="clear-user-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
+                </form>
+              </div>
+              <div class="admin-table-side glass">
+                <h3>Usuários Cadastrados</h3>
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>Email</th>
+                        <th>Senha</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-users-tbody">
                       <!-- Inserido dinamicamente -->
                     </tbody>
                   </table>
