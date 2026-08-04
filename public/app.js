@@ -288,6 +288,7 @@ async function loadAllData() {
     renderAdminTables();
     renderReportsFields();
     renderReportsTable();
+    updateDiagnostics();
     
     // Verificação de backup automático diário (executada em background)
     try {
@@ -305,6 +306,7 @@ async function loadAllData() {
   } catch (err) {
     console.error('Erro ao carregar dados do Supabase:', err.message);
     alert('Erro ao sincronizar dados com o Supabase: ' + err.message);
+    updateDiagnostics(err.message);
   }
 }
 
@@ -2580,6 +2582,45 @@ if (closeReceiptModalBtn) {
     document.getElementById('receipt-modal').classList.add('hide');
     document.getElementById('receipt-modal-img').src = '';
   });
+}
+
+function updateDiagnostics(errMessage = null) {
+  if (errMessage) {
+    state.lastError = errMessage;
+  }
+  
+  const dbStatusEl = document.getElementById('diag-db-status');
+  const dbUrlEl = document.getElementById('diag-db-url');
+  const lastErrEl = document.getElementById('diag-last-error');
+  
+  if (dbStatusEl) {
+    dbStatusEl.textContent = state.supabase ? 'Conectado' : 'Desconectado';
+    dbStatusEl.style.color = state.supabase ? 'var(--neon-green)' : 'var(--neon-red)';
+  }
+  
+  if (dbUrlEl && state.supabase) {
+    dbUrlEl.textContent = localStorage.getItem('supabase_url') || 'Configurado via código';
+  }
+  
+  if (lastErrEl) {
+    lastErrEl.textContent = state.lastError || 'Nenhum';
+    lastErrEl.style.color = state.lastError ? 'var(--neon-red)' : 'var(--text-muted)';
+  }
+  
+  const mappings = {
+    'diag-count-accounts': state.accounts?.length || 0,
+    'diag-count-cards': state.cards?.length || 0,
+    'diag-count-fixed': state.fixedItems?.length || 0,
+    'diag-count-categories': state.categories?.length || 0,
+    'diag-count-transactions': state.transactions?.length || 0,
+    'diag-count-paid-bills': state.paidCardBills?.length || 0,
+    'diag-count-users': state.users?.length || 0
+  };
+  
+  for (const [id, count] of Object.entries(mappings)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = count;
+  }
 }
 
 // ================= INICIALIZAÇÃO =================

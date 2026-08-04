@@ -613,6 +613,7 @@
             <button class="admin-tab-btn" data-admin-tab="admin-categories">Categorias</button>
             <button class="admin-tab-btn" data-admin-tab="admin-users">Usuários</button>
             <button class="admin-tab-btn" data-admin-tab="admin-backups">Backups</button>
+            <button class="admin-tab-btn" data-admin-tab="admin-diagnostics">Status do Sistema</button>
           </div>
 
           <!-- SUB-TELA ADMIN: CONTAS -->
@@ -934,6 +935,68 @@
                     <tbody id="admin-backups-tbody">
                       <!-- Inserido dinamicamente -->
                     </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA ADMIN: DIAGNÓSTICO -->
+          <div id="admin-diagnostics" class="admin-tab-content">
+            <div class="glass" style="padding: 20px;">
+              <h3>Diagnóstico de Sincronização</h3>
+              <p style="margin-bottom: 20px; color: var(--text-muted);">Verifique abaixo o status da conexão e quantidade de registros carregados em memória.</p>
+              
+              <div class="admin-grid-layout" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                  <h4>Status da Conexão</h4>
+                  <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 10px 0; color: var(--text-muted);">Banco de Dados (Supabase):</td>
+                      <td id="diag-db-status" style="font-weight: bold; color: var(--neon-red); text-align: right;">Desconectado</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 10px 0; color: var(--text-muted);">URL do Banco:</td>
+                      <td id="diag-db-url" style="word-break: break-all; font-family: monospace; text-align: right; font-size: 0.85rem;">N/A</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0; color: var(--text-muted);">Último Erro:</td>
+                      <td id="diag-last-error" style="color: var(--neon-red); word-break: break-all; text-align: right; font-size: 0.85rem;">Nenhum</td>
+                    </tr>
+                  </table>
+                </div>
+                
+                <div>
+                  <h4>Registros em Memória</h4>
+                  <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 8px 0; color: var(--text-muted);">Contas Bancárias:</td>
+                      <td id="diag-count-accounts" style="font-weight: bold; text-align: right;">0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 8px 0; color: var(--text-muted);">Cartões de Crédito:</td>
+                      <td id="diag-count-cards" style="font-weight: bold; text-align: right;">0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 8px 0; color: var(--text-muted);">Itens Fixos / Recorrentes:</td>
+                      <td id="diag-count-fixed" style="font-weight: bold; text-align: right;">0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 8px 0; color: var(--text-muted);">Categorias:</td>
+                      <td id="diag-count-categories" style="font-weight: bold; text-align: right;">0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 8px 0; color: var(--text-muted);">Transações:</td>
+                      <td id="diag-count-transactions" style="font-weight: bold; text-align: right;">0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 8px 0; color: var(--text-muted);">Faturas Pagas:</td>
+                      <td id="diag-count-paid-bills" style="font-weight: bold; text-align: right;">0</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px 0; color: var(--text-muted);">Usuários Cadastrados:</td>
+                      <td id="diag-count-users" style="font-weight: bold; text-align: right;">0</td>
+                    </tr>
                   </table>
                 </div>
               </div>
