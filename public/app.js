@@ -2612,6 +2612,52 @@ function updateDiagnostics(errMessage = null) {
   }
 }
 
+// Listener de clique para abrir o Modal de Diagnóstico do Desenvolvedor
+const devDiagTrigger = document.getElementById('dev-diag-trigger');
+const devDiagModal = document.getElementById('dev-diag-modal');
+const devDiagClose = document.getElementById('dev-diag-close');
+
+if (devDiagTrigger && devDiagModal) {
+  devDiagTrigger.addEventListener('click', () => {
+    const diagUserObj = document.getElementById('diag-user-obj');
+    if (diagUserObj) {
+      diagUserObj.textContent = JSON.stringify(state.user, null, 2);
+    }
+
+    const diagSbConn = document.getElementById('diag-sb-conn');
+    if (diagSbConn) {
+      diagSbConn.textContent = state.supabase ? 'Conectado com Sucesso' : 'Desconectado';
+      diagSbConn.style.color = state.supabase ? '#22c55e' : '#ef4444';
+    }
+
+    document.getElementById('diag-reg-accounts').textContent = state.accounts?.length || 0;
+    document.getElementById('diag-reg-cards').textContent = state.cards?.length || 0;
+    document.getElementById('diag-reg-categories').textContent = state.categories?.length || 0;
+    document.getElementById('diag-reg-transactions').textContent = state.transactions?.length || 0;
+
+    const diagDomAdmin = document.getElementById('diag-dom-admin');
+    const adminEl = document.getElementById('view-admin');
+    if (diagDomAdmin && adminEl) {
+      const isHidden = window.getComputedStyle(adminEl).display === 'none';
+      diagDomAdmin.textContent = `Existe no HTML (Display: ${window.getComputedStyle(adminEl).display}, Classes: ${adminEl.className})`;
+      diagDomAdmin.style.color = isHidden ? '#fbbf24' : '#22c55e';
+    }
+
+    const diagLastErrStr = document.getElementById('diag-last-err-str');
+    if (diagLastErrStr) {
+      diagLastErrStr.textContent = state.lastError || 'Nenhum erro registrado';
+    }
+
+    devDiagModal.classList.remove('hide');
+  });
+}
+
+if (devDiagClose && devDiagModal) {
+  devDiagClose.addEventListener('click', () => {
+    devDiagModal.classList.add('hide');
+  });
+}
+
 // ================= INICIALIZAÇÃO =================
 window.addEventListener('DOMContentLoaded', () => {
   const today = new Date().toISOString().split('T')[0];

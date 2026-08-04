@@ -1051,6 +1051,49 @@
     </div>
   </div>
 
+  <!-- Botão e Modal de Diagnóstico do Desenvolvedor -->
+  <button id="dev-diag-trigger" style="position: fixed; bottom: 15px; right: 15px; z-index: 999999; background: #6b21a8; color: #fff; border: none; border-radius: 50px; padding: 10px 18px; font-size: 0.8rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 6px;">
+    🛠️ Diagnóstico (v2.6)
+  </button>
+
+  <div id="dev-diag-modal" class="hide" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+    <div class="glass" style="width: 90%; max-width: 500px; padding: 25px; border-radius: 12px; max-height: 85vh; overflow-y: auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px;">
+        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v2.6)</h3>
+        <button id="dev-diag-close" style="background: transparent; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;">&times;</button>
+      </div>
+      
+      <div style="display: flex; flex-direction: column; gap: 15px; font-size: 0.85rem; text-align: left;">
+        <div>
+          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">2.6 (Live)</span>
+        </div>
+        <div>
+          <strong>Usuário Logado:</strong>
+          <pre id="diag-user-obj" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; margin-top: 5px; font-family: monospace; overflow-x: auto; color: #cbd5e1;"></pre>
+        </div>
+        <div>
+          <strong>Conexão Supabase:</strong> <span id="diag-sb-conn">Carregando...</span>
+        </div>
+        <div>
+          <strong>Registros Carregados:</strong>
+          <ul style="margin: 5px 0 0 15px; padding: 0;">
+            <li>Contas: <span id="diag-reg-accounts">0</span></li>
+            <li>Cartões: <span id="diag-reg-cards">0</span></li>
+            <li>Categorias: <span id="diag-reg-categories">0</span></li>
+            <li>Lançamentos: <span id="diag-reg-transactions">0</span></li>
+          </ul>
+        </div>
+        <div>
+          <strong>Menu Administração no DOM:</strong> <span id="diag-dom-admin">Verificando...</span>
+        </div>
+        <div>
+          <strong>Último Erro JS:</strong>
+          <pre id="diag-last-err-str" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); padding: 8px; border-radius: 6px; margin-top: 5px; font-family: monospace; overflow-x: auto; color: #fca5a5;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js?v=2.6"></script>
 </body>
 </html>
