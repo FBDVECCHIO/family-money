@@ -185,29 +185,64 @@ async function loadAllData() {
   if (!state.supabase) return;
 
   try {
-    // Carregar todas as tabelas em paralelo
-    const [accountsRes, cardsRes, categoriesRes, fixedRes, transactionsRes, paidBillsRes] = await Promise.all([
-      state.supabase.from('accounts').select('*').order('name'),
-      state.supabase.from('cards').select('*').order('name'),
-      state.supabase.from('categories').select('*').order('name'),
-      state.supabase.from('fixed_items').select('*').order('description'),
-      state.supabase.from('transactions').select('*').order('date', { ascending: false }),
-      state.supabase.from('paid_card_bills').select('*')
-    ]);
+    // 1. Carregar contas
+    try {
+      const { data, error } = await state.supabase.from('accounts').select('*').order('name');
+      if (error) throw error;
+      state.accounts = data || [];
+    } catch (err) {
+      console.error('Erro ao carregar contas:', err);
+    }
 
-    if (accountsRes.error) throw accountsRes.error;
-    if (cardsRes.error) throw cardsRes.error;
-    if (categoriesRes.error) throw categoriesRes.error;
-    if (fixedRes.error) throw fixedRes.error;
-    if (transactionsRes.error) throw transactionsRes.error;
-    if (paidBillsRes && paidBillsRes.error) throw paidBillsRes.error;
+    // 2. Carregar cartões
+    try {
+      const { data, error } = await state.supabase.from('cards').select('*').order('name');
+      if (error) throw error;
+      state.cards = data || [];
+    } catch (err) {
+      console.error('Erro ao carregar cartões:', err);
+    }
 
-    state.accounts = accountsRes.data;
-    state.cards = cardsRes.data;
-    state.categories = categoriesRes.data;
-    state.fixedItems = fixedRes.data;
-    state.transactions = transactionsRes.data;
-    state.paidCardBills = paidBillsRes ? (paidBillsRes.data || []) : [];
+    // 3. Carregar categorias
+    try {
+      const { data, error } = await state.supabase.from('categories').select('*').order('name');
+      if (error) throw error;
+      state.categories = data || [];
+    } catch (err) {
+      console.error('Erro ao carregar categorias:', err);
+    }
+
+    // 4. Carregar itens fixos
+    try {
+      const { data, error } = await state.supabase.from('fixed_items').select('*').order('description');
+      if (error) throw error;
+      state.fixedItems = data || [];
+    } catch (err) {
+      console.error('Erro ao carregar itens fixos:', err);
+    }
+
+    // 5. Carregar transações
+    try {
+      const { data, error } = await state.supabase.from('transactions').select('*').order('date', { ascending: false });
+      if (error) throw error;
+      state.transactions = data || [];
+    } catch (err) {
+      console.error('Erro ao carregar transações:', err);
+    }
+
+    // 6. Carregar faturas pagas (Tratamento resiliente caso a tabela ainda não exista no Supabase)
+    try {
+      const { data, error } = await state.supabase.from('paid_card_bills').select('*');
+      if (error) {
+        console.warn('Tabela paid_card_bills não encontrada ou cache do schema desatualizado:', error);
+        state.paidCardBills = [];
+      } else {
+        state.paidCardBills = data || [];
+      }
+    } catch (err) {
+      console.warn('Erro ao ler tabela paid_card_bills:', err);
+      state.paidCardBills = [];
+    }
 
     // FILTRO DE PERMISSÕES: Se Beatriz estiver logada, ela só vê o que ela mesma lançou
     if (state.user && state.user.only_self_data) {
