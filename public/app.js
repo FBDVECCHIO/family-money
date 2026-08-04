@@ -1700,13 +1700,14 @@ if (togglePasswordBtn && passwordInputEl) {
     const type = passwordInputEl.getAttribute('type') === 'password' ? 'text' : 'password';
     passwordInputEl.setAttribute('type', type);
     
-    const icon = togglePasswordBtn.querySelector('i');
     if (type === 'text') {
-      icon.setAttribute('data-lucide', 'eye-off');
+      togglePasswordBtn.innerHTML = '<i data-lucide="eye-off" style="width: 18px; height: 18px;"></i>';
     } else {
-      icon.setAttribute('data-lucide', 'eye');
+      togglePasswordBtn.innerHTML = '<i data-lucide="eye" style="width: 18px; height: 18px;"></i>';
     }
-    lucide.createIcons();
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
   });
 }
 
