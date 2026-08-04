@@ -252,10 +252,10 @@ async function loadAllData() {
     try {
       const { data, error } = await state.supabase.from('app_users').select('*').order('name');
       if (error) throw error;
-      state.users = data;
+      state.users = data || [];
     } catch (err) {
       console.warn('Erro ao carregar usuários em loadAllData (tabela pode não existir):', err);
-      state.users = state.users.length ? state.users : [
+      state.users = (state.users && state.users.length) ? state.users : [
         { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123', is_admin: true, only_self_data: false },
         { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123', is_admin: true, only_self_data: false },
         { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123', is_admin: false, only_self_data: true }
@@ -266,7 +266,7 @@ async function loadAllData() {
     try {
       const { data, error } = await state.supabase.from('app_backups').select('*').order('created_at', { ascending: false });
       if (error) throw error;
-      state.backups = data;
+      state.backups = data || [];
     } catch (err) {
       console.warn('Erro ao carregar backups em loadAllData (tabela pode não existir):', err);
       state.backups = [];
@@ -979,143 +979,194 @@ function renderMonthlyDetail(monthData) {
 
 // 8. Tabelas e Forms Administrativos
 function renderAdminTables() {
+  state.accounts = state.accounts || [];
+  state.cards = state.cards || [];
+  state.categories = state.categories || [];
+  state.fixedItems = state.fixedItems || [];
+  state.users = state.users || [];
+  state.backups = state.backups || [];
+
   // Contas
-  const accountsTbody = document.getElementById('admin-accounts-tbody');
-  accountsTbody.innerHTML = state.accounts.map(a => `
-    <tr>
-      <td>${a.name}</td>
-      <td class="green-neon" style="font-weight: 600;">${formatCurrency(a.balance)}</td>
-      <td>
-        <button class="btn-edit" onclick="editAccount(${a.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-        <button class="btn-delete" onclick="deleteAccount(${a.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-      </td>
-    </tr>
-  `).join('');
-
-  const cardAccSelect = document.getElementById('card-account');
-  cardAccSelect.innerHTML = `<option value="" disabled selected>Escolha a conta vinculada</option>` + 
-    state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
-
-  // Cartões
-  const cardsTbody = document.getElementById('admin-cards-tbody');
-  cardsTbody.innerHTML = state.cards.map(c => {
-    const accIdNum = c.account_id || c.accountId;
-    const acc = state.accounts.find(a => a.id === accIdNum);
-    return `
-      <tr>
-        <td style="font-weight: 500;">${c.name}</td>
-        <td>Dia ${c.closing_day || c.closingDay}</td>
-        <td>Dia ${c.due_day || c.dueDay}</td>
-        <td>${acc ? acc.name : 'Desconhecida'}</td>
-        <td>
-          <button class="btn-edit" onclick="editCard(${c.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-          <button class="btn-delete" onclick="deleteCard(${c.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-
-  const fixedSourceSelect = document.getElementById('fixed-payment-source');
-  if (fixedSourceSelect) {
-    const optgroupAccounts = document.getElementById('fixed-optgroup-accounts');
-    const optgroupCards = document.getElementById('fixed-optgroup-cards');
-    if (optgroupAccounts && optgroupCards) {
-      optgroupAccounts.innerHTML = state.accounts.map(a => `<option value="account-${a.id}">${a.name}</option>`).join('');
-      optgroupCards.innerHTML = state.cards.map(c => `<option value="card-${c.id}">${c.name}</option>`).join('');
+  try {
+    const accountsTbody = document.getElementById('admin-accounts-tbody');
+    if (accountsTbody) {
+      accountsTbody.innerHTML = state.accounts.map(a => `
+        <tr>
+          <td>${a.name}</td>
+          <td class="green-neon" style="font-weight: 600;">${formatCurrency(a.balance)}</td>
+          <td>
+            <button class="btn-edit" onclick="editAccount(${a.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+            <button class="btn-delete" onclick="deleteAccount(${a.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+          </td>
+        </tr>
+      `).join('');
     }
+
+    const cardAccSelect = document.getElementById('card-account');
+    if (cardAccSelect) {
+      cardAccSelect.innerHTML = `<option value="" disabled selected>Escolha a conta vinculada</option>` + 
+        state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao renderizar contas na administração:', err);
   }
 
-  const fixedCatSelect = document.getElementById('fixed-category');
-  if (fixedCatSelect) {
-    fixedCatSelect.innerHTML = `<option value="">Sem Categoria (Receitas)</option>` + 
-      state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  // Cartões
+  try {
+    const cardsTbody = document.getElementById('admin-cards-tbody');
+    if (cardsTbody) {
+      cardsTbody.innerHTML = state.cards.map(c => {
+        const accIdNum = c.account_id || c.accountId;
+        const acc = state.accounts.find(a => a.id === accIdNum);
+        return `
+          <tr>
+            <td style="font-weight: 500;">${c.name}</td>
+            <td>Dia ${c.closing_day || c.closingDay}</td>
+            <td>Dia ${c.due_day || c.dueDay}</td>
+            <td>${acc ? acc.name : 'Desconhecida'}</td>
+            <td>
+              <button class="btn-edit" onclick="editCard(${c.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+              <button class="btn-delete" onclick="deleteCard(${c.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao renderizar cartões na administração:', err);
+  }
+
+  // Origem Recorrente e Categoria Recorrente Selects
+  try {
+    const fixedSourceSelect = document.getElementById('fixed-payment-source');
+    if (fixedSourceSelect) {
+      const optgroupAccounts = document.getElementById('fixed-optgroup-accounts');
+      const optgroupCards = document.getElementById('fixed-optgroup-cards');
+      if (optgroupAccounts && optgroupCards) {
+        optgroupAccounts.innerHTML = state.accounts.map(a => `<option value="account-${a.id}">${a.name}</option>`).join('');
+        optgroupCards.innerHTML = state.cards.map(c => `<option value="card-${c.id}">${c.name}</option>`).join('');
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao preencher seletor de origem recorrente:', err);
+  }
+
+  try {
+    const fixedCatSelect = document.getElementById('fixed-category');
+    if (fixedCatSelect) {
+      fixedCatSelect.innerHTML = `<option value="">Sem Categoria (Receitas)</option>` + 
+        state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao preencher seletor de categoria recorrente:', err);
   }
 
   // Itens Fixos
-  const fixedTbody = document.getElementById('admin-fixed-tbody');
-  fixedTbody.innerHTML = state.fixedItems.map(f => {
-    const accIdNum = f.account_id || f.accountId;
-    const cardIdNum = f.card_id || f.cardId;
-    const catIdNum = f.category_id || f.categoryId;
-    const acc = state.accounts.find(a => a.id === accIdNum);
-    const card = state.cards.find(c => c.id === cardIdNum);
-    const cat = state.categories.find(c => c.id === catIdNum);
-    const catBadge = cat ? `<span class="badge-category" style="background-color: ${cat.color}22; color: ${cat.color}; border: 1px solid ${cat.color}44;">${cat.name}</span>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
-    
-    // Nome da origem (Conta ou Cartão)
-    const sourceLabel = card 
-      ? `<i data-lucide="credit-card" style="width: 12px; height: 12px; color: var(--neon-purple); vertical-align: middle; display: inline-block; margin-right: 4px;"></i>${card.name}` 
-      : (acc ? `<i data-lucide="wallet" style="width: 12px; height: 12px; color: var(--neon-green); vertical-align: middle; display: inline-block; margin-right: 4px;"></i>${acc.name}` : 'Desconhecida');
+  try {
+    const fixedTbody = document.getElementById('admin-fixed-tbody');
+    if (fixedTbody) {
+      fixedTbody.innerHTML = state.fixedItems.map(f => {
+        const accIdNum = f.account_id || f.accountId;
+        const cardIdNum = f.card_id || f.cardId;
+        const catIdNum = f.category_id || f.categoryId;
+        const acc = state.accounts.find(a => a.id === accIdNum);
+        const card = state.cards.find(c => c.id === cardIdNum);
+        const cat = state.categories.find(c => c.id === catIdNum);
+        const catBadge = cat ? `<span class="badge-category" style="background-color: ${cat.color}22; color: ${cat.color}; border: 1px solid ${cat.color}44;">${cat.name}</span>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
+        
+        // Nome da origem (Conta ou Cartão)
+        const sourceLabel = card 
+          ? `<i data-lucide="credit-card" style="width: 12px; height: 12px; color: var(--neon-purple); vertical-align: middle; display: inline-block; margin-right: 4px;"></i>${card.name}` 
+          : (acc ? `<i data-lucide="wallet" style="width: 12px; height: 12px; color: var(--neon-green); vertical-align: middle; display: inline-block; margin-right: 4px;"></i>${acc.name}` : 'Desconhecida');
 
-    return `
-      <tr>
-        <td style="font-weight: 500;">${f.description}</td>
-        <td>${formatCurrency(f.amount)}</td>
-        <td>Dia ${f.day_of_month || f.dayOfMonth}</td>
-        <td>
-          <span class="badge-category" style="background: ${f.type === 'income' ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 59, 48, 0.1)'}; color: ${f.type === 'income' ? 'var(--neon-green)' : 'var(--neon-red)'}; border: 1px solid ${f.type === 'income' ? 'rgba(57, 255, 20, 0.2)' : 'rgba(255, 59, 48, 0.2)'}">
-            ${f.type === 'income' ? 'Receita' : 'Despesa'}
-          </span>
-        </td>
-        <td>${catBadge}</td>
-        <td>${sourceLabel}</td>
-        <td>
-          <button class="btn-edit" onclick="editFixed(${f.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-          <button class="btn-delete" onclick="deleteFixed(${f.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-        </td>
-      </tr>
-    `;
-  }).join('');
+        return `
+          <tr>
+            <td style="font-weight: 500;">${f.description}</td>
+            <td>${formatCurrency(f.amount)}</td>
+            <td>Dia ${f.day_of_month || f.dayOfMonth}</td>
+            <td>
+              <span class="badge-category" style="background: ${f.type === 'income' ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 59, 48, 0.1)'}; color: ${f.type === 'income' ? 'var(--neon-green)' : 'var(--neon-red)'}; border: 1px solid ${f.type === 'income' ? 'rgba(57, 255, 20, 0.2)' : 'rgba(255, 59, 48, 0.2)'}">
+                ${f.type === 'income' ? 'Receita' : 'Despesa'}
+              </span>
+            </td>
+            <td>${catBadge}</td>
+            <td>${sourceLabel}</td>
+            <td>
+              <button class="btn-edit" onclick="editFixed(${f.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+              <button class="btn-delete" onclick="deleteFixed(${f.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao renderizar itens fixos na administração:', err);
+  }
 
   // Categorias
-  const categoriesTbody = document.getElementById('admin-categories-tbody');
-  categoriesTbody.innerHTML = state.categories.map(c => `
-    <tr>
-      <td style="font-weight: 500;">${c.name}</td>
-      <td><i data-lucide="${c.icon}" style="width: 18px; height: 18px; color: ${c.color}"></i></td>
-      <td>
-        <button class="btn-edit" onclick="editCategory(${c.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-        <button class="btn-delete" onclick="deleteCategory(${c.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-      </td>
-    </tr>
-  `).join('');
+  try {
+    const categoriesTbody = document.getElementById('admin-categories-tbody');
+    if (categoriesTbody) {
+      categoriesTbody.innerHTML = state.categories.map(c => `
+        <tr>
+          <td style="font-weight: 500;">${c.name}</td>
+          <td><i data-lucide="${c.icon}" style="width: 18px; height: 18px; color: ${c.color}"></i></td>
+          <td>
+            <button class="btn-edit" onclick="editCategory(${c.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+            <button class="btn-delete" onclick="deleteCategory(${c.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+          </td>
+        </tr>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao renderizar categorias na administração:', err);
+  }
+
   // Usuários
-  const usersTbody = document.getElementById('admin-users-tbody');
-  if (usersTbody) {
-    usersTbody.innerHTML = state.users.map(u => `
-      <tr>
-        <td style="font-weight: 500;">${u.name}</td>
-        <td><code>${u.email}</code></td>
-        <td><code>${u.password}</code></td>
-        <td>
-          <button class="btn-edit" onclick="editUser(${u.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-          <button class="btn-delete" onclick="deleteUser(${u.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-        </td>
-      </tr>
-    `).join('');
+  try {
+    const usersTbody = document.getElementById('admin-users-tbody');
+    if (usersTbody) {
+      usersTbody.innerHTML = state.users.map(u => `
+        <tr>
+          <td style="font-weight: 500;">${u.name}</td>
+          <td><code>${u.email}</code></td>
+          <td><code>${u.password}</code></td>
+          <td>
+            <button class="btn-edit" onclick="editUser(${u.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+            <button class="btn-delete" onclick="deleteUser(${u.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+          </td>
+        </tr>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao renderizar usuários na administração:', err);
   }
 
   // Backups
-  const backupsTbody = document.getElementById('admin-backups-tbody');
-  if (backupsTbody) {
-    backupsTbody.innerHTML = state.backups.map(b => {
-      const dateObj = new Date(b.created_at || b.createdAt);
-      const dateStr = dateObj.toLocaleDateString('pt-BR');
-      const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      return `
-        <tr>
-          <td style="font-weight: 500;">${dateStr}</td>
-          <td><code>${timeStr}</code></td>
-          <td><span class="badge-category" style="background: rgba(57, 255, 20, 0.1); color: var(--neon-green); border: 1px solid rgba(57, 255, 20, 0.2)">Sucesso</span></td>
-          <td>
-            <button class="btn btn-outline" style="padding: 4px 10px; width: auto; font-size: 0.8rem; border-color: rgba(255,255,255,0.2);" onclick="restoreBackup(${b.id})">
-              <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;"></i> Restaurar
-            </button>
-            <button class="btn-delete" onclick="deleteBackup(${b.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-          </td>
-        </tr>
-      `;
-    }).join('');
+  try {
+    const backupsTbody = document.getElementById('admin-backups-tbody');
+    if (backupsTbody) {
+      backupsTbody.innerHTML = state.backups.map(b => {
+        const dateObj = new Date(b.created_at || b.createdAt);
+        const dateStr = dateObj.toLocaleDateString('pt-BR');
+        const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        return `
+          <tr>
+            <td style="font-weight: 500;">${dateStr}</td>
+            <td><code>${timeStr}</code></td>
+            <td><span class="badge-category" style="background: rgba(57, 255, 20, 0.1); color: var(--neon-green); border: 1px solid rgba(57, 255, 20, 0.2)">Sucesso</span></td>
+            <td>
+              <button class="btn btn-outline" style="padding: 4px 10px; width: auto; font-size: 0.8rem; border-color: rgba(255,255,255,0.2);" onclick="restoreBackup(${b.id})">
+                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;"></i> Restaurar
+              </button>
+              <button class="btn-delete" onclick="deleteBackup(${b.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao renderizar backups na administração:', err);
   }
 
   if (window.lucide) {
