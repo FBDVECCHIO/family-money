@@ -116,21 +116,52 @@ async function initApp() {
 
   document.getElementById('supabase-setup-container').classList.add('hide');
 
+  // Carregar os usuários antes de prosseguir para podermos ler as permissões
+  await loadUsersOnly();
+
   // Verificar sessão ativa localmente
   const activeUserEmail = localStorage.getItem('familymoney_user_email');
   const activeUserName = localStorage.getItem('familymoney_user_name');
 
   if (activeUserEmail && activeUserName) {
-    state.user = { email: activeUserEmail, name: activeUserName };
+    // Enriquecer dados da sessão com as permissões do banco
+    const dbUser = state.users.find(u => u.email === activeUserEmail) || {
+      id: 9999, name: activeUserName, email: activeUserEmail, is_admin: true, only_self_data: false
+    };
+
+    state.user = { 
+      id: dbUser.id || dbUser.idNum || 9999, 
+      email: activeUserEmail, 
+      name: activeUserName,
+      is_admin: dbUser.is_admin !== false,
+      only_self_data: dbUser.only_self_data === true
+    };
+
     document.getElementById('login-container').classList.add('hide');
+    document.getElementById('app-container').classList.remove('remove');
     document.getElementById('app-container').classList.remove('hide');
     
+    // Ocultar botão de Administração se o usuário não for administrador
+    const adminNavBtn = document.getElementById('admin-nav-btn');
+    if (adminNavBtn) {
+      if (state.user.is_admin) {
+        adminNavBtn.style.display = 'flex';
+      } else {
+        adminNavBtn.style.display = 'none';
+        // Se por acaso a aba atual for admin, redirecionar para dashboard
+        if (state.activeTab === 'admin') {
+          state.activeTab = 'dashboard';
+          document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active-view'));
+          document.getElementById('view-dashboard').classList.add('active-view');
+        }
+      }
+    }
+
     document.getElementById('user-display-name').textContent = activeUserName;
     loadAllData();
   } else {
     document.getElementById('login-container').classList.remove('hide');
     document.getElementById('app-container').classList.add('hide');
-    await loadUsersOnly();
   }
   lucide.createIcons();
 }
@@ -173,6 +204,11 @@ async function loadAllData() {
     state.fixedItems = fixedRes.data;
     state.transactions = transactionsRes.data;
 
+    // FILTRO DE PERMISSÕES: Se Beatriz estiver logada, ela só vê o que ela mesma lançou
+    if (state.user && state.user.only_self_data) {
+      state.transactions = state.transactions.filter(t => t.user_id === state.user.id);
+    }
+
     try {
       const { data, error } = await state.supabase.from('app_users').select('*').order('name');
       if (error) throw error;
@@ -180,9 +216,9 @@ async function loadAllData() {
     } catch (err) {
       console.warn('Erro ao carregar usuários em loadAllData (tabela pode não existir):', err);
       state.users = state.users.length ? state.users : [
-        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123' },
-        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123' },
-        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123' }
+        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123', is_admin: true, only_self_data: false },
+        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123', is_admin: true, only_self_data: false },
+        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123', is_admin: false, only_self_data: true }
       ];
     }
 
@@ -205,6 +241,8 @@ async function loadAllData() {
     renderDashboard();
     renderNewTxFormFields();
     renderAdminTables();
+    renderReportsFields();
+    renderReportsTable();
     
     // Verificação de backup automático diário (executada em background)
     try {
@@ -595,46 +633,73 @@ function renderTransactionsTable() {
   const searchInput = document.getElementById('tx-search-input').value.toLowerCase();
   const filterUser = document.getElementById('tx-filter-user').value;
 
-  const users = [
-    { email: 'pai@familia.com', name: 'Alexandre (Pai)' },
-    { email: 'mae@familia.com', name: 'Mariana (Mãe)' },
-    { email: 'filha@familia.com', name: 'Beatriz (Filha)' }
-  ];
+  // Atualizar o dropdown de usuários de busca se necessário
+  const txFilterUserDropdown = document.getElementById('tx-filter-user');
+  if (txFilterUserDropdown && state.users && txFilterUserDropdown.options.length <= 1) {
+    const selectedVal = txFilterUserDropdown.value;
+    txFilterUserDropdown.innerHTML = '<option value="">Todos os usuários</option>' +
+      state.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+    txFilterUserDropdown.value = selectedVal;
+  }
 
   let filtered = state.transactions.filter(t => {
     const matchesSearch = t.description.toLowerCase().includes(searchInput);
-    // Filtrar por ID de usuário (no Supabase, o id pode ser UUID, mas podemos checar pelo state.user)
-    return matchesSearch; // Mantém a busca textual
+    const matchesUser = filterUser ? (parseInt(t.user_id || t.userId) === parseInt(filterUser)) : true;
+    return matchesSearch && matchesUser;
   });
 
   tbody.innerHTML = filtered.map(t => {
     const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+    const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
+    const whoLaunched = usr ? usr.name : 'Família';
     
     let pmLabel = '';
     const cardIdNum = t.card_id || t.cardId;
     const accIdNum = t.account_id || t.accountId;
+    const destAccIdNum = t.destination_account_id || t.destinationAccountId;
 
     if (t.payment_method === 'card' || t.paymentMethod === 'card') {
       const card = state.cards.find(c => c.id === cardIdNum);
-      pmLabel = `<i data-lucide="credit-card" class="purple-neon" style="width: 14px; height: 14px;"></i> ${card ? card.name : 'Cartão'}`;
+      pmLabel = `<i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${card ? card.name : 'Cartão'}`;
+    } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+      const originAcc = state.accounts.find(a => a.id === accIdNum);
+      const destAcc = state.accounts.find(a => a.id === destAccIdNum);
+      pmLabel = `<i data-lucide="shuffle" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${originAcc ? originAcc.name : 'Origem'} ➔ ${destAcc ? destAcc.name : 'Destino'}`;
     } else {
       const acc = state.accounts.find(a => a.id === accIdNum);
-      pmLabel = `<i data-lucide="wallet" class="green-neon" style="width: 14px; height: 14px;"></i> ${acc ? acc.name : 'Débito'}`;
+      pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
     }
+
+    // Exibir valor formatado dependendo de tipo
+    let valueHtml = '';
+    if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+      valueHtml = `<span style="font-weight: 600; color: var(--neon-purple);">${formatCurrency(t.amount)}</span>`;
+    } else if (t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) {
+      valueHtml = `<span style="font-weight: 600; color: var(--neon-green);">+${formatCurrency(t.amount)}</span>`;
+    } else {
+      valueHtml = `<span style="font-weight: 600; color: var(--neon-red);">-${formatCurrency(t.amount)}</span>`;
+    }
+
+    const receiptHtml = t.receipt_url 
+      ? `<button class="btn-receipt" onclick="viewReceipt(${t.id})" title="Ver Recibo" style="background: rgba(79, 70, 229, 0.1); border: 1px solid rgba(79, 70, 229, 0.3); border-radius: 4px; padding: 4px; cursor: pointer; color: var(--neon-purple); display: inline-flex; align-items: center; justify-content: center; margin-right: 5px;">
+           <i data-lucide="image" style="width: 14px; height: 14px;"></i>
+         </button>` 
+      : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
 
     return `
       <tr>
         <td>${formatDate(t.date)}</td>
         <td style="font-weight: 500;">${t.description}</td>
         <td>
-          <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : '#333'}; color: ${cat ? cat.color : '#fff'}; border: 1px solid ${cat ? cat.color + '44' : '#555'}">
-            ${cat ? cat.name : 'Outros'}
+          <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
+            ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
           </span>
         </td>
-        <td>Família</td>
+        <td>${whoLaunched}</td>
         <td>${pmLabel}</td>
         <td>${t.installments > 1 ? `${t.installments}x` : 'À vista'}</td>
-        <td class="red-neon" style="font-weight: 600;">-${formatCurrency(t.amount)}</td>
+        <td>${valueHtml}</td>
+        <td style="text-align: center;">${receiptHtml}</td>
         <td>
           <button class="btn-delete" onclick="deleteTransaction(${t.id})" title="Excluir lançamento">
             <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
@@ -652,15 +717,27 @@ function renderNewTxFormFields() {
   const catSelect = document.getElementById('tx-category');
   const cardSelect = document.getElementById('tx-card');
   const accSelect = document.getElementById('tx-account');
+  const destAccSelect = document.getElementById('tx-destination-account');
 
-  catSelect.innerHTML = `<option value="" disabled selected>Escolha uma categoria</option>` + 
-    state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  if (catSelect) {
+    catSelect.innerHTML = `<option value="" disabled selected>Escolha uma categoria</option>` + 
+      state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
 
-  cardSelect.innerHTML = `<option value="" disabled selected>Escolha o cartão</option>` + 
-    state.cards.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  if (cardSelect) {
+    cardSelect.innerHTML = `<option value="" disabled selected>Escolha o cartão</option>` + 
+      state.cards.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
 
-  accSelect.innerHTML = `<option value="" disabled selected>Escolha a conta</option>` + 
-    state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  if (accSelect) {
+    accSelect.innerHTML = `<option value="" disabled selected>Escolha a conta</option>` + 
+      state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  }
+
+  if (destAccSelect) {
+    destAccSelect.innerHTML = `<option value="" disabled selected>Escolha a conta de destino</option>` + 
+      state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  }
 }
 
 // 7. Detalhamento Inline Mensal
@@ -1110,6 +1187,8 @@ function editUser(id) {
   document.getElementById('user-name').value = u.name;
   document.getElementById('user-email').value = u.email;
   document.getElementById('user-password').value = u.password;
+  document.getElementById('user-is-admin').checked = u.is_admin !== false;
+  document.getElementById('user-only-self-data').checked = u.only_self_data === true;
 
   document.getElementById('user-form-title').textContent = 'Editar Usuário';
   document.getElementById('clear-user-form-btn').classList.remove('hide');
@@ -1119,6 +1198,8 @@ function editUser(id) {
 function clearUserForm() {
   document.getElementById('user-id').value = '';
   document.getElementById('user-form').reset();
+  document.getElementById('user-is-admin').checked = true;
+  document.getElementById('user-only-self-data').checked = false;
   document.getElementById('user-form-title').textContent = 'Cadastrar Novo Usuário';
   document.getElementById('clear-user-form-btn').classList.add('hide');
   state.editingEntity = { type: null, id: null };
@@ -1372,28 +1453,124 @@ document.querySelectorAll('.admin-tab-btn').forEach(btn => {
   });
 });
 
-// Toggle Novo Lançamento (Cartão vs Débito)
+// Toggle Novo Lançamento (Cartão vs Débito vs Transferência)
 document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
   radio.addEventListener('change', (e) => {
     document.querySelectorAll('.toggle-option').forEach(opt => opt.classList.remove('active'));
     e.target.parentElement.classList.add('active');
 
     const method = e.target.value;
+    const cardGroup = document.getElementById('card-selection-group');
+    const accGroup = document.getElementById('account-selection-group');
+    const destGroup = document.getElementById('destination-account-selection-group');
+    const instRow = document.getElementById('installments-row');
+    const catGroup = document.getElementById('tx-category').parentElement;
+    const accLabel = document.getElementById('tx-account-label');
+
     if (method === 'card') {
-      document.getElementById('card-selection-group').classList.remove('hide');
-      document.getElementById('installments-row').classList.remove('hide');
-      document.getElementById('account-selection-group').classList.add('hide');
+      cardGroup.classList.remove('hide');
+      instRow.classList.remove('hide');
+      accGroup.classList.add('hide');
+      destGroup.classList.add('hide');
+      catGroup.classList.remove('hide');
+      
       document.getElementById('tx-card').setAttribute('required', true);
       document.getElementById('tx-account').removeAttribute('required');
-    } else {
-      document.getElementById('card-selection-group').classList.add('hide');
-      document.getElementById('installments-row').classList.add('hide');
-      document.getElementById('account-selection-group').classList.remove('hide');
+      document.getElementById('tx-destination-account').removeAttribute('required');
+      document.getElementById('tx-category').setAttribute('required', true);
+      accLabel.textContent = 'Qual Conta Bancária?';
+    } else if (method === 'account') {
+      cardGroup.classList.add('hide');
+      instRow.classList.add('hide');
+      accGroup.classList.remove('hide');
+      destGroup.classList.add('hide');
+      catGroup.classList.remove('hide');
+      
       document.getElementById('tx-account').setAttribute('required', true);
       document.getElementById('tx-card').removeAttribute('required');
+      document.getElementById('tx-destination-account').removeAttribute('required');
+      document.getElementById('tx-category').setAttribute('required', true);
+      accLabel.textContent = 'Qual Conta Bancária?';
+    } else if (method === 'transfer') {
+      cardGroup.classList.add('hide');
+      instRow.classList.add('hide');
+      accGroup.classList.remove('hide');
+      destGroup.classList.remove('hide');
+      catGroup.classList.add('hide'); // Ocultar categorias em transferências
+      
+      document.getElementById('tx-account').setAttribute('required', true);
+      document.getElementById('tx-destination-account').setAttribute('required', true);
+      document.getElementById('tx-card').removeAttribute('required');
+      document.getElementById('tx-category').removeAttribute('required');
+      accLabel.textContent = 'Conta de Origem (Sairá saldo)';
     }
   });
 });
+
+// Câmera e Recibo
+const receiptTrigger = document.getElementById('tx-receipt-trigger-btn');
+const receiptInput = document.getElementById('tx-receipt-input');
+const receiptStatus = document.getElementById('tx-receipt-status');
+const receiptBase64 = document.getElementById('tx-receipt-base64');
+const receiptPreviewContainer = document.getElementById('tx-receipt-preview-container');
+const receiptPreviewImg = document.getElementById('tx-receipt-preview-img');
+const receiptRemoveBtn = document.getElementById('tx-receipt-remove-btn');
+
+if (receiptTrigger && receiptInput) {
+  receiptTrigger.addEventListener('click', () => receiptInput.click());
+  
+  receiptInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    receiptStatus.textContent = 'Processando imagem...';
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 600;
+        const MAX_HEIGHT = 600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        receiptBase64.value = dataUrl;
+        receiptPreviewImg.src = dataUrl;
+        receiptPreviewContainer.classList.remove('hide');
+        receiptStatus.textContent = 'Recibo anexado com sucesso!';
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  receiptRemoveBtn.addEventListener('click', () => {
+    receiptInput.value = '';
+    receiptBase64.value = '';
+    receiptPreviewContainer.classList.add('hide');
+    receiptPreviewImg.src = '';
+    receiptStatus.textContent = 'Nenhum recibo anexado';
+  });
+}
 
 // Preview de parcelamento
 function updateInstallmentPreview() {
@@ -1419,11 +1596,14 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
   const description = document.getElementById('tx-description').value;
   const amount = parseFloat(document.getElementById('tx-amount').value);
   const date = document.getElementById('tx-date').value;
-  const categoryId = parseInt(document.getElementById('tx-category').value);
+  const categoryIdVal = document.getElementById('tx-category').value;
+  const categoryId = categoryIdVal ? parseInt(categoryIdVal) : null;
   const paymentMethod = document.querySelector('input[name="tx-payment-method"]:checked').value;
   const cardId = document.getElementById('tx-card').value;
   const installments = document.getElementById('tx-installments').value;
   const accountId = document.getElementById('tx-account').value;
+  const destinationAccountId = document.getElementById('tx-destination-account').value;
+  const receiptUrlVal = document.getElementById('tx-receipt-base64').value || null;
 
   try {
     // 1. Inserir Transação no Supabase
@@ -1431,12 +1611,14 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       description,
       amount,
       date,
-      category_id: categoryId,
+      category_id: paymentMethod === 'transfer' ? null : categoryId,
       payment_method: paymentMethod,
       card_id: paymentMethod === 'card' ? parseInt(cardId) : null,
       installments: paymentMethod === 'card' ? parseInt(installments) : 1,
-      account_id: paymentMethod === 'account' ? parseInt(accountId) : null,
-      user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
+      account_id: (paymentMethod === 'account' || paymentMethod === 'transfer') ? parseInt(accountId) : null,
+      destination_account_id: paymentMethod === 'transfer' ? parseInt(destinationAccountId) : null,
+      user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null,
+      receipt_url: receiptUrlVal
     };
 
     const { error: insertError } = await state.supabase.from('transactions').insert([newTx]);
@@ -1456,7 +1638,42 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       }
     }
 
+    // 3. Se for transferência, deduzir da conta de origem e somar na de destino
+    if (paymentMethod === 'transfer' && accountId && destinationAccountId) {
+      const originIdNum = parseInt(accountId);
+      const destIdNum = parseInt(destinationAccountId);
+
+      if (originIdNum === destIdNum) {
+        throw new Error('A conta de origem e destino da transferência devem ser diferentes!');
+      }
+
+      const originAcc = state.accounts.find(a => a.id === originIdNum);
+      const destAcc = state.accounts.find(a => a.id === destIdNum);
+
+      if (originAcc && destAcc) {
+        const newOriginBalance = parseFloat(originAcc.balance) - amount;
+        const { error: errorOrigin } = await state.supabase
+          .from('accounts')
+          .update({ balance: newOriginBalance })
+          .eq('id', originIdNum);
+        if (errorOrigin) throw errorOrigin;
+
+        const newDestBalance = parseFloat(destAcc.balance) + amount;
+        const { error: errorDest } = await state.supabase
+          .from('accounts')
+          .update({ balance: newDestBalance })
+          .eq('id', destIdNum);
+        if (errorDest) throw errorDest;
+      }
+    }
+
+    // Limpar o formulário e resetar preview de recibo
     document.getElementById('new-transaction-form').reset();
+    document.getElementById('tx-receipt-base64').value = '';
+    document.getElementById('tx-receipt-preview-container').classList.add('hide');
+    document.getElementById('tx-receipt-preview-img').src = '';
+    document.getElementById('tx-receipt-status').textContent = 'Nenhum recibo anexado';
+    
     document.querySelector('input[value="card"]').click();
     document.getElementById('installment-preview-text').classList.add('hide');
 
@@ -1583,9 +1800,18 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
   const name = document.getElementById('user-name').value;
   const email = document.getElementById('user-email').value;
   const password = document.getElementById('user-password').value;
+  const isAdmin = document.getElementById('user-is-admin').checked;
+  const onlySelfData = document.getElementById('user-only-self-data').checked;
 
   try {
-    const payload = { name, email, password };
+    const payload = { 
+      name, 
+      email, 
+      password,
+      is_admin: isAdmin,
+      only_self_data: onlySelfData
+    };
+    
     if (id) {
       const { error } = await state.supabase.from('app_users').update(payload).eq('id', id);
       if (error) throw error;
@@ -1600,7 +1826,7 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
     // Fallback em memória para teste
     if (!id) {
       const tempId = Date.now();
-      state.users.push({ id: tempId, name, email, password });
+      state.users.push({ id: tempId, name, email, password, is_admin: isAdmin, only_self_data: onlySelfData });
       clearUserForm();
       renderAdminTables();
     }
@@ -1662,6 +1888,254 @@ document.getElementById('death-button').addEventListener('click', async () => {
 });
 
 document.getElementById('create-backup-btn').addEventListener('click', createBackup);
+
+// ================= SISTEMA DE RELATÓRIOS DINÂMICOS =================
+function renderReportsFields() {
+  const repCat = document.getElementById('rep-category');
+  if (repCat && state.categories) {
+    const selected = repCat.value;
+    repCat.innerHTML = '<option value="">Todas</option>' + 
+      state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    repCat.value = selected;
+  }
+  
+  const repAcc = document.getElementById('rep-account');
+  if (repAcc && state.accounts) {
+    const selected = repAcc.value;
+    repAcc.innerHTML = '<option value="">Todas</option>' + 
+      state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+    repAcc.value = selected;
+  }
+}
+
+function renderReportsTable() {
+  const startDateVal = document.getElementById('rep-start-date').value;
+  const endDateVal = document.getElementById('rep-end-date').value;
+  const typeVal = document.getElementById('rep-type').value;
+  const categoryVal = document.getElementById('rep-category').value;
+  const accountVal = document.getElementById('rep-account').value;
+
+  const tbody = document.getElementById('reports-transactions-tbody');
+  if (!tbody) return;
+
+  // Filtrar transações na memória
+  let filtered = [...state.transactions];
+
+  if (startDateVal) {
+    filtered = filtered.filter(t => t.date >= startDateVal);
+  }
+  if (endDateVal) {
+    filtered = filtered.filter(t => t.date <= endDateVal);
+  }
+
+  // Filtragem por Tipo
+  if (typeVal) {
+    filtered = filtered.filter(t => {
+      if (typeVal === 'transfer') {
+        return t.payment_method === 'transfer' || t.paymentMethod === 'transfer';
+      }
+      
+      const isTransfer = t.payment_method === 'transfer' || t.paymentMethod === 'transfer';
+      if (isTransfer) return false;
+
+      const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+      const isCategoryIncome = cat && cat.name.toLowerCase().includes('receita');
+      const isIncome = t.amount > 0 || isCategoryIncome;
+
+      if (typeVal === 'income') return isIncome;
+      if (typeVal === 'expense') return !isIncome;
+      return true;
+    });
+  }
+
+  // Filtragem por Categoria
+  if (categoryVal) {
+    filtered = filtered.filter(t => parseInt(t.category_id || t.categoryId) === parseInt(categoryVal));
+  }
+
+  // Filtragem por Conta Bancária
+  if (accountVal) {
+    filtered = filtered.filter(t => {
+      const accIdNum = t.account_id || t.accountId;
+      const destAccIdNum = t.destination_account_id || t.destinationAccountId;
+      return parseInt(accIdNum) === parseInt(accountVal) || parseInt(destAccIdNum) === parseInt(accountVal);
+    });
+  }
+
+  // Salvar no estado das buscas para o exportador CSV de relatórios
+  state.filteredReports = filtered;
+
+  // Calcular Resumos do Filtro
+  let totalIncome = 0;
+  let totalExpense = 0;
+
+  filtered.forEach(t => {
+    const isTransfer = t.payment_method === 'transfer' || t.paymentMethod === 'transfer';
+    if (isTransfer) return; // Transferências são neutras em termos de receita/despesa líquida
+
+    const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+    const isCategoryIncome = cat && cat.name.toLowerCase().includes('receita');
+    
+    if (t.amount > 0 || isCategoryIncome) {
+      totalIncome += parseFloat(t.amount);
+    } else {
+      totalExpense += parseFloat(t.amount);
+    }
+  });
+
+  const netBalance = totalIncome - totalExpense;
+
+  document.getElementById('rep-total-income').textContent = formatCurrency(totalIncome);
+  document.getElementById('rep-total-expense').textContent = `-${formatCurrency(totalExpense)}`;
+  
+  const netElem = document.getElementById('rep-net-balance');
+  netElem.textContent = `${netBalance >= 0 ? '+' : ''}${formatCurrency(netBalance)}`;
+  netElem.className = netBalance >= 0 ? 'green-neon' : 'red-neon';
+
+  // Renderizar a tabela
+  if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum lançamento encontrado para os filtros selecionados</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(t => {
+    const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+    const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
+    const whoLaunched = usr ? usr.name : 'Família';
+    
+    let pmLabel = '';
+    const cardIdNum = t.card_id || t.cardId;
+    const accIdNum = t.account_id || t.accountId;
+    const destAccIdNum = t.destination_account_id || t.destinationAccountId;
+
+    if (t.payment_method === 'card' || t.paymentMethod === 'card') {
+      const card = state.cards.find(c => c.id === cardIdNum);
+      pmLabel = `<i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${card ? card.name : 'Cartão'}`;
+    } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+      const originAcc = state.accounts.find(a => a.id === accIdNum);
+      const destAcc = state.accounts.find(a => a.id === destAccIdNum);
+      pmLabel = `<i data-lucide="shuffle" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${originAcc ? originAcc.name : 'Origem'} ➔ ${destAcc ? destAcc.name : 'Destino'}`;
+    } else {
+      const acc = state.accounts.find(a => a.id === accIdNum);
+      pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
+    }
+
+    let valueHtml = '';
+    if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+      valueHtml = `<span style="font-weight: 600; color: var(--neon-purple);">${formatCurrency(t.amount)}</span>`;
+    } else if (t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) {
+      valueHtml = `<span style="font-weight: 600; color: var(--neon-green);">+${formatCurrency(t.amount)}</span>`;
+    } else {
+      valueHtml = `<span style="font-weight: 600; color: var(--neon-red);">-${formatCurrency(t.amount)}</span>`;
+    }
+
+    const receiptHtml = t.receipt_url 
+      ? `<button class="btn-receipt" onclick="viewReceipt(${t.id})" title="Ver Recibo" style="background: rgba(79, 70, 229, 0.1); border: 1px solid rgba(79, 70, 229, 0.3); border-radius: 4px; padding: 4px; cursor: pointer; color: var(--neon-purple); display: inline-flex; align-items: center; justify-content: center;">
+           <i data-lucide="image" style="width: 14px; height: 14px;"></i>
+         </button>` 
+      : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
+
+    return `
+      <tr>
+        <td>${formatDate(t.date)}</td>
+        <td style="font-weight: 500;">${t.description}</td>
+        <td>
+          <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
+            ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
+          </span>
+        </td>
+        <td>${whoLaunched}</td>
+        <td>${pmLabel}</td>
+        <td>${t.installments > 1 ? `${t.installments}x` : 'À vista'}</td>
+        <td>${valueHtml}</td>
+        <td style="text-align: center;">${receiptHtml}</td>
+      </tr>
+    `;
+  }).join('');
+
+  lucide.createIcons();
+}
+
+// Event Listeners dos Filtros de Relatório
+document.getElementById('rep-start-date').addEventListener('change', renderReportsTable);
+document.getElementById('rep-end-date').addEventListener('change', renderReportsTable);
+document.getElementById('rep-type').addEventListener('change', renderReportsTable);
+document.getElementById('rep-category').addEventListener('change', renderReportsTable);
+document.getElementById('rep-account').addEventListener('change', renderReportsTable);
+
+document.getElementById('clear-reports-filters-btn').addEventListener('click', () => {
+  document.getElementById('rep-start-date').value = '';
+  document.getElementById('rep-end-date').value = '';
+  document.getElementById('rep-type').value = '';
+  document.getElementById('rep-category').value = '';
+  document.getElementById('rep-account').value = '';
+  renderReportsTable();
+});
+
+// Exportar Relatório Filtrado em CSV
+document.getElementById('export-filtered-csv-btn').addEventListener('click', () => {
+  const dataToExport = state.filteredReports || state.transactions;
+  if (dataToExport.length === 0) {
+    alert('Nenhum lançamento para exportar.');
+    return;
+  }
+
+  let csvContent = '\uFEFF'; // UTF-8 BOM
+  csvContent += 'Data;Descrição;Categoria;Quem Lançou;Forma Pagamento;Parcelas;Valor (R$)\n';
+
+  dataToExport.forEach(t => {
+    const catIdNum = t.category_id || t.categoryId;
+    const cat = state.categories.find(c => c.id === catIdNum);
+    const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
+    const whoLaunched = usr ? usr.name : 'Família';
+    
+    let method = '';
+    if (t.payment_method === 'card' || t.paymentMethod === 'card') {
+      method = 'Cartão de Crédito';
+    } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+      method = 'Transferência entre contas';
+    } else {
+      method = 'Débito em Conta';
+    }
+
+    const installments = t.installments > 1 ? `${t.installments}x` : 'À vista';
+    const catName = t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral');
+
+    csvContent += `"${formatDate(t.date)}";"${t.description}";"${catName}";"${whoLaunched}";"${method}";"${installments}";"${parseFloat(t.amount).toFixed(2)}"\n`;
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `familymoney_relatorio_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});
+
+// Modal de Recibos
+window.viewReceipt = function(txId) {
+  const tx = state.transactions.find(t => t.id === parseInt(txId) || t.id === txId);
+  if (tx && tx.receipt_url) {
+    document.getElementById('receipt-modal-img').src = tx.receipt_url;
+    document.getElementById('receipt-modal').classList.remove('hide');
+  } else {
+    alert('Nenhum comprovante disponível para esta transação.');
+  }
+};
+
+const closeReceiptModalBtn = document.getElementById('close-receipt-modal-btn');
+if (closeReceiptModalBtn) {
+  closeReceiptModalBtn.addEventListener('click', () => {
+    document.getElementById('receipt-modal').classList.add('hide');
+    document.getElementById('receipt-modal-img').src = '';
+  });
+}
 
 // ================= INICIALIZAÇÃO =================
 window.addEventListener('DOMContentLoaded', () => {

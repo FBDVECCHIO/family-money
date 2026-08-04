@@ -59,6 +59,8 @@ CREATE TABLE app_users (
   name text NOT NULL,
   email text UNIQUE NOT NULL,
   password text NOT NULL,
+  is_admin boolean NOT NULL DEFAULT true,
+  only_self_data boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -75,12 +77,14 @@ CREATE TABLE transactions (
   description text NOT NULL,
   amount numeric(12, 2) NOT NULL,
   date date NOT NULL,
-  category_id bigint REFERENCES categories(id) ON DELETE CASCADE NOT NULL,
-  payment_method text NOT NULL CHECK (payment_method IN ('account', 'card')),
+  category_id bigint REFERENCES categories(id) ON DELETE CASCADE, -- Removido NOT NULL para permitir transferências sem categoria obrigatória
+  payment_method text NOT NULL CHECK (payment_method IN ('account', 'card', 'transfer')),
   card_id bigint REFERENCES cards(id) ON DELETE CASCADE,
   installments integer NOT NULL DEFAULT 1,
   account_id bigint REFERENCES accounts(id) ON DELETE CASCADE,
-  user_id bigint REFERENCES app_users(id) ON DELETE SET NULL, -- Vinculado à tabela app_users
+  destination_account_id bigint REFERENCES accounts(id) ON DELETE SET NULL,
+  user_id bigint REFERENCES app_users(id) ON DELETE SET NULL,
+  receipt_url text,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

@@ -1,37 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+
 /* ================= SISTEMA DE CORES E VARIÁVEIS ================= */
 :root {
-  /* Cores Base (Sólidos) */
-  --bg-main: #e2e8f0; /* Cinza claro levemente mais escuro (Slate-200) */
-  --bg-card: #27272a; /* Tom dos cards mais claro (Zinc-800) */
-  --bg-card-hover: #323235; /* Card hover */
-  --bg-input: #18181b; /* Áreas de dropdown/input em tom de cinza escuro/baixo para contrastar */
-  --border-color: rgba(255, 255, 255, 0.08); /* Borda branca suave */
+  /* Cores Base (Sólidos - Light Mode) */
+  --bg-main: #e2e8f0; /* Cinza claro suave (Slate-200) */
+  --bg-card: #f1f5f9; /* Tom dos cards cinza claro 2 pontos acima do fundo (Slate-100) */
+  --bg-card-hover: #e2e8f0; /* Card hover */
+  --bg-input: #ffffff; /* Áreas de dropdown/input brancas para contrastar */
+  --border-color: rgba(15, 23, 42, 0.08); /* Borda escura muito suave */
   
   /* Cores de Destaque */
-  --neon-green: #ffffff; /* Branco puro */
-  --neon-green-dim: #e4e4e7; /* Cinza claro */
-  --neon-purple: #a1a1aa; /* Cinza médio */
-  --neon-purple-bright: #ffffff; /* Branco puro */
-  --neon-red: #ff3b30; /* Mantém vermelho para alertas financeiros */
-  --neon-red-dim: #ef4444;
-  --neon-red-glow: 0 0 8px rgba(255, 59, 48, 0.3);
+  --neon-green: #0f766e; /* Azul-petróleo escuro/verde escuro para receitas */
+  --neon-green-dim: #115e59;
+  --neon-purple: #4f46e5; /* Violeta/Indigo escuro */
+  --neon-purple-bright: #3730a3;
+  --neon-red: #dc2626; /* Vermelho escuro para despesas */
+  --neon-red-dim: #b91c1c;
+  --neon-red-glow: none;
   
   /* Tons Pastéis e Auxiliares */
-  --pastel-purple: #a1a1aa; /* Cinza médio para subtítulos */
-  --pastel-green: #ffffff; /* Branco suave */
-  --pastel-red: #fda4af; /* Vermelho pastel suave para alertas */
-  --pastel-text: #f4f4f5; /* Texto claro */
-  --text-muted: #71717a; /* Cinza escuro para textos secundários */
+  --pastel-purple: #4b5563; /* Cinza médio para subtítulos */
+  --pastel-green: #0f766e; /* Verde escuro */
+  --pastel-red: #fca5a5; /* Vermelho pastel suave para alertas */
+  --pastel-text: #0f172a; /* Texto escuro */
+  --text-muted: #6b7280; /* Cinza escuro para textos secundários */
   
   /* Status */
-  --color-positive: #ffffff;
-  --color-negative: #ff3b30;
+  --color-positive: #0f766e;
+  --color-negative: #dc2626;
   
   /* Fontes e Sombras */
-  --font-family: 'Outfit', sans-serif;
-  --shadow-glow-purple: 0 0 10px rgba(0, 0, 0, 0.05);
-  --shadow-glow-green: 0 0 10px rgba(0, 0, 0, 0.05);
-  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+  --font-family: 'Gotham', 'Montserrat', 'Outfit', sans-serif;
+  --shadow-glow-purple: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-glow-green: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 10px -2px rgba(0, 0, 0, 0.03);
   --radius: 12px;
   --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1433,38 +1435,88 @@ tr:hover td {
   padding-bottom: 8px;
 }
 
-/* ================= CONTEXTO DE CONTRASTE (TEXTOS CLAROS EM CARDS ESCUROS, TEXTOS ESCUROS NO FUNDO CLARO) ================= */
+/* ================= TEMA CLARO SUAVE (AJUSTE GERAL DE CORES E CONTRASTE) ================= */
 
-/* Cabeçalhos e subtítulos das telas que ficam no fundo cinza claro */
-.view-header h2,
-.view-header p.subtitle,
-.admin-tab-btn,
-.view-container > div > h2,
-.view-container > div > p {
-  color: #1e293b !important;
+/* Forçar cor do texto escura para o corpo, cabeçalhos, formulários, tabelas, inputs e botões */
+body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th, code, .nav-link {
+  color: #0f172a;
 }
 
-.view-header p.subtitle {
-  color: #52525b !important;
+/* Forçar inputs com fundo branco e texto escuro */
+.form-group input, .form-group select, .form-group select option {
+  background: var(--bg-input) !important;
+  color: #0f172a !important;
 }
 
-.admin-tab-btn {
-  color: #71717a !important;
-}
-
-.admin-tab-btn:hover {
-  color: #09090b !important;
-}
-
-.admin-tab-btn.active {
-  color: #18181b !important;
-  border-bottom-color: #18181b !important;
-}
-
-/* Forçar textos de cards glass, sidebar e modals a continuarem brancos/claros */
-.glass, .glass h1, .glass h2, .glass h3, .glass h4, .glass p, .glass span, .glass td, .glass th, .glass label, .glass code,
-.app-header, .app-header span, .app-header a, .app-header button,
-.main-nav button, .main-nav span,
+/* Modals */
 .modal-content, .modal-content h1, .modal-content h2, .modal-content h3, .modal-content h4, .modal-content p, .modal-content span, .modal-content td, .modal-content th, .modal-content label {
-  color: #f4f4f5;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* Corrigir as bordas no light mode */
+.glass, .app-header, .main-nav, .detail-list-box h4, .section-header, .account-item, .card-item {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Customizações dos botões e navegação */
+.btn-primary {
+  background: #0f172a !important;
+  color: #ffffff !important;
+}
+.btn-primary:hover {
+  background: #1e293b !important;
+}
+
+.btn-outline {
+  border-color: rgba(15, 23, 42, 0.2) !important;
+  color: #0f172a !important;
+}
+.btn-outline:hover {
+  background: rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Menu Lateral e Cabeçalho */
+.app-header {
+  background: #f8fafc !important; /* Ligeiramente mais claro/limpo */
+}
+
+/* Nav links inativos no desktop e mobile */
+.nav-link {
+  color: #4b5563 !important; /* Slate-600 */
+}
+.nav-link:hover {
+  color: #0f172a !important;
+  background: rgba(15, 23, 42, 0.05) !important;
+}
+.nav-link.active {
+  color: #0f172a !important;
+  background: rgba(15, 23, 42, 0.08) !important;
+  border-color: rgba(15, 23, 42, 0.15) !important;
+}
+
+/* Links administrativos */
+.admin-tab-btn {
+  color: #4b5563 !important;
+}
+.admin-tab-btn:hover {
+  color: #0f172a !important;
+}
+.admin-tab-btn.active {
+  color: #4f46e5 !important; /* Roxo para destaque na aba ativa */
+  border-bottom-color: #4f46e5 !important;
+}
+
+/* Ajustes de badges de forecast */
+.forecast-card-sobra, .forecast-card-projected {
+  border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Estilo para smartphone fixo */
+@media (max-width: 600px) {
+  .main-nav {
+    background: #f8fafc !important;
+    border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.05) !important;
+  }
 }

@@ -103,11 +103,16 @@
           <span class="nav-text-desktop">Dashboard</span>
           <span class="nav-text-mobile">Dash</span>
         </button>
+        <button class="nav-link" data-tab="reports">
+          <i data-lucide="bar-chart-2"></i>
+          <span class="nav-text-desktop">Relatórios</span>
+          <span class="nav-text-mobile">Rel</span>
+        </button>
         <button class="nav-link" data-tab="new-tx">
           <i data-lucide="plus-circle"></i>
           <span class="nav-text-desktop">Novo Lançamento</span>
         </button>
-        <button class="nav-link" data-tab="admin">
+        <button class="nav-link" id="admin-nav-btn" data-tab="admin">
           <i data-lucide="settings"></i>
           <span class="nav-text-desktop">Administração</span>
           <span class="nav-text-mobile">Adm</span>
@@ -317,6 +322,102 @@
 
         </div>
 
+        <!-- TELA: RELATÓRIOS (NOVA) -->
+        <div id="view-reports" class="tab-view">
+          <div class="view-header">
+            <div>
+              <h2>Relatórios e Cruzamento de Dados</h2>
+              <p class="subtitle text-pastel-purple">Filtros avançados e análise detalhada dos lançamentos da família</p>
+            </div>
+            <div class="actions">
+              <button id="export-filtered-csv-btn" class="btn btn-outline">
+                <i data-lucide="download"></i> Exportar Resultados
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtros de Relatório -->
+          <div class="glass" style="padding: 20px; margin-bottom: 25px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px;">
+            <div class="form-group">
+              <label for="rep-start-date">Data Inicial</label>
+              <input type="date" id="rep-start-date">
+            </div>
+            <div class="form-group">
+              <label for="rep-end-date">Data Final</label>
+              <input type="date" id="rep-end-date">
+            </div>
+            <div class="form-group">
+              <label for="rep-type">Tipo</label>
+              <select id="rep-type">
+                <option value="">Todos</option>
+                <option value="income">Receitas (Entradas)</option>
+                <option value="expense">Despesas (Saídas)</option>
+                <option value="transfer">Transferências</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="rep-category">Categoria</label>
+              <select id="rep-category">
+                <option value="">Todas</option>
+                <!-- Inserido dinamicamente -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="rep-account">Conta Bancária</label>
+              <select id="rep-account">
+                <option value="">Todas</option>
+                <!-- Inserido dinamicamente -->
+              </select>
+            </div>
+            <div class="form-group" style="justify-content: flex-end; margin-bottom: 0;">
+              <button id="clear-reports-filters-btn" class="btn btn-outline" style="width: 100%; padding: 10px;">
+                Limpar Filtros
+              </button>
+            </div>
+          </div>
+
+          <!-- Resumo de Filtro -->
+          <div class="inline-summary-row" style="margin-bottom: 25px;">
+            <div class="summary-box glass">
+              <h4>Receitas (Filtro)</h4>
+              <span class="green-neon" id="rep-total-income" style="font-size: 1.5rem; font-weight: 700;">R$ 0,00</span>
+            </div>
+            <div class="summary-box glass">
+              <h4>Despesas (Filtro)</h4>
+              <span class="red-neon" id="rep-total-expense" style="font-size: 1.5rem; font-weight: 700;">R$ 0,00</span>
+            </div>
+            <div class="summary-box glass">
+              <h4>Saldo Líquido</h4>
+              <span id="rep-net-balance" class="green-neon" style="font-size: 1.5rem; font-weight: 700;">R$ 0,00</span>
+            </div>
+          </div>
+
+          <!-- Tabela de Resultados -->
+          <div class="recent-transactions-card glass" style="margin-top: 0;">
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Lançamento</th>
+                    <th>Categoria</th>
+                    <th>Quem Lançou</th>
+                    <th>Forma de Pagamento</th>
+                    <th>Parcelamento</th>
+                    <th>Valor</th>
+                    <th>Recibo</th>
+                  </tr>
+                </thead>
+                <tbody id="reports-transactions-tbody">
+                  <tr>
+                    <td colspan="8" style="text-align: center; color: var(--text-muted);">Aplique ou limpe os filtros para visualizar os dados</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- TELA 2: NOVO LANÇAMENTO -->
         <div id="view-new-tx" class="tab-view">
           <div class="view-header">
@@ -362,6 +463,10 @@
                       <input type="radio" name="tx-payment-method" value="account">
                       <i data-lucide="wallet"></i> Débito / Pix (Conta)
                     </label>
+                    <label class="toggle-option">
+                      <input type="radio" name="tx-payment-method" value="transfer">
+                      <i data-lucide="shuffle"></i> Transferência
+                    </label>
                   </div>
                 </div>
                 
@@ -373,10 +478,18 @@
                   </select>
                 </div>
 
-                <!-- Condicional: Débito em Conta -->
+                <!-- Condicional: Conta Bancária (Origem) -->
                 <div class="form-group hide" id="account-selection-group">
-                  <label for="tx-account">Qual Conta Bancária?</label>
+                  <label for="tx-account" id="tx-account-label">Qual Conta Bancária?</label>
                   <select id="tx-account">
+                    <!-- Preenchido via API -->
+                  </select>
+                </div>
+
+                <!-- Condicional: Transferência (Destino) -->
+                <div class="form-group hide" id="destination-account-selection-group">
+                  <label for="tx-destination-account">Qual Conta de Destino?</label>
+                  <select id="tx-destination-account">
                     <!-- Preenchido via API -->
                   </select>
                 </div>
@@ -404,6 +517,29 @@
                 <div class="form-group" style="justify-content: flex-end; display: flex; align-items: flex-end;">
                   <div class="installment-calc-preview" id="installment-preview-text">
                     Valor da Parcela: <span class="green-neon" id="preview-installment-amount">R$ 0,00</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Foto do Recibo -->
+              <div class="form-row-2" id="receipt-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px; margin-bottom: 15px;">
+                <div class="form-group">
+                  <label>Comprovante / Recibo (Foto)</label>
+                  <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <button type="button" id="tx-receipt-trigger-btn" class="btn btn-outline" style="width: auto;">
+                      <i data-lucide="camera"></i> Anexar / Tirar Foto
+                    </button>
+                    <input type="file" id="tx-receipt-input" accept="image/*" capture="environment" style="display: none;">
+                    <span id="tx-receipt-status" style="color: var(--text-muted); font-size: 0.85rem;">Nenhum recibo anexado</span>
+                  </div>
+                  <input type="hidden" id="tx-receipt-base64">
+                </div>
+                <div class="form-group" style="justify-content: center; display: flex; align-items: center;">
+                  <div id="tx-receipt-preview-container" class="hide" style="position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);">
+                    <img id="tx-receipt-preview-img" style="width: 100%; height: 100%; object-fit: cover;">
+                    <button type="button" id="tx-receipt-remove-btn" style="position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #fff;">
+                      <i data-lucide="x" style="width: 12px; height: 12px;"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -680,6 +816,16 @@
                     <label for="user-password">Senha de Acesso</label>
                     <input type="text" id="user-password" placeholder="Ex: 123" required>
                   </div>
+                  <div class="form-row-2" style="margin-bottom: 20px; gap: 20px; display: flex;">
+                    <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px; margin-bottom: 0;">
+                      <input type="checkbox" id="user-is-admin" checked style="width: 18px; height: 18px;">
+                      <label for="user-is-admin" style="text-transform: none; font-size: 0.85rem; font-weight: normal; margin-bottom: 0; cursor: pointer;">Acesso Admin</label>
+                    </div>
+                    <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px; margin-bottom: 0;">
+                      <input type="checkbox" id="user-only-self-data" style="width: 18px; height: 18px;">
+                      <label for="user-only-self-data" style="text-transform: none; font-size: 0.85rem; font-weight: normal; margin-bottom: 0; cursor: pointer;">Apenas Dados Próprios</label>
+                    </div>
+                  </div>
                   <button type="submit" class="btn btn-primary btn-block">Salvar Usuário</button>
                   <button type="button" id="clear-user-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
                 </form>
@@ -742,6 +888,19 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- Modal de Visualização de Recibo -->
+  <div id="receipt-modal" class="hide" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.6); z-index: 99999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+    <div class="glass" style="background: #f8fafc; padding: 20px; border-radius: 12px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; gap: 15px; position: relative;">
+      <button id="close-receipt-modal-btn" style="position: absolute; top: 10px; right: 10px; background: rgba(15, 23, 42, 0.08); border: none; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #0f172a;">
+        <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+      </button>
+      <h3 style="margin-right: 40px; color: #0f172a;">Comprovante de Lançamento</h3>
+      <div style="overflow: auto; text-align: center; border-radius: 8px; border: 1px solid var(--border-color); background: #f1f5f9;">
+        <img id="receipt-modal-img" style="max-width: 100%; max-height: 60vh; object-fit: contain; display: block; margin: 0 auto;">
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
