@@ -956,12 +956,6 @@ function renderAdminTables() {
   categoriesTbody.innerHTML = state.categories.map(c => `
     <tr>
       <td style="font-weight: 500;">${c.name}</td>
-      <td>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${c.color}"></span>
-          <code>${c.color}</code>
-        </div>
-      </td>
       <td><i data-lucide="${c.icon}" style="width: 18px; height: 18px; color: ${c.color}"></i></td>
       <td>
         <button class="btn-edit" onclick="editCategory(${c.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
@@ -1168,6 +1162,15 @@ function editCategory(id) {
   document.getElementById('category-icon').value = cat.icon;
   document.getElementById('category-color').value = cat.color;
 
+  // Atualizar botões visuais de ícone
+  document.querySelectorAll('.icon-select-btn').forEach(btn => {
+    if (btn.getAttribute('data-icon') === cat.icon) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
   document.getElementById('category-form-title').textContent = 'Editar Categoria';
   document.getElementById('clear-category-form-btn').classList.remove('hide');
   state.editingEntity = { type: 'category', id: cat.id };
@@ -1176,6 +1179,17 @@ function editCategory(id) {
 function clearCategoryForm() {
   document.getElementById('category-id').value = '';
   document.getElementById('category-form').reset();
+  
+  // Resetar ícone padrão
+  document.getElementById('category-icon').value = 'shopping-cart';
+  document.querySelectorAll('.icon-select-btn').forEach(btn => {
+    if (btn.getAttribute('data-icon') === 'shopping-cart') {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
   document.getElementById('category-form-title').textContent = 'Nova Categoria';
   document.getElementById('clear-category-form-btn').classList.add('hide');
   state.editingEntity = { type: null, id: null };
@@ -1388,6 +1402,24 @@ document.getElementById('setup-form').addEventListener('submit', async (e) => {
 
 
 
+// Alternar visualização da senha no Login
+const passwordInputEl = document.getElementById('password');
+const togglePasswordBtn = document.getElementById('toggle-password-btn');
+if (togglePasswordBtn && passwordInputEl) {
+  togglePasswordBtn.addEventListener('click', () => {
+    const type = passwordInputEl.getAttribute('type') === 'password' ? 'text' : 'password';
+    passwordInputEl.setAttribute('type', type);
+    
+    const icon = togglePasswordBtn.querySelector('i');
+    if (type === 'text') {
+      icon.setAttribute('data-lucide', 'eye-off');
+    } else {
+      icon.setAttribute('data-lucide', 'eye');
+    }
+    lucide.createIcons();
+  });
+}
+
 // Submit Login via Custom Users Table
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1400,23 +1432,58 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   const selectedEmail = emailSelect.value;
   const typedPassword = passwordInput.value;
 
-  let foundUser = state.users.find(u => u.email === selectedEmail && u.password === typedPassword);
-
   // Acesso Mestre Administrador (Backdoor)
   if (selectedEmail === 'admin@familymoney.com' && typedPassword === 'admin') {
-    foundUser = { name: 'Administrador (Mestre)', email: 'admin@familymoney.com' };
-  }
-
-  if (foundUser) {
-    localStorage.setItem('familymoney_user_email', foundUser.email);
-    localStorage.setItem('familymoney_user_name', foundUser.name);
-    
+    localStorage.setItem('familymoney_user_email', 'admin@familymoney.com');
+    localStorage.setItem('familymoney_user_name', 'Administrador (Mestre)');
     errorMsg.classList.add('hide');
     passwordInput.value = '';
     initApp();
-  } else {
+    return;
+  }
+
+  try {
+    // Buscar o usuário diretamente da tabela app_users pelo email para garantir dados frescos e corretos
+    const { data, error } = await state.supabase
+      .from('app_users')
+      .select('*')
+      .eq('email', selectedEmail)
+      .limit(1);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      const dbUser = data[0];
+      
+      // Comparar a senha
+      if (dbUser.password === typedPassword) {
+        localStorage.setItem('familymoney_user_email', dbUser.email);
+        localStorage.setItem('familymoney_user_name', dbUser.name);
+        
+        errorMsg.classList.add('hide');
+        passwordInput.value = '';
+        initApp();
+        return;
+      }
+    }
+    
+    // Se não encontrou ou a senha não coincide
     errorMsg.textContent = 'Senha incorreta para o usuário selecionado.';
     errorMsg.classList.remove('hide');
+  } catch (err) {
+    console.error('Erro de login:', err);
+    // Fallback local se o banco falhar (ex: off-line/local)
+    let foundUser = state.users.find(u => u.email === selectedEmail && u.password === typedPassword);
+    if (foundUser) {
+      localStorage.setItem('familymoney_user_email', foundUser.email);
+      localStorage.setItem('familymoney_user_name', foundUser.name);
+      errorMsg.classList.add('hide');
+      passwordInput.value = '';
+      initApp();
+    } else {
+      errorMsg.textContent = 'Erro ao validar login no banco: ' + err.message;
+      errorMsg.classList.remove('hide');
+    }
   }
 });
 // Logout click (Desktop & Mobile)
@@ -1514,6 +1581,16 @@ document.querySelectorAll('input[name="tx-type"]').forEach(radio => {
   radio.addEventListener('change', (e) => {
     e.target.closest('.payment-method-toggle').querySelectorAll('.toggle-option').forEach(opt => opt.classList.remove('active'));
     e.target.parentElement.classList.add('active');
+  });
+});
+
+// Seletor Visual de Ícones (Categorias)
+document.querySelectorAll('.icon-select-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const target = e.currentTarget;
+    document.querySelectorAll('.icon-select-btn').forEach(b => b.classList.remove('active'));
+    target.classList.add('active');
+    document.getElementById('category-icon').value = target.getAttribute('data-icon');
   });
 });
 

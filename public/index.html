@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>FAMILY MONEY - Controle Financeiro Familiar</title>
+  
+  <!-- PWA & Mobile Optimization -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0c0714">
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.json">
+
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -72,10 +82,15 @@
         
         <div class="form-group">
           <label for="password">Senha de Acesso</label>
-          <input type="password" id="password" placeholder="Digite sua senha" required>
+          <div style="position: relative; display: flex; align-items: center; width: 100%;">
+            <input type="password" id="password" placeholder="Digite sua senha" required style="padding-right: 40px; width: 100%;">
+            <button type="button" id="toggle-password-btn" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px;">
+              <i data-lucide="eye" style="width: 18px; height: 18px;"></i>
+            </button>
+          </div>
         </div>
         
-        <div id="login-error" class="error-msg hide">Usuário ou senha inválidos.</div>
+        <div id="login-error" class="error-msg hide">Senha de acesso incorreta.</div>
         
         <button type="submit" class="btn btn-primary btn-block">
           Entrar no Painel <i data-lucide="arrow-right"></i>
@@ -768,19 +783,35 @@
                     <input type="text" id="category-name" placeholder="Ex: Alimentação, Viagem" required>
                   </div>
                   <div class="form-row-2">
-                    <div class="form-group">
-                      <label for="category-icon">Ícone Lucide</label>
-                      <select id="category-icon">
-                        <option value="home">Casa (home)</option>
-                        <option value="shopping-cart" selected>Mercado (shopping-cart)</option>
-                        <option value="car">Carro (car)</option>
-                        <option value="activity">Saúde (activity)</option>
-                        <option value="book-open">Educação (book-open)</option>
-                        <option value="smile">Lazer (smile)</option>
-                        <option value="credit-card">Cartão (credit-card)</option>
-                        <option value="tv">Assinatura (tv)</option>
-                        <option value="help-circle">Outro (help-circle)</option>
-                      </select>
+                    <div class="form-group" style="grid-column: span 2;">
+                      <label style="margin-bottom: 8px; display: block;">Selecione o Ícone da Categoria</label>
+                      <input type="hidden" id="category-icon" value="shopping-cart">
+                      <div class="icon-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; max-height: 180px; overflow-y: auto; padding: 6px; border: 1px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.2);">
+                        <button type="button" class="icon-select-btn active" data-icon="shopping-cart" title="Mercado"><i data-lucide="shopping-cart"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="home" title="Casa"><i data-lucide="home"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="car" title="Carro"><i data-lucide="car"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="activity" title="Saúde"><i data-lucide="activity"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="book-open" title="Educação"><i data-lucide="book-open"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="smile" title="Lazer"><i data-lucide="smile"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="credit-card" title="Cartão"><i data-lucide="credit-card"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="tv" title="Assinatura"><i data-lucide="tv"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="utensils" title="Alimentação"><i data-lucide="utensils"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="plane" title="Viagem"><i data-lucide="plane"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="gift" title="Presentes"><i data-lucide="gift"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="shirt" title="Vestuário"><i data-lucide="shirt"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="scissors" title="Beleza"><i data-lucide="scissors"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="dumbbell" title="Academia"><i data-lucide="dumbbell"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="dog" title="Petshop"><i data-lucide="dog"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="briefcase" title="Trabalho"><i data-lucide="briefcase"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="wrench" title="Manutenção"><i data-lucide="wrench"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="coffee" title="Café"><i data-lucide="coffee"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="dollar-sign" title="Finanças"><i data-lucide="dollar-sign"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="heart" title="Saúde/Amor"><i data-lucide="heart"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="smartphone" title="Tecnologia"><i data-lucide="smartphone"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="bus" title="Transporte"><i data-lucide="bus"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="sparkles" title="Decoração/Beleza"><i data-lucide="sparkles"></i></button>
+                        <button type="button" class="icon-select-btn" data-icon="help-circle" title="Outros"><i data-lucide="help-circle"></i></button>
+                      </div>
                     </div>
                     <div class="form-group">
                       <label for="category-color">Cor Hex</label>
@@ -798,7 +829,6 @@
                     <thead>
                       <tr>
                         <th>Categoria</th>
-                        <th>Cor</th>
                         <th>Ícone</th>
                         <th>Ações</th>
                       </tr>

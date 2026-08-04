@@ -1563,9 +1563,68 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
 
 /* Estilo para smartphone fixo */
 @media (max-width: 600px) {
+  html {
+    font-size: 13px !important; /* Encolhe fontes relativas rem de forma proporcional em toda a tela */
+  }
+  body {
+    font-size: 13px !important;
+  }
+  h2 {
+    font-size: 1.3rem !important;
+  }
+  h3 {
+    font-size: 1.1rem !important;
+  }
+  h4 {
+    font-size: 0.95rem !important;
+  }
+  td, th {
+    padding: 6px 4px !important;
+    font-size: 0.75rem !important;
+  }
+  .badge-category {
+    font-size: 0.7rem !important;
+    padding: 2px 4px !important;
+  }
+  .view-header {
+    margin-bottom: 12px !important;
+  }
+  .view-header h2 {
+    font-size: 1.2rem !important;
+  }
   .main-nav {
     background: #191129 !important;
     border-top: 1px solid rgba(168, 85, 247, 0.15) !important;
     box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.4) !important;
   }
+}
+
+/* Seletor Visual de Ícones de Categorias */
+.icon-select-btn {
+  background: rgba(168, 85, 247, 0.05) !important;
+  border: 1px solid rgba(168, 85, 247, 0.15) !important;
+  border-radius: 6px !important;
+  color: var(--text-muted) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  aspect-ratio: 1 / 1 !important;
+  padding: 8px !important;
+  cursor: pointer !important;
+  transition: var(--transition) !important;
+}
+.icon-select-btn:hover {
+  border-color: var(--neon-purple) !important;
+  color: #ffffff !important;
+  background: rgba(168, 85, 247, 0.1) !important;
+}
+.icon-select-btn.active {
+  background: var(--neon-purple) !important;
+  border-color: var(--neon-purple) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.4) !important;
+}
+.icon-select-btn i {
+  width: 18px !important;
+  height: 18px !important;
 }
