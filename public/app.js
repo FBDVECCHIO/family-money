@@ -130,11 +130,12 @@ async function initApp() {
       id: 9999, name: activeUserName, email: activeUserEmail, is_admin: true, only_self_data: false
     };
 
+    const forceAdmin = ['fbdv1202@gmail.com', 'joycesiqueirafs@gmail.com', 'admin@familymoney.com'].includes(activeUserEmail.toLowerCase().trim());
     state.user = { 
       id: dbUser.id || dbUser.idNum || 9999, 
       email: activeUserEmail, 
       name: activeUserName,
-      is_admin: dbUser.is_admin !== false,
+      is_admin: forceAdmin || dbUser.is_admin !== false,
       only_self_data: dbUser.only_self_data === true
     };
 
