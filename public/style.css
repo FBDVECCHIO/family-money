@@ -1083,105 +1083,124 @@ tr:hover td {
 
 @media (max-width: 600px) {
   body {
-    padding-bottom: 70px !important; /* Espaço para o menu inferior fixo */
+    padding-bottom: 0 !important; /* Remover o preenchimento inferior que era usado para o rodapé */
   }
   
   .container {
     padding: 8px !important;
   }
   
-  /* Top Header Compacto (Apenas Logo e Usuário) */
+  /* Cabeçalho Compacto para Celular */
   .app-header {
-    padding: 8px !important;
+    padding: 8px 12px !important;
     flex-direction: row !important;
     justify-content: space-between !important;
     align-items: center !important;
-    gap: 0 !important;
+    gap: 8px !important;
     position: relative !important;
   }
   
-  .logo span {
-    font-size: 1.1rem !important;
-  }
-  
-  .header-profile {
+  /* Centralizar o logo no cabeçalho */
+  .logo {
+    order: 2 !important;
+    margin: 0 auto !important;
     display: flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 4px !important;
   }
   
-  #logout-btn {
-    display: none !important; /* Esconde o botão de logout de cima no celular */
+  .logo span {
+    font-size: 0.95rem !important; /* Compacto */
   }
-  
-  /* Menu Inferior Fixo em Destaque */
-  .main-nav {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    background: #111113 !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-    display: grid !important;
-    grid-template-columns: repeat(4, 1fr) !important; /* 4 Colunas */
-    padding: 6px 0 !important;
-    margin-top: 0 !important;
-    z-index: 9999 !important;
-    box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.6) !important;
-    border-radius: 0 !important;
-  }
-  
-  /* Botões do Menu Inferior */
-  .nav-link {
-    flex-direction: column !important;
-    gap: 3px !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: transparent !important;
-    border: none !important;
-    padding: 6px 0 !important;
-    color: var(--text-muted) !important;
-    border-radius: 0 !important;
-    width: 100% !important;
-  }
-  
-  .nav-link.active {
-    color: #ffffff !important;
-    background: transparent !important;
-    border: none !important;
-  }
-  
-  .nav-link i, .nav-logout-btn i {
+
+  .logo-icon {
     width: 16px !important;
     height: 16px !important;
   }
   
-  /* Exibição de Textos Otimizados para Celular */
+  /* Logout no canto superior esquerdo (do outro lado) */
+  .header-profile {
+    order: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+  }
+  
+  .user-badge {
+    display: none !important; /* Esconde nome do usuário no topo para economizar espaço */
+  }
+  
+  #logout-btn {
+    display: inline-flex !important; /* Forçar exibição no topo */
+    background: transparent !important;
+    border: none !important;
+    color: var(--neon-red) !important;
+    padding: 4px !important;
+  }
+
+  #logout-btn i {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  
+  /* Menu no canto superior direito (no topo) */
+  .main-nav {
+    order: 3 !important;
+    position: static !important; /* Remove fixo do rodapé */
+    width: auto !important;
+    background: transparent !important;
+    border: none !important;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 5px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    z-index: 10 !important;
+  }
+
+  #logout-btn-mobile {
+    display: none !important; /* Esconde o botão de logout duplicado do celular */
+  }
+  
+  /* Links do Menu Superior Compactados */
+  .nav-link {
+    flex-direction: row !important;
+    gap: 3px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(168, 85, 247, 0.08) !important;
+    border: 1px solid rgba(168, 85, 247, 0.15) !important;
+    padding: 5px 6px !important;
+    color: var(--text-muted) !important;
+    border-radius: 6px !important;
+    width: auto !important;
+    font-size: 0.8rem !important;
+  }
+  
+  .nav-link.active {
+    color: #ffffff !important;
+    background: rgba(168, 85, 247, 0.2) !important;
+    border-color: rgba(168, 85, 247, 0.4) !important;
+  }
+  
+  .nav-link i {
+    width: 13px !important;
+    height: 13px !important;
+  }
+  
+  /* Textos otimizados para celular */
   .nav-text-desktop {
-    display: none !important; /* Oculta textos de desktop */
+    display: none !important;
   }
   
   .nav-text-mobile {
     display: inline-block !important; /* Mostra "Dash" e "Adm" */
   }
   
-  /* Botão de Logout Fixo no Rodapé do Celular */
+  /* Botão de Logout Fixo no Rodapé do Celular (não utilizado mais) */
   .nav-logout-btn {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: transparent !important;
-    border: none !important;
-    color: var(--text-muted) !important;
-    padding: 6px 0 !important;
-    width: 100% !important;
-    cursor: pointer !important;
-  }
-  
-  .nav-logout-btn:active {
-    color: var(--neon-red) !important;
+    display: none !important;
   }
   
   /* Cards de Previsão Compactos */
