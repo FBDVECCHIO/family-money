@@ -1131,21 +1131,51 @@ tr:hover td {
     flex-direction: row !important;
     justify-content: space-between !important;
     align-items: center !important;
-    gap: 8px !important;
+    gap: 6px !important;
     position: relative !important;
   }
   
-  /* Esconder o logo no celular */
+  /* Logotipo visível e compacto no canto esquerdo */
   .logo {
-    display: none !important;
-  }
-  
-  /* Logout no canto superior esquerdo (do outro lado) */
-  .header-profile {
     order: 1 !important;
+    margin: 0 !important;
     display: flex !important;
     align-items: center !important;
-    margin: 0 !important;
+    gap: 4px !important;
+  }
+  
+  .logo span {
+    font-size: 0.9rem !important; /* Compacto e elegante */
+    font-weight: 700 !important;
+  }
+
+  .logo-icon {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  
+  /* Menu no canto superior direito */
+  .main-nav {
+    order: 2 !important;
+    position: static !important; /* Remove fixo do rodapé */
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 4px !important; /* Espaçamento condensado para caber */
+    margin: 0 0 0 auto !important; /* Empurra tudo para a direita */
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    border: none !important;
+    z-index: 10 !important;
+    width: auto !important;
+  }
+
+  /* Logout no canto superior direito (do outro lado do menu) */
+  .header-profile {
+    order: 3 !important;
+    display: flex !important;
+    align-items: center !important;
+    margin: 0 0 0 4px !important;
   }
   
   .user-badge {
@@ -1157,29 +1187,12 @@ tr:hover td {
     background: transparent !important;
     border: none !important;
     color: var(--neon-red) !important;
-    padding: 6px !important;
+    padding: 5px !important;
   }
 
   #logout-btn i {
-    width: 20px !important;
-    height: 20px !important;
-  }
-  
-  /* Menu no canto superior direito (no topo) com distribuição flexível */
-  .main-nav {
-    order: 2 !important;
-    position: static !important; /* Remove fixo do rodapé */
-    flex: 1 !important;
-    background: transparent !important;
-    border: none !important;
-    display: flex !important;
-    flex-direction: row !important;
-    gap: 8px !important; /* Espaçamento mais amplo e distribuído */
-    justify-content: flex-end !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    z-index: 10 !important;
+    width: 18px !important;
+    height: 18px !important;
   }
 
   #logout-btn-mobile {
@@ -1227,8 +1240,9 @@ tr:hover td {
   }
   
   /* Cards de Previsão Compactos */
+  /* Cards de Previsão Compactos (2 colunas) */
   .forecast-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(2, 1fr) !important;
     gap: 8px !important;
   }
   
@@ -1238,27 +1252,27 @@ tr:hover td {
   }
   
   .forecast-month-label {
-    font-size: 1rem !important;
-    margin-bottom: 6px !important;
+    font-size: 0.95rem !important;
+    margin-bottom: 4px !important;
   }
   
   .forecast-values {
-    gap: 4px !important;
+    gap: 2px !important;
   }
   
   .forecast-val-row {
-    font-size: 0.85rem !important;
+    font-size: 0.8rem !important;
   }
   
   .forecast-card-sobra {
-    margin-top: 6px !important;
-    padding-top: 6px !important;
-    font-size: 0.9rem !important;
+    margin-top: 4px !important;
+    padding-top: 4px !important;
+    font-size: 0.85rem !important;
   }
   
   .forecast-card-projected {
-    margin-top: 4px !important;
-    font-size: 0.8rem !important;
+    margin-top: 2px !important;
+    font-size: 0.78rem !important;
   }
 
   /* Detalhamento Inline Compacto */
@@ -1278,21 +1292,28 @@ tr:hover td {
     font-size: 1.05rem !important;
   }
   
+  /* Receitas, Despesas, Sobra em 3 colunas (lado a lado) */
   .inline-summary-row {
-    grid-template-columns: 1fr !important;
-    gap: 8px !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
     margin-bottom: 10px !important;
   }
   
   .summary-box {
-    padding: 10px !important;
+    padding: 8px 6px !important;
     border-radius: 8px !important;
+    text-align: center !important;
   }
   
   .summary-box h4 {
-    font-size: 0.88rem !important;
-    margin-bottom: 8px !important;
-    padding-bottom: 4px !important;
+    font-size: 0.75rem !important;
+    margin-bottom: 4px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .summary-box p {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
   }
   
   .summary-bar-row {
