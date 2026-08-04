@@ -3,6 +3,12 @@
 <head>
   <script>
     window.onerror = function(message, source, lineno, colno, error) {
+      const errText = 'Erro de Execução: ' + message + '\nOrigem: ' + source + ':' + lineno + ':' + colno;
+      console.error(errText);
+      try {
+        alert(errText);
+      } catch(e) {}
+      
       const errDiv = document.createElement('div');
       errDiv.style.position = 'fixed';
       errDiv.style.top = '0';
@@ -17,7 +23,11 @@
       errDiv.style.whiteSpace = 'pre-wrap';
       errDiv.style.boxSizing = 'border-box';
       errDiv.innerHTML = '<strong>Erro de Execução Detectado:</strong><br>' + message + '<br>Origem: ' + source + ':' + lineno + ':' + colno;
-      document.body.appendChild(errDiv);
+      if (document.body) {
+        document.body.appendChild(errDiv);
+      } else {
+        document.documentElement.appendChild(errDiv);
+      }
       return false;
     };
   </script>
