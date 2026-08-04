@@ -273,11 +273,16 @@ async function loadAllData() {
     }
 
     // Calcular a previsão de 6 meses no lado do cliente
-    const forecastResult = calculateForecast(state.accounts, state.cards, state.fixedItems, state.transactions);
-    state.forecast = forecastResult.forecast;
+    let forecastResult = { currentBalance: 0, forecast: [] };
+    try {
+      forecastResult = calculateForecast(state.accounts, state.cards, state.fixedItems, state.transactions);
+      state.forecast = forecastResult.forecast || [];
+    } catch (calcErr) {
+      console.error('Erro ao calcular motor de previsão (calculateForecast):', calcErr);
+    }
 
     // Renderizações
-    renderSidebar(forecastResult.currentBalance);
+    renderSidebar(forecastResult.currentBalance || 0);
     renderDashboard();
     renderNewTxFormFields();
     renderAdminTables();
@@ -351,7 +356,7 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
             description: `${item.description} (Assinatura Recorrente)`,
             amount: amount,
             cardName: card ? card.name : 'Cartão',
-            date: new Date(m.year, m.month, Math.min(item.day_of_month || item.dayOfMonth, 28)).toISOString().split('T')[0]
+            date: new Date(m.year, m.month, Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28)).toISOString().split('T')[0]
           });
         } else {
           m.fixedExpenses.push(itemDetail);
