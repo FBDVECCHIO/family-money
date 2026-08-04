@@ -1100,22 +1100,9 @@ tr:hover td {
     position: relative !important;
   }
   
-  /* Centralizar o logo no cabeçalho */
+  /* Esconder o logo no celular */
   .logo {
-    order: 2 !important;
-    margin: 0 auto !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-  }
-  
-  .logo span {
-    font-size: 0.95rem !important; /* Compacto */
-  }
-
-  .logo-icon {
-    width: 16px !important;
-    height: 16px !important;
+    display: none !important;
   }
   
   /* Logout no canto superior esquerdo (do outro lado) */
@@ -1135,24 +1122,25 @@ tr:hover td {
     background: transparent !important;
     border: none !important;
     color: var(--neon-red) !important;
-    padding: 4px !important;
+    padding: 6px !important;
   }
 
   #logout-btn i {
-    width: 18px !important;
-    height: 18px !important;
+    width: 20px !important;
+    height: 20px !important;
   }
   
-  /* Menu no canto superior direito (no topo) */
+  /* Menu no canto superior direito (no topo) com distribuição flexível */
   .main-nav {
-    order: 3 !important;
+    order: 2 !important;
     position: static !important; /* Remove fixo do rodapé */
-    width: auto !important;
+    flex: 1 !important;
     background: transparent !important;
     border: none !important;
     display: flex !important;
     flex-direction: row !important;
-    gap: 5px !important;
+    gap: 8px !important; /* Espaçamento mais amplo e distribuído */
+    justify-content: flex-end !important;
     padding: 0 !important;
     margin: 0 !important;
     box-shadow: none !important;
@@ -1166,12 +1154,12 @@ tr:hover td {
   /* Links do Menu Superior Compactados */
   .nav-link {
     flex-direction: row !important;
-    gap: 3px !important;
+    gap: 4px !important;
     align-items: center !important;
     justify-content: center !important;
     background: rgba(168, 85, 247, 0.08) !important;
     border: 1px solid rgba(168, 85, 247, 0.15) !important;
-    padding: 5px 6px !important;
+    padding: 6px 10px !important; /* Mais espaçoso e fácil de tocar */
     color: var(--text-muted) !important;
     border-radius: 6px !important;
     width: auto !important;
