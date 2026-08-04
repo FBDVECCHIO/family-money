@@ -1,6 +1,26 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      const errDiv = document.createElement('div');
+      errDiv.style.position = 'fixed';
+      errDiv.style.top = '0';
+      errDiv.style.left = '0';
+      errDiv.style.width = '100vw';
+      errDiv.style.background = '#ff3b30';
+      errDiv.style.color = '#fff';
+      errDiv.style.padding = '15px';
+      errDiv.style.zIndex = '999999';
+      errDiv.style.fontFamily = 'monospace';
+      errDiv.style.fontSize = '12px';
+      errDiv.style.whiteSpace = 'pre-wrap';
+      errDiv.style.boxSizing = 'border-box';
+      errDiv.innerHTML = '<strong>Erro de Execução Detectado:</strong><br>' + message + '<br>Origem: ' + source + ':' + lineno + ':' + colno;
+      document.body.appendChild(errDiv);
+      return false;
+    };
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>FAMILY MONEY - Controle Financeiro Familiar</title>
@@ -25,7 +45,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=2.2">
+  <link rel="stylesheet" href="style.css?v=2.3">
 </head>
 <body>
 
@@ -1023,6 +1043,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=2.2"></script>
+  <script src="app.js?v=2.3"></script>
 </body>
 </html>
