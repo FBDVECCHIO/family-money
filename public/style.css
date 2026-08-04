@@ -1189,12 +1189,12 @@ tr:hover td {
   /* Links do Menu Superior Compactados */
   .nav-link {
     flex-direction: row !important;
-    gap: 4px !important;
+    gap: 0 !important;
     align-items: center !important;
     justify-content: center !important;
     background: rgba(168, 85, 247, 0.08) !important;
     border: 1px solid rgba(168, 85, 247, 0.15) !important;
-    padding: 6px 10px !important; /* Mais espaçoso e fácil de tocar */
+    padding: 8px 12px !important; /* Mais espaçoso e fácil de tocar */
     color: var(--text-muted) !important;
     border-radius: 6px !important;
     width: auto !important;
@@ -1208,8 +1208,8 @@ tr:hover td {
   }
   
   .nav-link i {
-    width: 13px !important;
-    height: 13px !important;
+    width: 18px !important;
+    height: 18px !important;
   }
   
   /* Textos otimizados para celular */
@@ -1218,7 +1218,7 @@ tr:hover td {
   }
   
   .nav-text-mobile {
-    display: inline-block !important; /* Mostra "Dash" e "Adm" */
+    display: none !important; /* Deixa apenas os ícones */
   }
   
   /* Botão de Logout Fixo no Rodapé do Celular (não utilizado mais) */
@@ -1596,6 +1596,83 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
     background: #191129 !important;
     border-top: 1px solid rgba(168, 85, 247, 0.15) !important;
     box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  /* Readequação do layout principal e ordens no smartphone */
+  .app-content {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 10px !important;
+    gap: 15px !important;
+  }
+  .view-container {
+    order: 1 !important; /* Visual ativo fica no topo */
+    width: 100% !important;
+  }
+  .sidebar-info {
+    order: 2 !important; /* Contas e Cartões ficam na parte inferior no celular */
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 15px !important;
+  }
+
+  /* Form Row Stacking */
+  .form-row-2 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  
+  /* Redimensionamento e Enquadramento de Elementos */
+  .glass, .new-tx-form-wrapper, .admin-form-side, .admin-table-side {
+    padding: 12px !important;
+    border-radius: 8px !important;
+  }
+  input, select, textarea {
+    padding: 10px 12px !important;
+    font-size: 0.85rem !important;
+  }
+
+  /* Métodos de Pagamento: Empilhar verticalmente para evitar encavalamento */
+  .payment-method-toggle {
+    flex-direction: column !important;
+    gap: 6px !important;
+    align-items: stretch !important;
+    width: 100% !important;
+  }
+  .payment-method-toggle .toggle-option {
+    flex: none !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-start !important; /* Escrito na frente */
+    align-items: center !important;
+    padding: 10px 15px !important;
+    font-size: 0.85rem !important;
+    gap: 8px !important;
+    text-align: left !important;
+  }
+
+  /* Seletor Despesa / Receita: Manter horizontal e otimizado */
+  .payment-method-toggle.type-toggle {
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+  .payment-method-toggle.type-toggle .toggle-option {
+    flex: 1 !important;
+    justify-content: center !important;
+    padding: 8px 10px !important;
+    font-size: 0.8rem !important;
+  }
+
+  /* Adequar colunas do Dashboard */
+  .inline-detail-lists {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+  }
+  .admin-grid-layout {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
   }
 }
 

@@ -159,6 +159,7 @@ async function initApp() {
 
     document.getElementById('user-display-name').textContent = activeUserName;
     loadAllData();
+    updateSidebarVisibility();
   } else {
     document.getElementById('login-container').classList.remove('hide');
     document.getElementById('app-container').classList.add('hide');
@@ -1504,11 +1505,33 @@ document.querySelectorAll('.nav-link').forEach(btn => {
     document.getElementById(`view-${tabName}`).classList.add('active-view');
     state.activeTab = tabName;
 
+    // Atualizar visibilidade da barra lateral de contas/cartões no celular
+    updateSidebarVisibility();
+
     if (tabName === 'dashboard') {
       loadAllData();
     }
   });
 });
+
+// Helper para controlar a exibição da barra lateral no celular
+function updateSidebarVisibility() {
+  const sidebar = document.querySelector('.sidebar-info');
+  if (!sidebar) return;
+  if (window.innerWidth <= 600) {
+    if (state.activeTab === 'dashboard') {
+      sidebar.style.display = 'flex';
+    } else {
+      sidebar.style.display = 'none';
+    }
+  } else {
+    // Garantir que no desktop a sidebar sempre apareça
+    sidebar.style.display = 'flex';
+  }
+}
+
+// Ouvir redimensionamento para ajustar a barra lateral
+window.addEventListener('resize', updateSidebarVisibility);
 
 // Abas Admin
 document.querySelectorAll('.admin-tab-btn').forEach(btn => {
