@@ -79,6 +79,7 @@ CREATE TABLE transactions (
   date date NOT NULL,
   category_id bigint REFERENCES categories(id) ON DELETE CASCADE, -- Removido NOT NULL para permitir transferências sem categoria obrigatória
   payment_method text NOT NULL CHECK (payment_method IN ('account', 'card', 'transfer')),
+  type text NOT NULL DEFAULT 'expense' CHECK (type IN ('income', 'expense', 'transfer')),
   card_id bigint REFERENCES cards(id) ON DELETE CASCADE,
   installments integer NOT NULL DEFAULT 1,
   account_id bigint REFERENCES accounts(id) ON DELETE CASCADE,

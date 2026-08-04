@@ -671,10 +671,12 @@ function renderTransactionsTable() {
     }
 
     // Exibir valor formatado dependendo de tipo
+    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+
     let valueHtml = '';
-    if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+    if (finalType === 'transfer') {
       valueHtml = `<span style="font-weight: 600; color: var(--neon-purple);">${formatCurrency(t.amount)}</span>`;
-    } else if (t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) {
+    } else if (finalType === 'income') {
       valueHtml = `<span style="font-weight: 600; color: var(--neon-green);">+${formatCurrency(t.amount)}</span>`;
     } else {
       valueHtml = `<span style="font-weight: 600; color: var(--neon-red);">-${formatCurrency(t.amount)}</span>`;
@@ -1507,6 +1509,14 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
   });
 });
 
+// Toggle Tipo de Lançamento (Despesa vs Receita)
+document.querySelectorAll('input[name="tx-type"]').forEach(radio => {
+  radio.addEventListener('change', (e) => {
+    e.target.closest('.payment-method-toggle').querySelectorAll('.toggle-option').forEach(opt => opt.classList.remove('active'));
+    e.target.parentElement.classList.add('active');
+  });
+});
+
 // Câmera e Recibo
 const receiptTrigger = document.getElementById('tx-receipt-trigger-btn');
 const receiptInput = document.getElementById('tx-receipt-input');
@@ -1606,6 +1616,9 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
   const receiptUrlVal = document.getElementById('tx-receipt-base64').value || null;
 
   try {
+    const typeVal = document.querySelector('input[name="tx-type"]:checked').value;
+    const finalType = paymentMethod === 'transfer' ? 'transfer' : typeVal;
+
     // 1. Inserir Transação no Supabase
     const newTx = {
       description,
@@ -1613,6 +1626,7 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       date,
       category_id: paymentMethod === 'transfer' ? null : categoryId,
       payment_method: paymentMethod,
+      type: finalType,
       card_id: paymentMethod === 'card' ? parseInt(cardId) : null,
       installments: paymentMethod === 'card' ? parseInt(installments) : 1,
       account_id: (paymentMethod === 'account' || paymentMethod === 'transfer') ? parseInt(accountId) : null,
@@ -1624,12 +1638,16 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
     const { error: insertError } = await state.supabase.from('transactions').insert([newTx]);
     if (insertError) throw insertError;
 
-    // 2. Se for débito imediato, deduzir do saldo da conta correspondente
+    // 2. Se for débito/crédito em conta imediato, atualizar saldo
     if (paymentMethod === 'account' && accountId) {
       const accIdNum = parseInt(accountId);
       const acc = state.accounts.find(a => a.id === accIdNum);
       if (acc) {
-        const newBalance = parseFloat(acc.balance) - amount;
+        // Se for receita, soma ao saldo. Se for despesa, subtrai.
+        const newBalance = finalType === 'income' 
+          ? parseFloat(acc.balance) + amount 
+          : parseFloat(acc.balance) - amount;
+
         const { error: updateError } = await state.supabase
           .from('accounts')
           .update({ balance: newBalance })
@@ -1674,7 +1692,14 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
     document.getElementById('tx-receipt-preview-img').src = '';
     document.getElementById('tx-receipt-status').textContent = 'Nenhum recibo anexado';
     
+    // Resetar toggle active states do formulário de novo lançamento
+    document.querySelectorAll('#new-transaction-form .toggle-option').forEach(opt => opt.classList.remove('active'));
+    // Definir as defaults corretas
+    document.querySelector('input[value="card"]').parentElement.classList.add('active');
     document.querySelector('input[value="card"]').click();
+    document.querySelector('input[value="expense"]').parentElement.classList.add('active');
+    document.querySelector('input[value="expense"]').click();
+
     document.getElementById('installment-preview-text').classList.add('hide');
 
     document.querySelector('.nav-link[data-tab="dashboard"]').click();
@@ -1931,20 +1956,9 @@ function renderReportsTable() {
   // Filtragem por Tipo
   if (typeVal) {
     filtered = filtered.filter(t => {
-      if (typeVal === 'transfer') {
-        return t.payment_method === 'transfer' || t.paymentMethod === 'transfer';
-      }
-      
-      const isTransfer = t.payment_method === 'transfer' || t.paymentMethod === 'transfer';
-      if (isTransfer) return false;
-
       const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
-      const isCategoryIncome = cat && cat.name.toLowerCase().includes('receita');
-      const isIncome = t.amount > 0 || isCategoryIncome;
-
-      if (typeVal === 'income') return isIncome;
-      if (typeVal === 'expense') return !isIncome;
-      return true;
+      const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+      return finalType === typeVal;
     });
   }
 
@@ -1970,13 +1984,12 @@ function renderReportsTable() {
   let totalExpense = 0;
 
   filtered.forEach(t => {
-    const isTransfer = t.payment_method === 'transfer' || t.paymentMethod === 'transfer';
-    if (isTransfer) return; // Transferências são neutras em termos de receita/despesa líquida
-
     const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
-    const isCategoryIncome = cat && cat.name.toLowerCase().includes('receita');
-    
-    if (t.amount > 0 || isCategoryIncome) {
+    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+
+    if (finalType === 'transfer') return; // Transferências são neutras em termos de receita/despesa líquida
+
+    if (finalType === 'income') {
       totalIncome += parseFloat(t.amount);
     } else {
       totalExpense += parseFloat(t.amount);
@@ -2024,10 +2037,12 @@ function renderReportsTable() {
       pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
     }
 
+    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+
     let valueHtml = '';
-    if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+    if (finalType === 'transfer') {
       valueHtml = `<span style="font-weight: 600; color: var(--neon-purple);">${formatCurrency(t.amount)}</span>`;
-    } else if (t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) {
+    } else if (finalType === 'income') {
       valueHtml = `<span style="font-weight: 600; color: var(--neon-green);">+${formatCurrency(t.amount)}</span>`;
     } else {
       valueHtml = `<span style="font-weight: 600; color: var(--neon-red);">-${formatCurrency(t.amount)}</span>`;
