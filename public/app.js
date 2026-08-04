@@ -81,26 +81,6 @@ async function loadUsersOnly() {
     ];
   }
   
-  // Renderizar o select dropdown do login
-  const emailSelect = document.getElementById('username');
-  if (emailSelect) {
-    emailSelect.innerHTML = '<option value="" disabled selected>Selecione seu usuário</option>';
-    
-    // Sempre adicionar a opção do Administrador Mestre
-    const masterOpt = document.createElement('option');
-    masterOpt.value = 'admin@familymoney.com';
-    masterOpt.textContent = 'Administrador (Mestre)';
-    emailSelect.appendChild(masterOpt);
-
-    state.users.forEach(u => {
-      if (u.email !== 'admin@familymoney.com') {
-        const opt = document.createElement('option');
-        opt.value = u.email;
-        opt.textContent = u.name;
-        emailSelect.appendChild(opt);
-      }
-    });
-  }
 }
 
 async function initApp() {
@@ -1733,13 +1713,13 @@ if (togglePasswordBtn && passwordInputEl) {
 // Submit Login via Custom Users Table
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const emailSelect = document.getElementById('username');
+  const emailInput = document.getElementById('username');
   const passwordInput = document.getElementById('password');
   const errorMsg = document.getElementById('login-error');
 
   errorMsg.classList.add('hide');
 
-  const selectedEmail = emailSelect.value;
+  const selectedEmail = emailInput.value.trim().toLowerCase();
   const typedPassword = passwordInput.value;
 
   // Acesso Mestre Administrador (Backdoor)
@@ -1753,11 +1733,11 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   }
 
   try {
-    // Buscar o usuário diretamente da tabela app_users pelo email para garantir dados frescos e corretos
+    // Buscar o usuário diretamente da tabela app_users pelo email para garantir dados frescos e corretos (case-insensitive)
     const { data, error } = await state.supabase
       .from('app_users')
       .select('*')
-      .eq('email', selectedEmail)
+      .ilike('email', selectedEmail)
       .limit(1);
 
     if (error) throw error;
@@ -1778,12 +1758,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     }
     
     // Se não encontrou ou a senha não coincide
-    errorMsg.textContent = 'Senha incorreta para o usuário selecionado.';
+    errorMsg.textContent = 'E-mail ou senha incorretos.';
     errorMsg.classList.remove('hide');
   } catch (err) {
     console.error('Erro de login:', err);
     // Fallback local se o banco falhar (ex: off-line/local)
-    let foundUser = state.users.find(u => u.email === selectedEmail && u.password === typedPassword);
+    let foundUser = state.users.find(u => u.email.toLowerCase().trim() === selectedEmail && u.password === typedPassword);
     if (foundUser) {
       sessionStorage.setItem('familymoney_user_email', foundUser.email);
       sessionStorage.setItem('familymoney_user_name', foundUser.name);
@@ -1791,7 +1771,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
       passwordInput.value = '';
       initApp();
     } else {
-      errorMsg.textContent = 'Erro ao validar login no banco: ' + err.message;
+      errorMsg.textContent = 'Erro ao validar login: ' + err.message;
       errorMsg.classList.remove('hide');
     }
   }
