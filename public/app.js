@@ -1743,27 +1743,37 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 
     if (error) throw error;
 
+    let authenticated = false;
+    
     if (data && data.length > 0) {
       const dbUser = data[0];
-      
-      // Comparar a senha
       if (dbUser.password === typedPassword) {
         sessionStorage.setItem('familymoney_user_email', dbUser.email);
         sessionStorage.setItem('familymoney_user_name', dbUser.name);
-        
-        errorMsg.classList.add('hide');
-        passwordInput.value = '';
-        initApp();
-        return;
+        authenticated = true;
       }
     }
     
-    // Se não encontrou ou a senha não coincide
+    if (!authenticated) {
+      const foundUser = state.users.find(u => u.email.toLowerCase().trim() === selectedEmail && u.password === typedPassword);
+      if (foundUser) {
+        sessionStorage.setItem('familymoney_user_email', foundUser.email);
+        sessionStorage.setItem('familymoney_user_name', foundUser.name);
+        authenticated = true;
+      }
+    }
+    
+    if (authenticated) {
+      errorMsg.classList.add('hide');
+      passwordInput.value = '';
+      initApp();
+      return;
+    }
+    
     errorMsg.textContent = 'E-mail ou senha incorretos.';
     errorMsg.classList.remove('hide');
   } catch (err) {
     console.error('Erro de login:', err);
-    // Fallback local se o banco falhar (ex: off-line/local)
     let foundUser = state.users.find(u => u.email.toLowerCase().trim() === selectedEmail && u.password === typedPassword);
     if (foundUser) {
       sessionStorage.setItem('familymoney_user_email', foundUser.email);
@@ -1771,9 +1781,6 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
       errorMsg.classList.add('hide');
       passwordInput.value = '';
       initApp();
-    } else {
-      errorMsg.textContent = 'Erro ao validar login: ' + err.message;
-      errorMsg.classList.remove('hide');
     }
   }
 });
