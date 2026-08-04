@@ -1,10 +1,10 @@
 /* ================= SISTEMA DE CORES E VARIÁVEIS ================= */
 :root {
   /* Cores Base (Sólidos) */
-  --bg-main: #f3f4f6; /* Cinza claro suave */
-  --bg-card: #18181b; /* Cinza escuro médio (Zinc-900) */
-  --bg-card-hover: #222226; /* Cinza escuro card hover */
-  --bg-input: #27272a; /* Cinza input */
+  --bg-main: #e2e8f0; /* Cinza claro levemente mais escuro (Slate-200) */
+  --bg-card: #27272a; /* Tom dos cards mais claro (Zinc-800) */
+  --bg-card-hover: #323235; /* Card hover */
+  --bg-input: #18181b; /* Áreas de dropdown/input em tom de cinza escuro/baixo para contrastar */
   --border-color: rgba(255, 255, 255, 0.08); /* Borda branca suave */
   
   /* Cores de Destaque */
