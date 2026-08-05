@@ -58,7 +58,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=3.0">
+  <link rel="stylesheet" href="style.css?v=3.1">
 </head>
 <body>
 
@@ -655,16 +655,20 @@
                 <h3 id="account-form-title">Nova Conta Bancária</h3>
                 <form id="account-form">
                   <input type="hidden" id="account-id">
-                  <div class="form-group">
-                    <label for="account-name">Nome da Conta / Banco</label>
-                    <input type="text" id="account-name" placeholder="Ex: Itaú Corrente, Nubank Conta" required>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="account-name">Nome da Conta / Banco</label>
+                      <input type="text" id="account-name" placeholder="Ex: Itaú Corrente, Nubank Conta" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="account-balance">Saldo Inicial Atual (R$)</label>
+                      <input type="number" step="0.01" id="account-balance" placeholder="0,00" required>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label for="account-balance">Saldo Inicial Atual (R$)</label>
-                    <input type="number" step="0.01" id="account-balance" placeholder="0,00" required>
+                  <div style="display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
+                    <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 25px;">Salvar Conta</button>
+                    <button type="button" id="clear-account-form-btn" class="btn btn-outline hide" style="width: auto; padding: 12px 25px;">Cancelar Edição</button>
                   </div>
-                  <button type="submit" class="btn btn-primary btn-block">Salvar Conta</button>
-                  <button type="button" id="clear-account-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
                 </form>
               </div>
               <div class="admin-table-side glass">
@@ -694,9 +698,17 @@
                 <h3 id="card-form-title">Cadastrar Novo Cartão</h3>
                 <form id="card-form">
                   <input type="hidden" id="card-id">
-                  <div class="form-group">
-                    <label for="card-name">Nome do Cartão</label>
-                    <input type="text" id="card-name" placeholder="Ex: XP Visa, Nubank Roxinho" required>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="card-name">Nome do Cartão</label>
+                      <input type="text" id="card-name" placeholder="Ex: XP Visa, Nubank Roxinho" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="card-account">Conta de Débito da Fatura</label>
+                      <select id="card-account" required>
+                        <!-- Preenchido via API -->
+                      </select>
+                    </div>
                   </div>
                   <div class="form-row-2">
                     <div class="form-group">
@@ -708,14 +720,10 @@
                       <input type="number" min="1" max="31" id="card-due" placeholder="Ex: 12" required>
                     </div>
                   </div>
-                  <div class="form-group">
-                    <label for="card-account">Conta de Débito da Fatura</label>
-                    <select id="card-account" required>
-                      <!-- Preenchido via API -->
-                    </select>
+                  <div style="display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
+                    <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 25px;">Salvar Cartão</button>
+                    <button type="button" id="clear-card-form-btn" class="btn btn-outline hide" style="width: auto; padding: 12px 25px;">Cancelar Edição</button>
                   </div>
-                  <button type="submit" class="btn btn-primary btn-block">Salvar Cartão</button>
-                  <button type="button" id="clear-card-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
                 </form>
               </div>
               <div class="admin-table-side glass">
@@ -747,21 +755,21 @@
                 <h3 id="fixed-form-title">Nova Receita/Despesa Fixa</h3>
                 <form id="fixed-form">
                   <input type="hidden" id="fixed-id">
-                  <div class="form-group">
-                    <label for="fixed-desc">Descrição do Item</label>
-                    <input type="text" id="fixed-desc" placeholder="Ex: Aluguel, Salário, Internet" required>
-                  </div>
                   <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="fixed-desc">Descrição do Item</label>
+                      <input type="text" id="fixed-desc" placeholder="Ex: Aluguel, Salário, Internet" required>
+                    </div>
                     <div class="form-group">
                       <label for="fixed-amount">Valor (R$)</label>
                       <input type="number" step="0.01" id="fixed-amount" placeholder="0,00" required>
                     </div>
+                  </div>
+                  <div class="form-row-2">
                     <div class="form-group">
                       <label for="fixed-day">Dia de Vencimento</label>
                       <input type="number" min="1" max="31" id="fixed-day" placeholder="Ex: 10" required>
                     </div>
-                  </div>
-                  <div class="form-row-2">
                     <div class="form-group">
                       <label for="fixed-type">Tipo de Lançamento</label>
                       <select id="fixed-type" required>
@@ -769,6 +777,8 @@
                         <option value="income">Receita Recorrente (Entrada)</option>
                       </select>
                     </div>
+                  </div>
+                  <div class="form-row-2">
                     <div class="form-group">
                       <label for="fixed-category">Categoria</label>
                       <select id="fixed-category">
@@ -776,20 +786,22 @@
                         <!-- Preenchido via API -->
                       </select>
                     </div>
+                    <div class="form-group">
+                      <label for="fixed-payment-source">Conta ou Cartão Associado</label>
+                      <select id="fixed-payment-source" required>
+                        <optgroup label="Contas Bancárias" id="fixed-optgroup-accounts">
+                          <!-- Preenchido via API -->
+                        </optgroup>
+                        <optgroup label="Cartões de Crédito" id="fixed-optgroup-cards">
+                          <!-- Preenchido via API -->
+                        </optgroup>
+                      </select>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label for="fixed-payment-source">Conta ou Cartão Associado</label>
-                    <select id="fixed-payment-source" required>
-                      <optgroup label="Contas Bancárias" id="fixed-optgroup-accounts">
-                        <!-- Preenchido via API -->
-                      </optgroup>
-                      <optgroup label="Cartões de Crédito" id="fixed-optgroup-cards">
-                        <!-- Preenchido via API -->
-                      </optgroup>
-                    </select>
+                  <div style="display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
+                    <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 25px;">Salvar Item Fixo</button>
+                    <button type="button" id="clear-fixed-form-btn" class="btn btn-outline hide" style="width: auto; padding: 12px 25px;">Cancelar Edição</button>
                   </div>
-                  <button type="submit" class="btn btn-primary btn-block">Salvar Item Fixo</button>
-                  <button type="button" id="clear-fixed-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
                 </form>
               </div>
               <div class="admin-table-side glass">
@@ -823,48 +835,50 @@
                 <h3 id="category-form-title">Nova Categoria</h3>
                 <form id="category-form">
                   <input type="hidden" id="category-id">
-                  <div class="form-group">
-                    <label for="category-name">Nome da Categoria</label>
-                    <input type="text" id="category-name" placeholder="Ex: Alimentação, Viagem" required>
-                  </div>
                   <div class="form-row-2">
-                    <div class="form-group" style="grid-column: span 2;">
-                      <label style="margin-bottom: 8px; display: block;">Selecione o Ícone da Categoria</label>
-                      <input type="hidden" id="category-icon" value="shopping-cart">
-                      <div class="icon-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; max-height: 180px; overflow-y: auto; padding: 6px; border: 1px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.2);">
-                        <button type="button" class="icon-select-btn active" data-icon="shopping-cart" title="Mercado"><i data-lucide="shopping-cart"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="home" title="Casa"><i data-lucide="home"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="car" title="Carro"><i data-lucide="car"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="activity" title="Saúde"><i data-lucide="activity"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="book-open" title="Educação"><i data-lucide="book-open"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="smile" title="Lazer"><i data-lucide="smile"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="credit-card" title="Cartão"><i data-lucide="credit-card"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="tv" title="Assinatura"><i data-lucide="tv"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="utensils" title="Alimentação"><i data-lucide="utensils"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="plane" title="Viagem"><i data-lucide="plane"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="gift" title="Presentes"><i data-lucide="gift"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="shirt" title="Vestuário"><i data-lucide="shirt"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="scissors" title="Beleza"><i data-lucide="scissors"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="dumbbell" title="Academia"><i data-lucide="dumbbell"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="dog" title="Petshop"><i data-lucide="dog"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="briefcase" title="Trabalho"><i data-lucide="briefcase"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="wrench" title="Manutenção"><i data-lucide="wrench"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="coffee" title="Café"><i data-lucide="coffee"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="dollar-sign" title="Finanças"><i data-lucide="dollar-sign"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="heart" title="Saúde/Amor"><i data-lucide="heart"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="smartphone" title="Tecnologia"><i data-lucide="smartphone"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="bus" title="Transporte"><i data-lucide="bus"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="sparkles" title="Decoração/Beleza"><i data-lucide="sparkles"></i></button>
-                        <button type="button" class="icon-select-btn" data-icon="help-circle" title="Outros"><i data-lucide="help-circle"></i></button>
-                      </div>
-                    </div>
                     <div class="form-group">
-                      <label for="category-color">Cor Hex</label>
-                      <input type="color" id="category-color" value="#8b5cf6">
+                      <label for="category-name">Nome da Categoria</label>
+                      <input type="text" id="category-name" placeholder="Ex: Alimentação, Viagem" required>
+                    </div>
+                    <div class="form-group" style="max-width: 120px;">
+                      <label for="category-color">Cor da Categoria</label>
+                      <input type="color" id="category-color" value="#8b5cf6" style="height: 42px; padding: 2px; cursor: pointer;">
                     </div>
                   </div>
-                  <button type="submit" class="btn btn-primary btn-block">Salvar Categoria</button>
-                  <button type="button" id="clear-category-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
+                  <div class="form-group" style="margin-top: 15px;">
+                    <label style="margin-bottom: 8px; display: block;">Selecione o Ícone da Categoria</label>
+                    <input type="hidden" id="category-icon" value="shopping-cart">
+                    <div class="icon-grid" style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; max-height: 120px; overflow-y: auto; padding: 6px; border: 1px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.2);">
+                      <button type="button" class="icon-select-btn active" data-icon="shopping-cart" title="Mercado"><i data-lucide="shopping-cart"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="home" title="Casa"><i data-lucide="home"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="car" title="Carro"><i data-lucide="car"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="activity" title="Saúde"><i data-lucide="activity"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="book-open" title="Educação"><i data-lucide="book-open"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="smile" title="Lazer"><i data-lucide="smile"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="credit-card" title="Cartão"><i data-lucide="credit-card"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="tv" title="Assinatura"><i data-lucide="tv"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="utensils" title="Alimentação"><i data-lucide="utensils"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="plane" title="Viagem"><i data-lucide="plane"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="gift" title="Presentes"><i data-lucide="gift"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="shirt" title="Vestuário"><i data-lucide="shirt"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="scissors" title="Beleza"><i data-lucide="scissors"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="dumbbell" title="Academia"><i data-lucide="dumbbell"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="dog" title="Petshop"><i data-lucide="dog"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="briefcase" title="Trabalho"><i data-lucide="briefcase"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="wrench" title="Manutenção"><i data-lucide="wrench"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="coffee" title="Café"><i data-lucide="coffee"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="dollar-sign" title="Finanças"><i data-lucide="dollar-sign"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="heart" title="Saúde/Amor"><i data-lucide="heart"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="smartphone" title="Tecnologia"><i data-lucide="smartphone"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="bus" title="Transporte"><i data-lucide="bus"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="sparkles" title="Decoração/Beleza"><i data-lucide="sparkles"></i></button>
+                      <button type="button" class="icon-select-btn" data-icon="help-circle" title="Outros"><i data-lucide="help-circle"></i></button>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
+                    <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 25px;">Salvar Categoria</button>
+                    <button type="button" id="clear-category-form-btn" class="btn btn-outline hide" style="width: auto; padding: 12px 25px;">Cancelar Edição</button>
+                  </div>
                 </form>
               </div>
               <div class="admin-table-side glass">
@@ -894,30 +908,36 @@
                 <h3 id="user-form-title">Cadastrar Novo Usuário</h3>
                 <form id="user-form">
                   <input type="hidden" id="user-id">
-                  <div class="form-group">
-                    <label for="user-name">Nome do Usuário</label>
-                    <input type="text" id="user-name" placeholder="Ex: Fábio (Pai)" required>
-                  </div>
-                  <div class="form-group">
-                    <label for="user-email">Email (Login)</label>
-                    <input type="email" id="user-email" placeholder="Ex: fbdv1202@gmail.com" required>
-                  </div>
-                  <div class="form-group">
-                    <label for="user-password">Senha de Acesso</label>
-                    <input type="text" id="user-password" placeholder="Ex: 123" required>
-                  </div>
-                  <div class="form-row-2" style="margin-bottom: 20px; gap: 20px; display: flex;">
-                    <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px; margin-bottom: 0;">
-                      <input type="checkbox" id="user-is-admin" checked style="width: 18px; height: 18px;">
-                      <label for="user-is-admin" style="text-transform: none; font-size: 0.85rem; font-weight: normal; margin-bottom: 0; cursor: pointer;">Acesso Admin</label>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="user-name">Nome do Usuário</label>
+                      <input type="text" id="user-name" placeholder="Ex: Fábio (Pai)" required>
                     </div>
-                    <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px; margin-bottom: 0;">
-                      <input type="checkbox" id="user-only-self-data" style="width: 18px; height: 18px;">
-                      <label for="user-only-self-data" style="text-transform: none; font-size: 0.85rem; font-weight: normal; margin-bottom: 0; cursor: pointer;">Apenas Dados Próprios</label>
+                    <div class="form-group">
+                      <label for="user-email">Email (Login)</label>
+                      <input type="email" id="user-email" placeholder="Ex: fbdv1202@gmail.com" required>
                     </div>
                   </div>
-                  <button type="submit" class="btn btn-primary btn-block">Salvar Usuário</button>
-                  <button type="button" id="clear-user-form-btn" class="btn btn-outline btn-block hide">Cancelar Edição</button>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label for="user-password">Senha de Acesso</label>
+                      <input type="text" id="user-password" placeholder="Ex: 123" required>
+                    </div>
+                    <div class="form-group" style="justify-content: flex-start; display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 0; padding-bottom: 10px;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="user-is-admin" checked style="width: 18px; height: 18px; cursor: pointer;">
+                        <label for="user-is-admin" style="text-transform: none; font-size: 0.85rem; font-weight: normal; margin-bottom: 0; cursor: pointer;">Acesso Admin</label>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="user-only-self-data" style="width: 18px; height: 18px; cursor: pointer;">
+                        <label for="user-only-self-data" style="text-transform: none; font-size: 0.85rem; font-weight: normal; margin-bottom: 0; cursor: pointer;">Apenas Dados Próprios</label>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
+                    <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 25px;">Salvar Usuário</button>
+                    <button type="button" id="clear-user-form-btn" class="btn btn-outline hide" style="width: auto; padding: 12px 25px;">Cancelar Edição</button>
+                  </div>
                 </form>
               </div>
               <div class="admin-table-side glass">
@@ -1058,19 +1078,19 @@
 
   <!-- Botão e Modal de Diagnóstico do Desenvolvedor -->
   <button id="dev-diag-trigger" style="position: fixed; bottom: 15px; right: 15px; z-index: 999999; background: #6b21a8; color: #fff; border: none; border-radius: 50px; padding: 10px 18px; font-size: 0.8rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 6px;">
-    🛠️ Diagnóstico (v3.0)
+    🛠️ Diagnóstico (v3.1)
   </button>
 
   <div id="dev-diag-modal" class="hide" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
     <div class="glass" style="width: 90%; max-width: 500px; padding: 25px; border-radius: 12px; max-height: 85vh; overflow-y: auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px;">
-        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v3.0)</h3>
+        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v3.1)</h3>
         <button id="dev-diag-close" style="background: transparent; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;">&times;</button>
       </div>
       
       <div style="display: flex; flex-direction: column; gap: 15px; font-size: 0.85rem; text-align: left;">
         <div>
-          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">3.0 (Live)</span>
+          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">3.1 (Live)</span>
         </div>
         <div>
           <strong>Usuário Logado:</strong>
@@ -1099,6 +1119,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=3.0"></script>
+  <script src="app.js?v=3.1"></script>
 </body>
 </html>

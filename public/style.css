@@ -940,8 +940,8 @@ tr:hover td {
 }
 
 .admin-grid-layout {
-  display: grid;
-  grid-template-columns: 1fr 1.8fr;
+  display: flex;
+  flex-direction: column;
   gap: 30px;
 }
 
@@ -1103,7 +1103,7 @@ tr:hover td {
     grid-template-columns: 1fr;
   }
   .admin-grid-layout {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
   .app-header {
     padding: 16px 20px;
@@ -1704,7 +1704,7 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
     gap: 15px !important;
   }
   .admin-grid-layout {
-    grid-template-columns: 1fr !important;
+    flex-direction: column !important;
     gap: 15px !important;
   }
 }
