@@ -524,7 +524,9 @@ button, input, select {
 }
 
 .tab-view.active-view {
-  display: block;
+  display: block !important;
+  opacity: 1 !important;
+  transform: none !important;
 }
 
 .view-header {
@@ -932,7 +934,9 @@ tr:hover td {
 }
 
 .admin-tab-content.active-admin-content {
-  display: block;
+  display: block !important;
+  opacity: 1 !important;
+  transform: none !important;
 }
 
 .admin-grid-layout {
