@@ -2638,9 +2638,20 @@ if (devDiagTrigger && devDiagModal) {
     const diagDomAdmin = document.getElementById('diag-dom-admin');
     const adminEl = document.getElementById('view-admin');
     if (diagDomAdmin && adminEl) {
-      const isHidden = window.getComputedStyle(adminEl).display === 'none';
-      diagDomAdmin.textContent = `Existe no HTML (Display: ${window.getComputedStyle(adminEl).display}, Classes: ${adminEl.className})`;
-      diagDomAdmin.style.color = isHidden ? '#fbbf24' : '#22c55e';
+      const display = window.getComputedStyle(adminEl).display;
+      const opacity = window.getComputedStyle(adminEl).opacity;
+      const w = adminEl.offsetWidth;
+      const h = adminEl.offsetHeight;
+      const htmlLen = adminEl.innerHTML ? adminEl.innerHTML.length : 0;
+      
+      diagDomAdmin.innerHTML = `
+        <span style="color: #22c55e;">Existe no HTML</span><br>
+        • Display: ${display}<br>
+        • Opacity: ${opacity}<br>
+        • Tamanho: ${w}x${h}px<br>
+        • Caracteres HTML: ${htmlLen}<br>
+        • Classes: ${adminEl.className}
+      `;
     }
 
     const diagLastErrStr = document.getElementById('diag-last-err-str');
