@@ -2644,13 +2644,26 @@ if (devDiagTrigger && devDiagModal) {
       const h = adminEl.offsetHeight;
       const htmlLen = adminEl.innerHTML ? adminEl.innerHTML.length : 0;
       
+      let parentTrace = [];
+      let parent = adminEl.parentElement;
+      while (parent) {
+        const pDisplay = window.getComputedStyle(parent).display;
+        const pOpacity = window.getComputedStyle(parent).opacity;
+        const pId = parent.id ? '#' + parent.id : '';
+        const pClass = parent.className ? '.' + parent.className.replace(/\s+/g, '.') : '';
+        parentTrace.push(`&nbsp;&nbsp;↳ ${parent.tagName.toLowerCase()}${pId}${pClass} (Disp: ${pDisplay}, Opac: ${pOpacity})`);
+        parent = parent.parentElement;
+      }
+      
       diagDomAdmin.innerHTML = `
         <span style="color: #22c55e;">Existe no HTML</span><br>
         • Display: ${display}<br>
         • Opacity: ${opacity}<br>
         • Tamanho: ${w}x${h}px<br>
         • Caracteres HTML: ${htmlLen}<br>
-        • Classes: ${adminEl.className}
+        • Classes: ${adminEl.className}<br>
+        <strong>Rastro de Pais:</strong><br>
+        ${parentTrace.join('<br>')}
       `;
     }
 
