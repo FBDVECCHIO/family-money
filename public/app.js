@@ -1271,13 +1271,13 @@ function renderAdminTables() {
 }
 
 async function payCardBill(cardId, year, month, amount) {
-  const card = state.cards.find(c => c.id === parseInt(cardId));
+  const card = state.cards.find(c => c.id == cardId);
   if (!card) {
     alert('Cartão não encontrado!');
     return;
   }
   
-  const acc = state.accounts.find(a => a.id === card.account_id);
+  const acc = state.accounts.find(a => a.id == card.account_id);
   if (!acc) {
     alert('Conta bancária associada ao cartão não encontrada!');
     return;
@@ -1359,7 +1359,7 @@ async function payCardBill(cardId, year, month, amount) {
 }
 
 async function reconcileRecurrence(recurrenceId, year, month) {
-  const item = state.fixedItems.find(f => f.id === recurrenceId);
+  const item = state.fixedItems.find(f => f.id == recurrenceId);
   if (!item) return;
 
   const day = Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28);
@@ -1386,7 +1386,7 @@ async function reconcileRecurrence(recurrenceId, year, month) {
 
     // 2. Atualizar saldo da conta vinculada
     if (item.account_id) {
-      const acc = state.accounts.find(a => a.id === item.account_id);
+      const acc = state.accounts.find(a => a.id == item.account_id);
       if (acc) {
         const isIncome = item.type === 'income';
         const newBalance = isIncome
@@ -1409,7 +1409,7 @@ async function reconcileRecurrence(recurrenceId, year, month) {
 }
 
 async function reconcileTransaction(id) {
-  const tx = state.transactions.find(t => t.id === id);
+  const tx = state.transactions.find(t => t.id == id);
   if (!tx) return;
   
   try {
@@ -1425,7 +1425,7 @@ async function reconcileTransaction(id) {
     const amount = parseFloat(tx.amount);
     
     if (tx.payment_method === 'account' && tx.account_id) {
-      const acc = state.accounts.find(a => a.id === tx.account_id);
+      const acc = state.accounts.find(a => a.id == tx.account_id);
       if (acc) {
         const newBalance = isIncome
           ? parseFloat(acc.balance) + amount
@@ -1438,8 +1438,8 @@ async function reconcileTransaction(id) {
         if (updateAccError) throw updateAccError;
       }
     } else if (tx.payment_method === 'transfer' && tx.account_id && tx.destination_account_id) {
-      const originAcc = state.accounts.find(a => a.id === tx.account_id);
-      const destAcc = state.accounts.find(a => a.id === tx.destination_account_id);
+      const originAcc = state.accounts.find(a => a.id == tx.account_id);
+      const destAcc = state.accounts.find(a => a.id == tx.destination_account_id);
       if (originAcc && destAcc) {
         const newOriginBalance = parseFloat(originAcc.balance) - amount;
         const newDestBalance = parseFloat(destAcc.balance) + amount;
@@ -1468,7 +1468,7 @@ async function reconcileTransaction(id) {
 async function deleteTransaction(id) {
   if (!confirm('Deseja realmente remover esta transação? Isso reajustará os saldos.')) return;
   try {
-    const txToDelete = state.transactions.find(t => t.id === id);
+    const txToDelete = state.transactions.find(t => t.id == id);
     if (!txToDelete) return;
 
     const { error } = await state.supabase.from('transactions').delete().eq('id', id);
@@ -1480,7 +1480,7 @@ async function deleteTransaction(id) {
     const isEffective = txToDelete.is_effective !== false;
 
     if (isAccount && accIdNum && isEffective) {
-      const acc = state.accounts.find(a => a.id === accIdNum);
+      const acc = state.accounts.find(a => a.id == accIdNum);
       if (acc) {
         // Se era despesa, soma de volta. Se era receita, subtrai.
         const amount = parseFloat(txToDelete.amount);
@@ -2264,7 +2264,7 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
     // 2. Se for débito/crédito em conta imediato, atualizar saldo (APENAS SE EFETIVADO)
     if (paymentMethod === 'account' && accountId && isEffective) {
       const accIdNum = parseInt(accountId);
-      const acc = state.accounts.find(a => a.id === accIdNum);
+      const acc = state.accounts.find(a => a.id == accIdNum);
       if (acc) {
         // Se for receita, soma ao saldo. Se for despesa, subtrai.
         const newBalance = finalType === 'income' 
@@ -2288,8 +2288,8 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
         throw new Error('A conta de origem e destino da transferência devem ser diferentes!');
       }
 
-      const originAcc = state.accounts.find(a => a.id === originIdNum);
-      const destAcc = state.accounts.find(a => a.id === destIdNum);
+      const originAcc = state.accounts.find(a => a.id == originIdNum);
+      const destAcc = state.accounts.find(a => a.id == destIdNum);
 
       if (originAcc && destAcc) {
         const newOriginBalance = parseFloat(originAcc.balance) - amount;
@@ -2307,6 +2307,9 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
         if (errorDest) throw errorDest;
       }
     }
+
+    // Recarregar todos os dados do Supabase na memória local e recalcular previsões
+    await loadAllData();
 
     // Limpar o formulário e resetar preview de recibo
     document.getElementById('new-transaction-form').reset();
