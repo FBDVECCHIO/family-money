@@ -58,7 +58,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=3.1">
+  <link rel="stylesheet" href="style.css?v=3.2">
 </head>
 <body>
 
@@ -300,6 +300,7 @@
                         <th>Vencimento</th>
                         <th>Tipo</th>
                         <th>Valor</th>
+                        <th style="text-align: right;">Ações</th>
                       </tr>
                     </thead>
                     <tbody id="inline-fixed-tbody">
@@ -488,14 +489,6 @@
               </div>
             </div>
 
-              <!-- Efetivação do Lançamento -->
-              <div class="form-group hide" id="tx-effective-group" style="margin-bottom: 20px;">
-                <label style="display: flex; align-items: center; cursor: pointer; gap: 8px; font-weight: normal; user-select: none;">
-                  <input type="checkbox" id="tx-is-effective" checked style="width: 16px; height: 16px; margin: 0; cursor: pointer;">
-                  <span>Lançamento Efetivado (Debitar/Creditar saldo da conta agora)</span>
-                </label>
-              </div>
-
               <div class="form-row-2">
                 <div class="form-group">
                   <label for="tx-description">Descrição / Estabelecimento</label>
@@ -520,24 +513,27 @@
                 </div>
               </div>
 
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label>Método de Pagamento</label>
-                  <div class="payment-method-toggle">
-                    <label class="toggle-option active">
-                      <input type="radio" name="tx-payment-method" value="card" checked>
-                      <i data-lucide="credit-card"></i> Cartão de Crédito
-                    </label>
-                    <label class="toggle-option">
-                      <input type="radio" name="tx-payment-method" value="account">
-                      <i data-lucide="wallet"></i> Débito / Pix (Conta)
-                    </label>
-                    <label class="toggle-option">
-                      <input type="radio" name="tx-payment-method" value="transfer">
-                      <i data-lucide="shuffle"></i> Transferência
-                    </label>
-                  </div>
+              <!-- Método de Pagamento (Linha Completa) -->
+              <div class="form-group" style="margin-bottom: 20px;">
+                <label>Método de Pagamento</label>
+                <div class="payment-method-toggle" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 4px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 12px;">
+                  <label class="toggle-option active" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; text-align: center;">
+                    <input type="radio" name="tx-payment-method" value="card" checked style="display: none;">
+                    <i data-lucide="credit-card" style="width: 16px; height: 16px;"></i> Cartão de Crédito
+                  </label>
+                  <label class="toggle-option" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; text-align: center;">
+                    <input type="radio" name="tx-payment-method" value="account" style="display: none;">
+                    <i data-lucide="wallet" style="width: 16px; height: 16px;"></i> Débito / Pix (Conta)
+                  </label>
+                  <label class="toggle-option" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; text-align: center;">
+                    <input type="radio" name="tx-payment-method" value="transfer" style="display: none;">
+                    <i data-lucide="shuffle" style="width: 16px; height: 16px;"></i> Transferência
+                  </label>
                 </div>
+              </div>
+
+              <!-- Campos Condicionais do Método de Pagamento -->
+              <div class="form-row-2" id="tx-conditional-row">
                 
                 <!-- Condicional: Cartão de Crédito -->
                 <div class="form-group" id="card-selection-group">
@@ -547,25 +543,8 @@
                   </select>
                 </div>
 
-                <!-- Condicional: Conta Bancária (Origem) -->
-                <div class="form-group hide" id="account-selection-group">
-                  <label for="tx-account" id="tx-account-label">Qual Conta Bancária?</label>
-                  <select id="tx-account">
-                    <!-- Preenchido via API -->
-                  </select>
-                </div>
-
-                <!-- Condicional: Transferência (Destino) -->
-                <div class="form-group hide" id="destination-account-selection-group">
-                  <label for="tx-destination-account">Qual Conta de Destino?</label>
-                  <select id="tx-destination-account">
-                    <!-- Preenchido via API -->
-                  </select>
-                </div>
-              </div>
-
-              <div class="form-row-2" id="installments-row">
-                <div class="form-group">
+                <!-- Condicional: Parcelamento (Somente Cartão) -->
+                <div class="form-group" id="installments-row">
                   <label for="tx-installments">Parcelamento (Quantas vezes?)</label>
                   <select id="tx-installments">
                     <option value="1" selected>À vista (1x)</option>
@@ -582,12 +561,43 @@
                     <option value="18">18x</option>
                     <option value="24">24x</option>
                   </select>
-                </div>
-                <div class="form-group" style="justify-content: flex-end; display: flex; align-items: flex-end;">
-                  <div class="installment-calc-preview" id="installment-preview-text">
+                  <div class="installment-calc-preview hide" id="installment-preview-text" style="margin-top: 6px; font-size: 0.85rem; font-weight: 500;">
                     Valor da Parcela: <span class="green-neon" id="preview-installment-amount">R$ 0,00</span>
                   </div>
                 </div>
+
+                <!-- Condicional: Conta Bancária (Origem - para Débito ou Transferência) -->
+                <div class="form-group hide" id="account-selection-group">
+                  <label for="tx-account" id="tx-account-label">Qual Conta Bancária?</label>
+                  <select id="tx-account">
+                    <!-- Preenchido via API -->
+                  </select>
+                </div>
+
+                <!-- Condicional: Transferência (Destino) -->
+                <div class="form-group hide" id="destination-account-selection-group">
+                  <label for="tx-destination-account">Qual Conta de Destino?</label>
+                  <select id="tx-destination-account">
+                    <!-- Preenchido via API -->
+                  </select>
+                </div>
+
+                <!-- Checkbox Efetivação (Somente Conta/Transferência) -->
+                <div class="form-group hide" id="tx-effective-group" style="justify-content: flex-start; display: flex; align-items: flex-end; padding-bottom: 10px;">
+                  <label style="display: flex; align-items: center; cursor: pointer; gap: 8px; font-weight: normal; user-select: none; margin: 0;">
+                    <input type="checkbox" id="tx-is-effective" checked style="width: 18px; height: 18px; margin: 0; cursor: pointer;">
+                    <span style="font-size: 0.9rem;">Efetivar lançamento (Atualizar saldo imediatamente)</span>
+                  </label>
+                </div>
+
+                <!-- Checkbox Recorrência (Somente Cartão) -->
+                <div class="form-group" id="tx-recurring-group" style="justify-content: flex-start; display: flex; align-items: flex-end; padding-bottom: 10px;">
+                  <label style="display: flex; align-items: center; cursor: pointer; gap: 8px; font-weight: normal; user-select: none; margin: 0;">
+                    <input type="checkbox" id="tx-is-recurring" style="width: 18px; height: 18px; margin: 0; cursor: pointer;">
+                    <span style="font-size: 0.9rem; color: var(--neon-purple); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Lançamento Recorrente (Streaming/Assinatura)</span>
+                  </label>
+                </div>
+
               </div>
 
               <!-- Foto do Recibo -->
@@ -1078,19 +1088,19 @@
 
   <!-- Botão e Modal de Diagnóstico do Desenvolvedor -->
   <button id="dev-diag-trigger" style="position: fixed; bottom: 15px; right: 15px; z-index: 999999; background: #6b21a8; color: #fff; border: none; border-radius: 50px; padding: 10px 18px; font-size: 0.8rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 6px;">
-    🛠️ Diagnóstico (v3.1)
+    🛠️ Diagnóstico (v3.2)
   </button>
 
   <div id="dev-diag-modal" class="hide" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
     <div class="glass" style="width: 90%; max-width: 500px; padding: 25px; border-radius: 12px; max-height: 85vh; overflow-y: auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px;">
-        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v3.1)</h3>
+        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v3.2)</h3>
         <button id="dev-diag-close" style="background: transparent; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;">&times;</button>
       </div>
       
       <div style="display: flex; flex-direction: column; gap: 15px; font-size: 0.85rem; text-align: left;">
         <div>
-          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">3.1 (Live)</span>
+          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">3.2 (Live)</span>
         </div>
         <div>
           <strong>Usuário Logado:</strong>
@@ -1119,6 +1129,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=3.1"></script>
+  <script src="app.js?v=3.2"></script>
 </body>
 </html>

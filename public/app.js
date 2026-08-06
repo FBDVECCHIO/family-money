@@ -35,6 +35,39 @@ function formatDate(dateStr) {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
+function cleanDescription(desc) {
+  if (!desc) return '';
+  return desc.replace(/\s*\[R:\d+\]/g, '');
+}
+
+// Lógica brasileira de faturas de cartão
+function getCardPaymentMonthAndYear(purchaseDateStr, closingDay, dueDay) {
+  const pDate = new Date(purchaseDateStr + 'T12:00:00');
+  let year = pDate.getFullYear();
+  let closingMonth = pDate.getMonth();
+  const day = pDate.getDate();
+
+  if (day > closingDay) {
+    closingMonth += 1;
+    if (closingMonth > 11) {
+      closingMonth = 0;
+      year += 1;
+    }
+  }
+
+  let dueMonth = closingMonth;
+  let dueYear = year;
+  if (dueDay < closingDay) {
+    dueMonth += 1;
+    if (dueMonth > 11) {
+      dueMonth = 0;
+      dueYear += 1;
+    }
+  }
+
+  return { year: dueYear, month: dueMonth };
+}
+
 // ================= CONEXÃO COM O SUPABASE (FIXADA) =================
 const HARDCODED_SB_URL = 'https://bfsliahvbzddlminbpdq.supabase.co';
 const HARDCODED_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmc2xpYWh2YnpkZGxtaW5icGRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3ODE3NTcsImV4cCI6MjEwMTM1Nzc1N30.foGxWytjJLG7TJ66moq3EkPrlYsq0fvZeO5z83ber8c';
@@ -161,6 +194,72 @@ async function logout() {
   initApp();
 }
 
+async function autoGenerateRecurringTransactions() {
+  if (!state.supabase || !state.fixedItems || state.fixedItems.length === 0) return;
+
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth(); // 0-indexed
+
+  let insertedCount = 0;
+
+  for (const item of state.fixedItems) {
+    // Apenas despesas recorrentes
+    if (item.type !== 'expense') continue;
+
+    // Verificar se já existe uma transação no mês/ano correspondente com o ID da recorrência [R:ID]
+    const recurrenceTag = `[R:${item.id}]`;
+    const alreadyExists = state.transactions.some(t => {
+      const isMethodMatch = item.card_id 
+        ? (t.payment_method === 'card' || t.paymentMethod === 'card') 
+        : (t.payment_method === 'account' || t.paymentMethod === 'account');
+      
+      if (!isMethodMatch) return false;
+      if (!t.description.includes(recurrenceTag)) return false;
+
+      // Verificar se a transação é do mesmo mês e ano
+      const txDate = new Date(t.date + 'T12:00:00');
+      return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+    });
+
+    if (!alreadyExists) {
+      // Inserir a transação recorrente para este mês
+      const day = Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28);
+      const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      
+      const payload = {
+        description: `${item.description} [R:${item.id}]`,
+        amount: parseFloat(item.amount),
+        date: dateStr,
+        category_id: item.category_id || item.categoryId || null,
+        payment_method: item.card_id ? 'card' : 'account',
+        type: 'expense',
+        is_effective: false, // Começa como pendente!
+        card_id: item.card_id || null,
+        installments: 1,
+        account_id: item.account_id || null,
+        user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
+      };
+
+      console.log(`Auto-gerando lançamento recorrente: ${payload.description} para a data ${payload.date}`);
+      const { error } = await state.supabase.from('transactions').insert([payload]);
+      if (error) {
+        console.error('Erro ao auto-gerar lançamento:', error);
+      } else {
+        insertedCount++;
+      }
+    }
+  }
+
+  // Se inseriu novos lançamentos, recarrega a tabela de transações do Supabase
+  if (insertedCount > 0) {
+    const { data, error } = await state.supabase.from('transactions').select('*').order('date', { ascending: false });
+    if (!error) {
+      state.transactions = data || [];
+    }
+  }
+}
+
 // ================= CARREGAMENTO E SINCRONIZAÇÃO DE DADOS =================
 async function loadAllData() {
   if (!state.supabase) return;
@@ -253,6 +352,13 @@ async function loadAllData() {
       state.backups = [];
     }
 
+    // Auto-gerar lançamentos recorrentes pendentes do mês corrente
+    try {
+      await autoGenerateRecurringTransactions();
+    } catch (autoErr) {
+      console.error('Erro no motor de auto-geração de recorrências:', autoErr);
+    }
+
     // Calcular a previsão de 6 meses no lado do cliente
     let forecastResult = { currentBalance: 0, forecast: [] };
     try {
@@ -322,9 +428,11 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
       const cardIdNum = item.card_id || item.cardId;
       const amount = parseFloat(item.amount);
       const itemDetail = {
+        id: item.id,
         description: item.description,
         amount: amount,
-        dayOfMonth: item.day_of_month || item.dayOfMonth
+        dayOfMonth: item.day_of_month || item.dayOfMonth,
+        category_id: item.category_id || item.categoryId || null
       };
 
       if (item.type === 'income') {
@@ -348,33 +456,7 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
     });
   });
 
-  // Lógica brasileira de faturas de cartão
-  function getCardPaymentMonthAndYear(purchaseDateStr, closingDay, dueDay) {
-    const pDate = new Date(purchaseDateStr + 'T12:00:00');
-    let year = pDate.getFullYear();
-    let closingMonth = pDate.getMonth();
-    const day = pDate.getDate();
 
-    if (day > closingDay) {
-      closingMonth += 1;
-      if (closingMonth > 11) {
-        closingMonth = 0;
-        year += 1;
-      }
-    }
-
-    let dueMonth = closingMonth;
-    let dueYear = year;
-    if (dueDay < closingDay) {
-      dueMonth += 1;
-      if (dueMonth > 11) {
-        dueMonth = 0;
-        dueYear += 1;
-      }
-    }
-
-    return { year: dueYear, month: dueMonth };
-  }
 
   // 2. Processar compras de Cartão de Crédito e suas Faturas
   transactions.forEach(tx => {
@@ -744,7 +826,7 @@ function renderTransactionsTable() {
     return `
       <tr>
         <td>${formatDate(t.date)}</td>
-        <td style="font-weight: 500;">${t.description}</td>
+        <td style="font-weight: 500;">${cleanDescription(t.description)}</td>
         <td>
           <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
             ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
@@ -945,9 +1027,34 @@ function renderMonthlyDetail(monthData) {
       const catIdNum = f.category_id || f.categoryId;
       const cat = state.categories.find(c => c.id === catIdNum);
       const catBadge = cat ? `<span class="badge-category" style="background-color: ${cat.color}22; color: ${cat.color}; border: 1px solid ${cat.color}44;">${cat.name}</span>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
+      
+      // Encontrar transação correspondente a esta recorrência no mês da projeção
+      const txForRecurrence = state.transactions.find(t => {
+        if (!t.description.includes(`[R:${f.id}]`)) return false;
+        const txDate = new Date(t.date + 'T12:00:00');
+        return txDate.getFullYear() === monthData.year && txDate.getMonth() === monthData.month;
+      });
+
+      const isEffective = txForRecurrence ? (txForRecurrence.is_effective !== false) : false;
+
+      let actionHtml = '';
+      if (isEffective) {
+        actionHtml = `<span style="color: var(--neon-green); font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> Efetivado</span>`;
+      } else {
+        if (txForRecurrence) {
+          actionHtml = `<button class="btn-reconcile" onclick="reconcileTransaction(${txForRecurrence.id})" title="Efetivar e abater saldo da conta agora" style="padding: 4px 8px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+                          <i data-lucide="check" style="width: 12px; height: 12px;"></i> Efetivar
+                        </button>`;
+        } else {
+          actionHtml = `<button class="btn-reconcile" onclick="reconcileRecurrence(${f.id}, ${monthData.year}, ${monthData.month})" title="Efetivar e abater saldo da conta agora" style="padding: 4px 8px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+                          <i data-lucide="check" style="width: 12px; height: 12px;"></i> Efetivar
+                        </button>`;
+        }
+      }
+
       return `
         <tr>
-          <td style="font-weight: 500;">${f.description}</td>
+          <td style="font-weight: 500;">${cleanDescription(f.description)}</td>
           <td>Dia ${f.dayOfMonth}</td>
           <td>
             <span class="badge-category" style="background: ${f.type === 'income' ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 59, 48, 0.1)'}; color: ${f.type === 'income' ? 'var(--neon-green)' : 'var(--neon-red)'}; border: 1px solid ${f.type === 'income' ? 'rgba(57, 255, 20, 0.2)' : 'rgba(255, 59, 48, 0.2)'}">
@@ -957,6 +1064,7 @@ function renderMonthlyDetail(monthData) {
           <td class="${f.type === 'income' ? 'green-neon' : 'red-neon'}" style="font-weight: 600;">
             ${f.type === 'income' ? '+' : '-'}${formatCurrency(f.amount)}
           </td>
+          <td style="text-align: right;">${actionHtml}</td>
         </tr>
       `;
     }).join('');
@@ -1215,11 +1323,88 @@ async function payCardBill(cardId, year, month, amount) {
       .update({ balance: newBalance })
       .eq('id', card.account_id);
     if (errorAcc) throw errorAcc;
+
+    // 4. Reconciliar transações individuais do cartão que pertencem a esta fatura
+    const cardTransactionsToReconcile = state.transactions.filter(t => {
+      const cardIdNum = t.card_id || t.cardId;
+      if (parseInt(cardIdNum) !== parseInt(cardId)) return false;
+
+      const isCard = t.payment_method === 'card' || t.paymentMethod === 'card';
+      if (!isCard) return false;
+
+      // Calcular a fatura a qual esta transação pertence
+      const closingDayVal = card.closing_day || card.closingDay;
+      const dueDayVal = card.due_day || card.dueDay;
+      const firstBill = getCardPaymentMonthAndYear(t.date, closingDayVal, dueDayVal);
+      
+      return parseInt(firstBill.year) === parseInt(year) && parseInt(firstBill.month) === parseInt(month);
+    });
+
+    if (cardTransactionsToReconcile.length > 0) {
+      const ids = cardTransactionsToReconcile.map(t => t.id);
+      console.log(`Reconciliando ${ids.length} transações do cartão ${card.name} para a fatura de ${monthName}/${year}`);
+      
+      const { error: errorReconcile } = await state.supabase
+        .from('transactions')
+        .update({ is_effective: true })
+        .in('id', ids);
+      if (errorReconcile) throw errorReconcile;
+    }
     
     alert(`Fatura do cartão ${card.name} paga com sucesso!`);
     loadAllData();
   } catch (err) {
     alert('Erro ao pagar fatura: ' + err.message);
+  }
+}
+
+async function reconcileRecurrence(recurrenceId, year, month) {
+  const item = state.fixedItems.find(f => f.id === recurrenceId);
+  if (!item) return;
+
+  const day = Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28);
+  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  try {
+    // 1. Inserir transação efetivada
+    const payload = {
+      description: `${item.description} [R:${item.id}]`,
+      amount: parseFloat(item.amount),
+      date: dateStr,
+      category_id: item.category_id || item.categoryId || null,
+      payment_method: 'account',
+      type: item.type || 'expense',
+      is_effective: true, // Já cria efetivado!
+      card_id: null,
+      installments: 1,
+      account_id: item.account_id || null,
+      user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
+    };
+
+    const { error: insertError } = await state.supabase.from('transactions').insert([payload]);
+    if (insertError) throw insertError;
+
+    // 2. Atualizar saldo da conta vinculada
+    if (item.account_id) {
+      const acc = state.accounts.find(a => a.id === item.account_id);
+      if (acc) {
+        const isIncome = item.type === 'income';
+        const newBalance = isIncome
+          ? parseFloat(acc.balance) + parseFloat(item.amount)
+          : parseFloat(acc.balance) - parseFloat(item.amount);
+
+        const { error: updateAccError } = await state.supabase
+          .from('accounts')
+          .update({ balance: newBalance })
+          .eq('id', item.account_id);
+        if (updateAccError) throw updateAccError;
+      }
+    }
+
+    alert('Lançamento recorrente efetivado e saldo atualizado!');
+    loadAllData();
+  } catch (err) {
+    alert('Erro ao efetivar lançamento: ' + err.message);
   }
 }
 
@@ -1845,7 +2030,7 @@ document.querySelectorAll('.admin-tab-btn').forEach(btn => {
 // Toggle Novo Lançamento (Cartão vs Débito vs Transferência)
 document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
   radio.addEventListener('change', (e) => {
-    document.querySelectorAll('.toggle-option').forEach(opt => opt.classList.remove('active'));
+    e.target.closest('.payment-method-toggle').querySelectorAll('.toggle-option').forEach(opt => opt.classList.remove('active'));
     e.target.parentElement.classList.add('active');
 
     const method = e.target.value;
@@ -1857,6 +2042,7 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
     const accLabel = document.getElementById('tx-account-label');
 
     const effectiveGroup = document.getElementById('tx-effective-group');
+    const recurringGroup = document.getElementById('tx-recurring-group');
 
     if (method === 'card') {
       cardGroup.classList.remove('hide');
@@ -1865,6 +2051,7 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
       destGroup.classList.add('hide');
       catGroup.classList.remove('hide');
       if (effectiveGroup) effectiveGroup.classList.add('hide'); // Esconde o checkbox de efetivação imediata
+      if (recurringGroup) recurringGroup.classList.remove('hide'); // Mostra o checkbox de recorrência
       
       document.getElementById('tx-card').setAttribute('required', true);
       document.getElementById('tx-account').removeAttribute('required');
@@ -1878,6 +2065,7 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
       destGroup.classList.add('hide');
       catGroup.classList.remove('hide');
       if (effectiveGroup) effectiveGroup.classList.remove('hide'); // Mostra para contas
+      if (recurringGroup) recurringGroup.classList.add('hide'); // Esconde o checkbox de recorrência
       
       document.getElementById('tx-account').setAttribute('required', true);
       document.getElementById('tx-card').removeAttribute('required');
@@ -1891,6 +2079,7 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
       destGroup.classList.remove('hide');
       catGroup.classList.add('hide'); // Ocultar categorias em transferências
       if (effectiveGroup) effectiveGroup.classList.remove('hide'); // Mostra para transferências
+      if (recurringGroup) recurringGroup.classList.add('hide'); // Esconde o checkbox de recorrência
       
       document.getElementById('tx-account').setAttribute('required', true);
       document.getElementById('tx-destination-account').setAttribute('required', true);
@@ -2025,9 +2214,36 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
     // Transações no cartão começam como não efetivadas (falsa) até a fatura ser paga
     const isEffective = paymentMethod === 'card' ? false : isEffectiveVal;
 
-    // 1. Inserir Transação no Supabase
+    const isRecurringVal = document.getElementById('tx-is-recurring').checked;
+    const isRecurring = paymentMethod === 'card' && isRecurringVal;
+    let finalDescription = description;
+
+    if (isRecurring) {
+      // 1. Inserir na tabela fixed_items
+      const dayOfMonth = new Date(date + 'T12:00:00').getDate();
+      const fixedPayload = {
+        description,
+        amount,
+        day_of_month: dayOfMonth,
+        type: 'expense',
+        card_id: parseInt(cardId),
+        category_id: categoryId
+      };
+      
+      const { data: fixedData, error: fixedErr } = await state.supabase
+        .from('fixed_items')
+        .insert([fixedPayload])
+        .select();
+      if (fixedErr) throw fixedErr;
+      
+      if (fixedData && fixedData.length > 0) {
+        finalDescription = `${description} [R:${fixedData[0].id}]`;
+      }
+    }
+
+    // 2. Inserir Transação no Supabase
     const newTx = {
-      description,
+      description: finalDescription,
       amount,
       date,
       category_id: paymentMethod === 'transfer' ? null : categoryId,
@@ -2296,7 +2512,7 @@ document.getElementById('export-csv-btn').addEventListener('click', () => {
     const installments = t.installments > 1 ? `${t.installments}x` : 'À vista';
     const catName = cat ? cat.name : 'Outros';
 
-    csvContent += `"${formatDate(t.date)}";"${t.description}";"${catName}";"Família";"${method}";"${installments}";"-${parseFloat(t.amount).toFixed(2)}"\n`;
+    csvContent += `"${formatDate(t.date)}";"${cleanDescription(t.description)}";"${catName}";"Família";"${method}";"${installments}";"-${parseFloat(t.amount).toFixed(2)}"\n`;
   });
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -2478,7 +2694,7 @@ function renderReportsTable() {
     return `
       <tr>
         <td>${formatDate(t.date)}</td>
-        <td style="font-weight: 500;">${t.description}</td>
+        <td style="font-weight: 500;">${cleanDescription(t.description)}</td>
         <td>
           <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
             ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
@@ -2541,7 +2757,7 @@ document.getElementById('export-filtered-csv-btn').addEventListener('click', () 
     const installments = t.installments > 1 ? `${t.installments}x` : 'À vista';
     const catName = t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral');
 
-    csvContent += `"${formatDate(t.date)}";"${t.description}";"${catName}";"${whoLaunched}";"${method}";"${installments}";"${parseFloat(t.amount).toFixed(2)}"\n`;
+    csvContent += `"${formatDate(t.date)}";"${cleanDescription(t.description)}";"${catName}";"${whoLaunched}";"${method}";"${installments}";"${parseFloat(t.amount).toFixed(2)}"\n`;
   });
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
