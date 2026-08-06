@@ -550,7 +550,7 @@ function renderSidebar(totalBalance) {
           <i data-lucide="credit-card" class="purple-neon"></i>
         </div>
         <div class="card-details-row">
-          <span>Fechamento: Dia ${card.closing_day || card.closingDay}</span>
+          <span>Fecha: Dia ${card.closing_day || card.closingDay}</span>
           <span>Vence: Dia ${card.due_day || card.dueDay}</span>
         </div>
         <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; text-align: right;">
@@ -1061,7 +1061,7 @@ function renderMonthlyDetail(monthData) {
               ${f.type === 'income' ? 'Receita' : 'Despesa'}
             </span>
           </td>
-          <td class="${f.type === 'income' ? 'green-neon' : 'red-neon'}" style="font-weight: 600;">
+          <td class="${f.type === 'income' ? 'green-neon' : 'red-neon'}" style="font-weight: 600; white-space: nowrap; font-size: 0.85rem;">
             ${f.type === 'income' ? '+' : '-'}${formatCurrency(f.amount)}
           </td>
           <td style="text-align: right;">${actionHtml}</td>

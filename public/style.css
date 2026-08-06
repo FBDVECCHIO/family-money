@@ -837,6 +837,12 @@ tr:hover td {
   gap: 24px;
 }
 
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+}
+
 .payment-method-toggle {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1642,8 +1648,7 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
     gap: 15px !important;
   }
 
-  /* Form Row Stacking */
-  .form-row-2 {
+  .form-row-2, .form-row-3 {
     grid-template-columns: 1fr !important;
     gap: 10px !important;
   }
