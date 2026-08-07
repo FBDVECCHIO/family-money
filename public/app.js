@@ -569,6 +569,24 @@ function renderDashboard() {
   cardsContainer.innerHTML = state.forecast.map((m, idx) => {
     const isBalanceNegative = m.projectedBalance < 0;
     
+    // Agrupar faturas por cartão
+    const billsByCard = {};
+    m.cardBills.forEach(c => {
+      const name = c.cardName || 'Cartão';
+      billsByCard[name] = (billsByCard[name] || 0) + c.amount;
+    });
+
+    const subtotalsHtml = Object.keys(billsByCard).map(cardName => {
+      const amt = billsByCard[cardName];
+      if (amt === 0) return '';
+      return `
+        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.45); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
+          <span style="overflow: hidden; text-overflow: ellipsis; max-width: 100px;">• ${cardName}:</span>
+          <span>-${formatCurrency(amt)}</span>
+        </div>
+      `;
+    }).join('');
+
     return `
       <div class="forecast-card glass ${isBalanceNegative ? 'alert-deficit' : ''}" data-month-index="${idx}" style="border: 1px solid rgba(168, 85, 247, 0.15); transition: border-color 0.3s ease;">
         <div class="forecast-month-label" style="justify-content: center; text-transform: uppercase; font-weight: 700; border-bottom: none; padding-bottom: 0;">
@@ -583,10 +601,11 @@ function renderDashboard() {
             <span>Contas:</span>
             <span class="red-neon">-${formatCurrency(m.fixedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
           </div>
-          <div class="forecast-val-row">
+          <div class="forecast-val-row" style="margin-bottom: 2px;">
             <span>Cartões:</span>
             <span class="red-neon">-${formatCurrency(m.cardBills.reduce((sum, c) => sum + c.amount, 0))}</span>
           </div>
+          ${subtotalsHtml}
         </div>
         <div class="forecast-card-sobra">
           <span class="sobra-label">Sobra do Mês:</span>
@@ -1358,6 +1377,54 @@ async function payCardBill(cardId, year, month, amount) {
   }
 }
 
+function promptAccountSelection(title, defaultAccountId, callback) {
+  const overlay = document.createElement('div');
+  overlay.id = 'dynamic-account-prompt-modal';
+  overlay.style = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.85); z-index: 99999999;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+  `;
+  
+  const optionsHtml = state.accounts.map(acc => {
+    const isSelected = (defaultAccountId && String(acc.id) === String(defaultAccountId)) ? 'selected' : '';
+    return `<option value="${acc.id}" ${isSelected}>${acc.name} (Saldo: ${formatCurrency(acc.balance)})</option>`;
+  }).join('');
+  
+  overlay.innerHTML = `
+    <div class="glass" style="width: 90%; max-width: 400px; padding: 25px; border-radius: 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box; text-align: left;">
+      <h3 style="margin-top: 0; margin-bottom: 15px; color: var(--neon-purple); font-size: 1.15rem; font-weight: 600;">${title}</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Selecione a conta bancária para efetivar o débito deste lançamento:</p>
+      
+      <div class="form-group" style="margin-bottom: 20px;">
+        <select id="prompt-selected-account-id" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: #fff; outline: none; font-size: 0.9rem;">
+          ${optionsHtml}
+        </select>
+      </div>
+      
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="prompt-cancel-btn" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem; border-color: rgba(255,255,255,0.1); color: #fff; cursor: pointer;">Cancelar</button>
+        <button id="prompt-confirm-btn" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.85rem; cursor: pointer;">Confirmar</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  
+  overlay.querySelector('#prompt-cancel-btn').onclick = () => {
+    document.body.removeChild(overlay);
+  };
+  
+  overlay.querySelector('#prompt-confirm-btn').onclick = () => {
+    const selectedAccountId = overlay.querySelector('#prompt-selected-account-id').value;
+    document.body.removeChild(overlay);
+    if (selectedAccountId) {
+      callback(parseInt(selectedAccountId));
+    }
+  };
+}
+
 async function reconcileRecurrence(recurrenceId, year, month) {
   const item = state.fixedItems.find(f => f.id == recurrenceId);
   if (!item) return;
@@ -1365,28 +1432,28 @@ async function reconcileRecurrence(recurrenceId, year, month) {
   const day = Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28);
   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-  try {
-    // 1. Inserir transação efetivada
-    const payload = {
-      description: `${item.description} [R:${item.id}]`,
-      amount: parseFloat(item.amount),
-      date: dateStr,
-      category_id: item.category_id || item.categoryId || null,
-      payment_method: 'account',
-      type: item.type || 'expense',
-      is_effective: true, // Já cria efetivado!
-      card_id: null,
-      installments: 1,
-      account_id: item.account_id || null,
-      user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
-    };
+  promptAccountSelection(`Efetivar Recorrência: ${item.description}`, item.account_id, async (selectedAccountId) => {
+    try {
+      // 1. Inserir transação efetivada
+      const payload = {
+        description: `${item.description} [R:${item.id}]`,
+        amount: parseFloat(item.amount),
+        date: dateStr,
+        category_id: item.category_id || item.categoryId || null,
+        payment_method: 'account',
+        type: item.type || 'expense',
+        is_effective: true, // Já cria efetivado!
+        card_id: null,
+        installments: 1,
+        account_id: selectedAccountId,
+        user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
+      };
 
-    const { error: insertError } = await state.supabase.from('transactions').insert([payload]);
-    if (insertError) throw insertError;
+      const { error: insertError } = await state.supabase.from('transactions').insert([payload]);
+      if (insertError) throw insertError;
 
-    // 2. Atualizar saldo da conta vinculada
-    if (item.account_id) {
-      const acc = state.accounts.find(a => a.id == item.account_id);
+      // 2. Atualizar saldo da conta vinculada selecionada
+      const acc = state.accounts.find(a => a.id == selectedAccountId);
       if (acc) {
         const isIncome = item.type === 'income';
         const newBalance = isIncome
@@ -1396,50 +1463,35 @@ async function reconcileRecurrence(recurrenceId, year, month) {
         const { error: updateAccError } = await state.supabase
           .from('accounts')
           .update({ balance: newBalance })
-          .eq('id', item.account_id);
+          .eq('id', selectedAccountId);
         if (updateAccError) throw updateAccError;
       }
-    }
 
-    alert('Lançamento recorrente efetivado e saldo atualizado!');
-    loadAllData();
-  } catch (err) {
-    alert('Erro ao efetivar lançamento: ' + err.message);
-  }
+      alert('Lançamento recorrente efetivado e saldo atualizado!');
+      loadAllData();
+    } catch (err) {
+      alert('Erro ao efetivar lançamento: ' + err.message);
+    }
+  });
 }
 
 async function reconcileTransaction(id) {
   const tx = state.transactions.find(t => t.id == id);
   if (!tx) return;
   
-  try {
-    // 1. Efetivar no Supabase
-    const { error: updateTxError } = await state.supabase
-      .from('transactions')
-      .update({ is_effective: true })
-      .eq('id', id);
-    if (updateTxError) throw updateTxError;
-    
-    // 2. Debitar/Creditar o valor da conta
-    const isIncome = tx.type === 'income';
-    const amount = parseFloat(tx.amount);
-    
-    if (tx.payment_method === 'account' && tx.account_id) {
-      const acc = state.accounts.find(a => a.id == tx.account_id);
-      if (acc) {
-        const newBalance = isIncome
-          ? parseFloat(acc.balance) + amount
-          : parseFloat(acc.balance) - amount;
-          
-        const { error: updateAccError } = await state.supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', tx.account_id);
-        if (updateAccError) throw updateAccError;
-      }
-    } else if (tx.payment_method === 'transfer' && tx.account_id && tx.destination_account_id) {
+  if (tx.payment_method === 'transfer') {
+    // Efetivação direta para transferências (não requer prompt de conta única)
+    try {
+      const { error: updateTxError } = await state.supabase
+        .from('transactions')
+        .update({ is_effective: true })
+        .eq('id', id);
+      if (updateTxError) throw updateTxError;
+      
+      const amount = parseFloat(tx.amount);
       const originAcc = state.accounts.find(a => a.id == tx.account_id);
       const destAcc = state.accounts.find(a => a.id == tx.destination_account_id);
+      
       if (originAcc && destAcc) {
         const newOriginBalance = parseFloat(originAcc.balance) - amount;
         const newDestBalance = parseFloat(destAcc.balance) + amount;
@@ -1456,12 +1508,44 @@ async function reconcileTransaction(id) {
           .eq('id', tx.destination_account_id);
         if (errDest) throw errDest;
       }
+      
+      alert('Transferência efetivada e saldos atualizados!');
+      loadAllData();
+    } catch (err) {
+      alert('Erro ao efetivar transferência: ' + err.message);
     }
-    
-    alert('Lançamento efetivado e saldo atualizado!');
-    loadAllData();
-  } catch (err) {
-    alert('Erro ao efetivar lançamento: ' + err.message);
+  } else {
+    // Efetivação com escolha de conta para despesas / receitas
+    promptAccountSelection(`Efetivar Lançamento: ${tx.description}`, tx.account_id, async (selectedAccountId) => {
+      try {
+        const { error: updateTxError } = await state.supabase
+          .from('transactions')
+          .update({ is_effective: true, account_id: selectedAccountId })
+          .eq('id', id);
+        if (updateTxError) throw updateTxError;
+        
+        const isIncome = tx.type === 'income';
+        const amount = parseFloat(tx.amount);
+        
+        const acc = state.accounts.find(a => a.id == selectedAccountId);
+        if (acc) {
+          const newBalance = isIncome
+            ? parseFloat(acc.balance) + amount
+            : parseFloat(acc.balance) - amount;
+            
+          const { error: updateAccError } = await state.supabase
+            .from('accounts')
+            .update({ balance: newBalance })
+            .eq('id', selectedAccountId);
+          if (updateAccError) throw updateAccError;
+        }
+        
+        alert('Lançamento efetivado e saldo atualizado!');
+        loadAllData();
+      } catch (err) {
+        alert('Erro ao efetivar lançamento: ' + err.message);
+      }
+    });
   }
 }
 
@@ -2093,8 +2177,34 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
 // Toggle Tipo de Lançamento (Despesa vs Receita)
 document.querySelectorAll('input[name="tx-type"]').forEach(radio => {
   radio.addEventListener('change', (e) => {
+    // Reset active classes inside this specific type-toggle container
     e.target.closest('.payment-method-toggle').querySelectorAll('.toggle-option').forEach(opt => opt.classList.remove('active'));
     e.target.parentElement.classList.add('active');
+    
+    const type = e.target.value; // 'expense' or 'income'
+    const cardToggleOption = document.querySelector('input[name="tx-payment-method"][value="card"]').parentElement;
+    
+    if (type === 'income') {
+      // Receita: Cartão não faz sentido, então esconde a opção Cartão
+      cardToggleOption.classList.add('hide');
+      
+      // Se a opção ativa era Cartão, muda para Conta
+      const activeMethodInput = document.querySelector('input[name="tx-payment-method"]:checked');
+      if (activeMethodInput && activeMethodInput.value === 'card') {
+        const accountInput = document.querySelector('input[name="tx-payment-method"][value="account"]');
+        accountInput.checked = true;
+        accountInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    } else {
+      // Despesa: Mostra a opção Cartão
+      cardToggleOption.classList.remove('hide');
+      
+      // Se for despesa, dispara um evento change no método de pagamento selecionado para re-exibir os campos se for cartão
+      const activeMethodInput = document.querySelector('input[name="tx-payment-method"]:checked');
+      if (activeMethodInput) {
+        activeMethodInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
   });
 });
 
