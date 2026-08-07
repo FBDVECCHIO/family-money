@@ -58,7 +58,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=3.7">
+  <link rel="stylesheet" href="style.css?v=3.8">
 </head>
 <body>
 
@@ -72,16 +72,15 @@
         </div>
         <p>Configuração de Conexão com o Supabase</p>
       </div>
-      
       <form id="setup-form">
-        <div class="form-group">
+        <div class="floating-field">
+          <input type="url" id="setup-url" placeholder=" " required>
           <label for="setup-url">URL do Projeto Supabase</label>
-          <input type="url" id="setup-url" placeholder="https://xxxx.supabase.co" required>
         </div>
         
-        <div class="form-group">
+        <div class="floating-field">
+          <input type="password" id="setup-key" placeholder=" " required>
           <label for="setup-key">Anon Key (Chave Pública API)</label>
-          <input type="password" id="setup-key" placeholder="eyJhbGciOiJIUzI1Ni..." required>
         </div>
         
         <button type="submit" class="btn btn-primary btn-block">
@@ -106,22 +105,22 @@
       </div>
       
       <form id="login-form">
-        <div class="form-group">
+        <div class="floating-field">
+          <input type="email" id="username" placeholder=" " required>
           <label for="username">E-mail de Acesso</label>
-          <input type="email" id="username" placeholder="Digite seu e-mail" required style="width: 100%;">
         </div>
         
-        <div class="form-group">
-          <label for="password">Senha de Acesso</label>
-          <div style="position: relative; display: flex; align-items: center; width: 100%;">
-            <input type="password" id="password" placeholder="Digite sua senha" required style="padding-right: 40px; width: 100%;">
-            <button type="button" id="toggle-password-btn" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px;">
+        <div class="floating-field">
+          <div class="toggle-password-wrapper">
+            <input type="password" id="password" placeholder=" " required>
+            <label for="password">Senha de Acesso</label>
+            <button type="button" id="toggle-password-btn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; z-index: 10;">
               <i data-lucide="eye" style="width: 18px; height: 18px;"></i>
             </button>
           </div>
         </div>
         
-        <div id="login-error" class="error-msg hide">Senha de acesso incorreta.</div>
+        <div id="login-error" class="error-msg hide" style="margin-top: -10px; margin-bottom: 15px;">Senha de acesso incorreta.</div>
         
         <button type="submit" class="btn btn-primary btn-block">
           Entrar no Painel <i data-lucide="arrow-right"></i>
@@ -1091,19 +1090,19 @@
 
   <!-- Botão e Modal de Diagnóstico do Desenvolvedor -->
   <button id="dev-diag-trigger" style="position: fixed; bottom: 15px; right: 15px; z-index: 999999; background: #6b21a8; color: #fff; border: none; border-radius: 50px; padding: 10px 18px; font-size: 0.8rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 6px;">
-    🛠️ Diagnóstico (v3.7)
+    🛠️ Diagnóstico (v3.8)
   </button>
 
   <div id="dev-diag-modal" class="hide" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
     <div class="glass" style="width: 90%; max-width: 500px; padding: 25px; border-radius: 12px; max-height: 85vh; overflow-y: auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px;">
-        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v3.7)</h3>
+        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v3.8)</h3>
         <button id="dev-diag-close" style="background: transparent; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;">&times;</button>
       </div>
       
       <div style="display: flex; flex-direction: column; gap: 15px; font-size: 0.85rem; text-align: left;">
         <div>
-          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">3.7 (Live)</span>
+          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">3.8 (Live)</span>
         </div>
         <div>
           <strong>Usuário Logado:</strong>
@@ -1132,6 +1131,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=3.7"></script>
+  <script src="app.js?v=3.8"></script>
 </body>
 </html>

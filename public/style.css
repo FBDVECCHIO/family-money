@@ -191,14 +191,25 @@ button, input, select {
   justify-content: center;
   min-height: 100vh;
   padding: 20px;
+  perspective: 1000px;
 }
 
 .login-card {
   width: 100%;
   max-width: 420px;
   padding: 40px 30px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3), 0 0 30px rgba(168, 85, 247, 0.05);
+  backdrop-filter: blur(24px) saturate(1.35);
+  border-radius: 26px;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+.login-card > * {
+  transform: translateZ(20px);
 }
 
 .login-header {
@@ -1779,4 +1790,107 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   font-size: 0.7rem !important;
   border-radius: 4px !important;
   display: inline-block !important;
+}
+
+/* Floating labels e spinner para tela de login premium */
+.floating-field {
+  position: relative;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.floating-field input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  padding: 16px 16px 10px 16px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.floating-field input::placeholder {
+  color: transparent;
+  user-select: none;
+}
+
+.floating-field label {
+  position: absolute;
+  left: 16px;
+  top: 15px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  pointer-events: none;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Estado ativo: input em foco ou preenchido */
+.floating-field input:focus ~ label,
+.floating-field input:not(:placeholder-shown) ~ label {
+  top: 6px;
+  left: 14px;
+  font-size: 0.72rem;
+  color: var(--neon-purple);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.floating-field input:focus {
+  border-color: var(--neon-purple);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+/* Tratamento de senha com botão de toggle */
+.toggle-password-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.toggle-password-wrapper input {
+  padding-right: 48px;
+}
+
+.toggle-password-wrapper input:focus ~ label,
+.toggle-password-wrapper input:not(:placeholder-shown) ~ label {
+  top: 6px;
+  left: 14px;
+  font-size: 0.72rem;
+  color: var(--neon-purple);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Botão de carregamento e spinner */
+.btn.is-loading {
+  color: transparent !important;
+  pointer-events: none;
+  position: relative;
+}
+
+.btn.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  top: 50%;
+  left: 50%;
+  margin-top: -9px;
+  margin-left: -9px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

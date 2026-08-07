@@ -1928,6 +1928,9 @@ window.deleteBackup = deleteBackup;
 // Submit Setup Supabase
 document.getElementById('setup-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const btn = e.target.querySelector('button[type="submit"]');
+  if (btn) btn.classList.add('is-loading');
+
   let url = document.getElementById('setup-url').value.trim();
   const key = document.getElementById('setup-key').value.trim();
 
@@ -1956,6 +1959,8 @@ document.getElementById('setup-form').addEventListener('submit', async (e) => {
     initApp();
   } catch (err) {
     alert('Falha ao conectar com o Supabase: ' + err.message + '\nVerifique a URL e a Anon Key fornecidas.');
+  } finally {
+    if (btn) btn.classList.remove('is-loading');
   }
 });
 
@@ -1983,6 +1988,9 @@ if (togglePasswordBtn && passwordInputEl) {
 // Submit Login via Custom Users Table
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const btn = e.target.querySelector('button[type="submit"]');
+  if (btn) btn.classList.add('is-loading');
+
   const emailInput = document.getElementById('username');
   const passwordInput = document.getElementById('password');
   const errorMsg = document.getElementById('login-error');
@@ -1998,6 +2006,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     sessionStorage.setItem('familymoney_user_name', 'Administrador (Mestre)');
     errorMsg.classList.add('hide');
     passwordInput.value = '';
+    if (btn) btn.classList.remove('is-loading');
     initApp();
     return;
   }
@@ -2035,6 +2044,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     if (authenticated) {
       errorMsg.classList.add('hide');
       passwordInput.value = '';
+      if (btn) btn.classList.remove('is-loading');
       initApp();
       return;
     }
@@ -2049,10 +2059,47 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
       sessionStorage.setItem('familymoney_user_name', foundUser.name);
       errorMsg.classList.add('hide');
       passwordInput.value = '';
+      if (btn) btn.classList.remove('is-loading');
       initApp();
+    } else {
+      errorMsg.textContent = 'Erro ao conectar: ' + err.message;
+      errorMsg.classList.remove('hide');
     }
+  } finally {
+    if (btn) btn.classList.remove('is-loading');
   }
 });
+
+// Efeito 3D Perspective Tilt nos cartões de login/configuração
+document.querySelectorAll('#login-container, #supabase-setup-container').forEach(container => {
+  const card = container.querySelector('.login-card');
+  if (!card) return;
+
+  container.addEventListener('pointermove', (e) => {
+    const rect = card.getBoundingClientRect();
+    
+    // Posição relativa do cursor dentro do card (normalizada de -1 a 1)
+    const cardX = e.clientX - rect.left - rect.width / 2;
+    const cardY = e.clientY - rect.top - rect.height / 2;
+    
+    const normalizedX = cardX / (rect.width / 2);
+    const normalizedY = cardY / (rect.height / 2);
+    
+    // Rotação máxima de 8 graus
+    const rotateX = -normalizedY * 8; 
+    const rotateY = normalizedX * 8;
+
+    card.style.setProperty('--rx', `${rotateX}deg`);
+    card.style.setProperty('--ry', `${rotateY}deg`);
+  });
+
+  container.addEventListener('pointerleave', () => {
+    // Resetar inclinação suavemente
+    card.style.setProperty('--rx', '0deg');
+    card.style.setProperty('--ry', '0deg');
+  });
+});
+
 // Logout click (Desktop & Mobile)
 document.getElementById('logout-btn').addEventListener('click', logout);
 const logoutBtnMobile = document.getElementById('logout-btn-mobile');
