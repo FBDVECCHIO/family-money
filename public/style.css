@@ -192,6 +192,10 @@ button, input, select {
   min-height: 100vh;
   padding: 20px;
   perspective: 1000px;
+  background-image: linear-gradient(rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.4)), url('login-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .login-card {

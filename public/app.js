@@ -614,7 +614,7 @@ function renderDashboard() {
           </span>
         </div>
         <div class="forecast-card-projected">
-          Projeção Caixa: <span class="${m.projectedBalance >= 0 ? 'green-neon' : 'red-neon'}">${formatCurrency(m.projectedBalance)}</span>
+          Projeção: <span class="${m.projectedBalance >= 0 ? 'green-neon' : 'red-neon'}">${formatCurrency(m.projectedBalance)}</span>
         </div>
       </div>
     `;
