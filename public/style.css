@@ -1169,21 +1169,24 @@ tr:hover td {
 
 @media (max-width: 600px) {
   body {
-    padding-bottom: 0 !important; /* Remover o preenchimento inferior que era usado para o rodapé */
+    padding-bottom: 75px !important; /* Garantir que o rodapé fixo de navegação não tape conteúdo */
   }
   
   .container {
     padding: 8px !important;
   }
   
-  /* Cabeçalho Compacto para Celular */
+  /* Cabeçalho Fixo e Limpo para Celular */
   .app-header {
-    padding: 8px 12px !important;
+    padding: 10px 16px !important;
     flex-direction: row !important;
     justify-content: space-between !important;
     align-items: center !important;
-    gap: 6px !important;
-    position: relative !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
+    background: #18181b !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4) !important;
   }
   
   /* Logotipo visível e compacto no canto esquerdo */
@@ -1192,113 +1195,138 @@ tr:hover td {
     margin: 0 !important;
     display: flex !important;
     align-items: center !important;
-    gap: 4px !important;
+    gap: 6px !important;
   }
   
   .logo span {
-    font-size: 0.9rem !important; /* Compacto e elegante */
+    font-size: 1rem !important;
     font-weight: 700 !important;
+    display: inline-block !important; /* Forçar exibir a marca */
   }
 
   .logo-icon {
-    width: 14px !important;
-    height: 14px !important;
+    width: 16px !important;
+    height: 16px !important;
   }
   
-  /* Menu no canto superior direito */
-  .main-nav {
-    order: 2 !important;
-    position: static !important; /* Remove fixo do rodapé */
-    display: flex !important;
-    flex-direction: row !important;
-    gap: 4px !important; /* Espaçamento condensado para caber */
-    margin: 0 0 0 auto !important; /* Empurra tudo para a direita */
-    padding: 0 !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    border: none !important;
-    z-index: 10 !important;
-    width: auto !important;
-  }
-
   /* Logout no canto superior direito (do outro lado do menu) */
   .header-profile {
     order: 3 !important;
     display: flex !important;
     align-items: center !important;
-    margin: 0 0 0 4px !important;
+    margin: 0 !important;
   }
   
   .user-badge {
-    display: none !important; /* Esconde nome do usuário no topo para economizar espaço */
+    display: none !important; /* Esconde nome do usuário no topo */
   }
   
   #logout-btn {
-    display: inline-flex !important; /* Forçar exibição no topo */
+    display: inline-flex !important;
     background: transparent !important;
     border: none !important;
     color: var(--neon-red) !important;
-    padding: 5px !important;
+    padding: 6px !important;
   }
 
   #logout-btn i {
-    width: 18px !important;
-    height: 18px !important;
+    width: 20px !important;
+    height: 20px !important;
   }
 
   #logout-btn-mobile {
-    display: none !important; /* Esconde o botão de logout duplicado do celular */
+    display: none !important;
   }
   
-  /* Links do Menu Superior Compactados */
-  .nav-link {
+  /* Barra de Navegação Inferior Estilo App Nativo */
+  .main-nav {
+    order: unset !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: 62px !important;
+    background: rgba(24, 24, 27, 0.9) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    display: flex !important;
     flex-direction: row !important;
-    gap: 0 !important;
+    justify-content: space-around !important;
+    align-items: center !important;
+    padding: 0 8px !important;
+    margin: 0 !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
+    z-index: 9999 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Links do Menu Inferior (Coluna: Ícone + Texto) */
+  .nav-link {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 3px !important;
     align-items: center !important;
     justify-content: center !important;
-    background: rgba(168, 85, 247, 0.08) !important;
-    border: 1px solid rgba(168, 85, 247, 0.15) !important;
-    padding: 8px 12px !important; /* Mais espaçoso e fácil de tocar */
+    background: transparent !important;
+    border: none !important;
+    padding: 4px 0 !important;
     color: var(--text-muted) !important;
-    border-radius: 6px !important;
-    width: auto !important;
-    font-size: 0.8rem !important;
+    border-radius: 0 !important;
+    width: 23% !important; /* Dividir igualmente em 4 abas */
+    height: 100% !important;
+    font-size: 0.68rem !important;
+    transition: var(--transition) !important;
   }
   
   .nav-link.active {
-    color: #ffffff !important;
-    background: rgba(168, 85, 247, 0.2) !important;
-    border-color: rgba(168, 85, 247, 0.4) !important;
+    color: var(--neon-purple) !important;
+    background: transparent !important;
+    border: none !important;
+    text-shadow: 0 0 10px rgba(168, 85, 247, 0.3) !important;
   }
   
   .nav-link i {
-    width: 18px !important;
-    height: 18px !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 !important;
   }
   
-  /* Textos otimizados para celular */
+  /* Rótulos dos botões do menu inferior */
   .nav-text-desktop {
     display: none !important;
   }
   
   .nav-text-mobile {
-    display: none !important; /* Deixa apenas os ícones */
+    display: block !important;
+    font-size: 0.65rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em !important;
   }
   
-  /* Botão de Logout Fixo no Rodapé do Celular (não utilizado mais) */
   .nav-logout-btn {
     display: none !important;
   }
   
-  /* Cards de Previsão Compactos */
-  /* Cards de Previsão Compactos (2 colunas) */
+  /* Cards de Previsão em Barra de Rolagem Horizontal (Swiper) no Celular */
   .forecast-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    gap: 12px !important;
+    padding: 2px 2px 10px 2px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    -webkit-overflow-scrolling: touch !important;
   }
   
   .forecast-card {
-    padding: 10px !important;
+    flex: 0 0 250px !important; /* Tamanho fixo confortável */
+    scroll-snap-align: start !important;
+    padding: 12px !important;
     border-radius: 8px !important;
   }
   
@@ -1400,13 +1428,22 @@ tr:hover td {
     padding-bottom: 4px !important;
   }
   
-  /* Tabelas Responsivas */
+  /* Tabelas Responsivas com rolagem interna livre */
   th, td {
-    padding: 6px 4px !important;
+    padding: 8px 6px !important;
+    font-size: 0.75rem !important;
   }
   
   .table-responsive {
     border-radius: 6px !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  .table-responsive table {
+    width: 100% !important;
+    min-width: 680px !important; /* Força largura confortável para colunas no celular */
   }
   
   /* Sidebar/Topo */
@@ -1749,9 +1786,49 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
     grid-template-columns: 1fr !important;
     gap: 15px !important;
   }
+  
   .admin-grid-layout {
     flex-direction: column !important;
     gap: 15px !important;
+  }
+
+  /* Evitar vazamento horizontal de viewport */
+  html, body {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    position: relative !important;
+  }
+
+  /* View Header stacking */
+  .view-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    margin-bottom: 15px !important;
+  }
+  .view-header .actions {
+    width: 100% !important;
+  }
+  .view-header .actions .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Search row stacking */
+  .search-filter-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100% !important;
+    align-items: stretch !important;
+  }
+  .search-filter-row input, .search-filter-row select {
+    width: 100% !important;
+  }
+
+  /* Stacking the summary boxes vertically to prevent horizontal overflow */
+  .inline-summary-row {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
   }
 }
 
