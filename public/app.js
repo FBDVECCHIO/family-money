@@ -2728,7 +2728,11 @@ document.getElementById('tag-form').addEventListener('submit', async (e) => {
     clearTagForm();
     loadAllData();
   } catch (err) {
-    alert(err.message);
+    if (err.code === 'PGRST205' || (err.message && err.message.includes('public.tags'))) {
+      alert('A tabela "tags" não existe no seu banco de dados Supabase!\n\nPara resolver isso, acesse o painel do Supabase, abra o "SQL Editor" e execute a migração SQL informada no plano para criar a tabela "tags" e vincular as colunas "tag_id".');
+    } else {
+      alert('Erro ao salvar tag: ' + err.message);
+    }
   }
 });
 document.getElementById('clear-tag-form-btn').addEventListener('click', clearTagForm);
