@@ -58,7 +58,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=4.0">
+  <link rel="stylesheet" href="style.css?v=4.1">
 </head>
 <body>
 
@@ -415,6 +415,21 @@
                 <!-- Inserido dinamicamente -->
               </select>
             </div>
+            <div class="form-group">
+              <label for="rep-card">Cartão de Crédito</label>
+              <select id="rep-card">
+                <option value="">Todos (ou s/ cartão)</option>
+                <option value="any">Qualquer Cartão</option>
+                <!-- Inserido dinamicamente -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="rep-tag">Tag</label>
+              <select id="rep-tag">
+                <option value="">Todas</option>
+                <!-- Inserido dinamicamente -->
+              </select>
+            </div>
             <div class="form-group" style="justify-content: flex-end; margin-bottom: 0;">
               <button id="clear-reports-filters-btn" class="btn btn-outline" style="width: 100%; padding: 10px;">
                 Limpar Filtros
@@ -517,7 +532,7 @@
               </div>
 
               <!-- Valor, Data e Categoria (Três Colunas) -->
-              <div class="form-row-3">
+              <div class="form-row-4">
                 <div class="form-group">
                   <label for="tx-amount">Valor (R$)</label>
                   <input type="number" step="0.01" id="tx-amount" placeholder="0,00" required style="width: 100%; box-sizing: border-box;">
@@ -529,6 +544,13 @@
                 <div class="form-group">
                   <label for="tx-category">Categoria</label>
                   <select id="tx-category" required style="width: 100%; box-sizing: border-box;">
+                    <!-- Preenchido via API -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="tx-tag">Tag (Filtro Inteligente)</label>
+                  <select id="tx-tag" style="width: 100%; box-sizing: border-box;">
+                    <option value="">Sem Tag</option>
                     <!-- Preenchido via API -->
                   </select>
                 </div>
@@ -655,6 +677,7 @@
             <button class="admin-tab-btn" data-admin-tab="admin-cards">Cartões</button>
             <button class="admin-tab-btn" data-admin-tab="admin-fixed">Contas Fixas / Recorrentes</button>
             <button class="admin-tab-btn" data-admin-tab="admin-categories">Categorias</button>
+            <button class="admin-tab-btn" data-admin-tab="admin-tags">Tags</button>
             <button class="admin-tab-btn" data-admin-tab="admin-users">Usuários</button>
             <button class="admin-tab-btn" data-admin-tab="admin-backups">Backups</button>
             <button class="admin-tab-btn" data-admin-tab="admin-diagnostics">Status do Sistema</button>
@@ -790,7 +813,7 @@
                       </select>
                     </div>
                   </div>
-                  <div class="form-row-2">
+                  <div class="form-row-3">
                     <div class="form-group">
                       <label for="fixed-category">Categoria</label>
                       <select id="fixed-category">
@@ -807,6 +830,13 @@
                         <optgroup label="Cartões de Crédito" id="fixed-optgroup-cards">
                           <!-- Preenchido via API -->
                         </optgroup>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="fixed-tag">Tag (Filtro Inteligente)</label>
+                      <select id="fixed-tag">
+                        <option value="">Sem Tag</option>
+                        <!-- Preenchido via API -->
                       </select>
                     </div>
                   </div>
@@ -905,6 +935,42 @@
                       </tr>
                     </thead>
                     <tbody id="admin-categories-tbody">
+                      <!-- Inserido dinamicamente -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA ADMIN: TAGS -->
+          <div id="admin-tags" class="admin-tab-content">
+            <div class="admin-grid-layout">
+              <div class="admin-form-side glass">
+                <h3 id="tag-form-title">Nova Tag</h3>
+                <form id="tag-form">
+                  <input type="hidden" id="tag-id">
+                  <div class="form-group">
+                    <label for="tag-name">Nome da Tag</label>
+                    <input type="text" id="tag-name" placeholder="Ex: Trabalho, Viagem, Pessoal" required style="width: 100%; box-sizing: border-box;">
+                  </div>
+                  <div style="display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
+                    <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 25px;">Salvar Tag</button>
+                    <button type="button" id="clear-tag-form-btn" class="btn btn-outline hide" style="width: auto; padding: 12px 25px;">Cancelar Edição</button>
+                  </div>
+                </form>
+              </div>
+              <div class="admin-table-side glass">
+                <h3>Tags Cadastradas</h3>
+                <div class="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Tag</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-tags-tbody">
                       <!-- Inserido dinamicamente -->
                     </tbody>
                   </table>
@@ -1090,19 +1156,19 @@
 
   <!-- Botão e Modal de Diagnóstico do Desenvolvedor -->
   <button id="dev-diag-trigger" style="position: fixed; bottom: 15px; right: 15px; z-index: 999999; background: #6b21a8; color: #fff; border: none; border-radius: 50px; padding: 10px 18px; font-size: 0.8rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 6px;">
-    🛠️ Diagnóstico (v4.0)
+    🛠️ Diagnóstico (v4.1)
   </button>
 
   <div id="dev-diag-modal" class="hide" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
     <div class="glass" style="width: 90%; max-width: 500px; padding: 25px; border-radius: 12px; max-height: 85vh; overflow-y: auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px;">
-        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v4.0)</h3>
+        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v4.1)</h3>
         <button id="dev-diag-close" style="background: transparent; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;">&times;</button>
       </div>
       
       <div style="display: flex; flex-direction: column; gap: 15px; font-size: 0.85rem; text-align: left;">
         <div>
-          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">4.0 (Live)</span>
+          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">4.1 (Live)</span>
         </div>
         <div>
           <strong>Usuário Logado:</strong>
@@ -1131,6 +1197,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=4.1"></script>
 </body>
 </html>

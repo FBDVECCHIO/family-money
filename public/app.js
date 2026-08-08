@@ -6,6 +6,7 @@ let state = {
   accounts: [],
   cards: [],
   categories: [],
+  tags: [],
   fixedItems: [],
   transactions: [],
   paidCardBills: [],
@@ -232,6 +233,7 @@ async function autoGenerateRecurringTransactions() {
         amount: parseFloat(item.amount),
         date: dateStr,
         category_id: item.category_id || item.categoryId || null,
+        tag_id: item.tag_id || item.tagId || null,
         payment_method: item.card_id ? 'card' : 'account',
         type: 'expense',
         is_effective: false, // Começa como pendente!
@@ -290,6 +292,20 @@ async function loadAllData() {
       state.categories = data || [];
     } catch (err) {
       console.error('Erro ao carregar categorias:', err);
+    }
+
+    // 3b. Carregar tags
+    try {
+      const { data, error } = await state.supabase.from('tags').select('*').order('name');
+      if (error) {
+        console.warn('Tabela tags não encontrada ou erro ao carregar:', error);
+        state.tags = [];
+      } else {
+        state.tags = data || [];
+      }
+    } catch (err) {
+      console.error('Erro ao carregar tags:', err);
+      state.tags = [];
     }
 
     // 4. Carregar itens fixos
@@ -793,6 +809,8 @@ function renderTransactionsTable() {
 
   tbody.innerHTML = filtered.map(t => {
     const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+    const tag = state.tags ? state.tags.find(g => g.id === t.tag_id || g.id === t.tagId) : null;
+    const tagHtml = tag ? ` <span class="badge-tag">#${tag.name}</span>` : '';
     const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
     const whoLaunched = usr ? usr.name : 'Família';
     
@@ -845,7 +863,7 @@ function renderTransactionsTable() {
     return `
       <tr>
         <td>${formatDate(t.date)}</td>
-        <td style="font-weight: 500;">${cleanDescription(t.description)}</td>
+        <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
         <td>
           <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
             ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
@@ -896,6 +914,12 @@ function renderNewTxFormFields() {
   if (destAccSelect) {
     destAccSelect.innerHTML = `<option value="" disabled selected>Escolha a conta de destino</option>` + 
       state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  }
+
+  const tagSelect = document.getElementById('tx-tag');
+  if (tagSelect) {
+    tagSelect.innerHTML = `<option value="">Sem Tag</option>` + 
+      state.tags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
   }
 }
 
@@ -1097,6 +1121,7 @@ function renderAdminTables() {
   state.accounts = state.accounts || [];
   state.cards = state.cards || [];
   state.categories = state.categories || [];
+  state.tags = state.tags || [];
   state.fixedItems = state.fixedItems || [];
   state.users = state.users || [];
   state.backups = state.backups || [];
@@ -1176,6 +1201,16 @@ function renderAdminTables() {
     console.error('Erro ao preencher seletor de categoria recorrente:', err);
   }
 
+  try {
+    const fixedTagSelect = document.getElementById('fixed-tag');
+    if (fixedTagSelect) {
+      fixedTagSelect.innerHTML = `<option value="">Sem Tag</option>` + 
+        state.tags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao preencher seletor de tag recorrente:', err);
+  }
+
   // Itens Fixos
   try {
     const fixedTbody = document.getElementById('admin-fixed-tbody');
@@ -1235,6 +1270,28 @@ function renderAdminTables() {
     }
   } catch (err) {
     console.error('Erro ao renderizar categorias na administração:', err);
+  }
+
+  // Tags
+  try {
+    const tagsTbody = document.getElementById('admin-tags-tbody');
+    if (tagsTbody) {
+      if (state.tags && state.tags.length > 0) {
+        tagsTbody.innerHTML = state.tags.map(t => `
+          <tr>
+            <td style="font-weight: 500;">${t.name}</td>
+            <td>
+              <button class="btn-edit" onclick="editTag(${t.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+              <button class="btn-delete" onclick="deleteTag(${t.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        tagsTbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 10px;">Nenhuma tag cadastrada</td></tr>`;
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao renderizar tags na administração:', err);
   }
 
   // Usuários
@@ -1440,6 +1497,7 @@ async function reconcileRecurrence(recurrenceId, year, month) {
         amount: parseFloat(item.amount),
         date: dateStr,
         category_id: item.category_id || item.categoryId || null,
+        tag_id: item.tag_id || item.tagId || null,
         payment_method: 'account',
         type: item.type || 'expense',
         is_effective: true, // Já cria efetivado!
@@ -1627,6 +1685,17 @@ async function deleteCategory(id) {
   }
 }
 
+async function deleteTag(id) {
+  if (!confirm('Excluir esta tag?')) return;
+  try {
+    const { error } = await state.supabase.from('tags').delete().eq('id', id);
+    if (error) throw error;
+    loadAllData();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 // ================= EDIÇÕES (PREENCHIMENTO DOS FORMULÁRIOS) =================
 function editAccount(id) {
   const acc = state.accounts.find(a => a.id === id);
@@ -1681,6 +1750,7 @@ function editFixed(id) {
   const accIdNum = f.account_id || f.accountId;
   const cardIdNum = f.card_id || f.cardId;
   const catIdNum = f.category_id || f.categoryId;
+  const tagIdNum = f.tag_id || f.tagId;
 
   document.getElementById('fixed-id').value = f.id;
   document.getElementById('fixed-desc').value = f.description;
@@ -1688,6 +1758,7 @@ function editFixed(id) {
   document.getElementById('fixed-day').value = f.day_of_month || f.dayOfMonth;
   document.getElementById('fixed-type').value = f.type;
   document.getElementById('fixed-category').value = catIdNum || '';
+  document.getElementById('fixed-tag').value = tagIdNum || '';
   
   const paymentSourceSelect = document.getElementById('fixed-payment-source');
   if (paymentSourceSelect) {
@@ -1707,6 +1778,7 @@ function clearFixedForm() {
   document.getElementById('fixed-id').value = '';
   document.getElementById('fixed-form').reset();
   document.getElementById('fixed-category').value = '';
+  document.getElementById('fixed-tag').value = '';
   document.getElementById('fixed-form-title').textContent = 'Nova Receita/Despesa Fixa';
   document.getElementById('clear-fixed-form-btn').classList.add('hide');
   state.editingEntity = { type: null, id: null };
@@ -1777,6 +1849,26 @@ function clearUserForm() {
   document.getElementById('user-only-self-data').checked = false;
   document.getElementById('user-form-title').textContent = 'Cadastrar Novo Usuário';
   document.getElementById('clear-user-form-btn').classList.add('hide');
+  state.editingEntity = { type: null, id: null };
+}
+
+function editTag(id) {
+  const tag = state.tags.find(x => x.id === id);
+  if (!tag) return;
+
+  document.getElementById('tag-id').value = tag.id;
+  document.getElementById('tag-name').value = tag.name;
+
+  document.getElementById('tag-form-title').textContent = 'Editar Tag';
+  document.getElementById('clear-tag-form-btn').classList.remove('hide');
+  state.editingEntity = { type: 'tag', id: tag.id };
+}
+
+function clearTagForm() {
+  document.getElementById('tag-id').value = '';
+  document.getElementById('tag-form').reset();
+  document.getElementById('tag-form-title').textContent = 'Nova Tag';
+  document.getElementById('clear-tag-form-btn').classList.add('hide');
   state.editingEntity = { type: null, id: null };
 }
 
@@ -2356,6 +2448,8 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
   const date = document.getElementById('tx-date').value;
   const categoryIdVal = document.getElementById('tx-category').value;
   const categoryId = categoryIdVal ? parseInt(categoryIdVal) : null;
+  const tagIdVal = document.getElementById('tx-tag').value;
+  const tagId = tagIdVal ? parseInt(tagIdVal) : null;
   const paymentMethod = document.querySelector('input[name="tx-payment-method"]:checked').value;
   const cardId = document.getElementById('tx-card').value;
   const installments = document.getElementById('tx-installments').value;
@@ -2384,7 +2478,8 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
         day_of_month: dayOfMonth,
         type: 'expense',
         card_id: parseInt(cardId),
-        category_id: categoryId
+        category_id: categoryId,
+        tag_id: tagId
       };
       
       const { data: fixedData, error: fixedErr } = await state.supabase
@@ -2404,6 +2499,7 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       amount,
       date,
       category_id: paymentMethod === 'transfer' ? null : categoryId,
+      tag_id: paymentMethod === 'transfer' ? null : tagId,
       payment_method: paymentMethod,
       type: finalType,
       is_effective: isEffective,
@@ -2560,6 +2656,9 @@ document.getElementById('fixed-form').addEventListener('submit', async (e) => {
   }
 
   try {
+    const tagIdVal = document.getElementById('fixed-tag').value;
+    const tagId = tagIdVal ? parseInt(tagIdVal) : null;
+
     const payload = {
       description,
       amount,
@@ -2567,7 +2666,8 @@ document.getElementById('fixed-form').addEventListener('submit', async (e) => {
       type,
       account_id: accountId,
       card_id: cardId,
-      category_id: categoryId ? parseInt(categoryId) : null
+      category_id: categoryId ? parseInt(categoryId) : null,
+      tag_id: tagId
     };
 
     if (id) {
@@ -2609,6 +2709,29 @@ document.getElementById('category-form').addEventListener('submit', async (e) =>
   }
 });
 document.getElementById('clear-category-form-btn').addEventListener('click', clearCategoryForm);
+
+// SUBMIT ADMIN: TAGS
+document.getElementById('tag-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('tag-id').value;
+  const name = document.getElementById('tag-name').value.trim();
+
+  try {
+    const payload = { name };
+    if (id) {
+      const { error } = await state.supabase.from('tags').update(payload).eq('id', id);
+      if (error) throw error;
+    } else {
+      const { error } = await state.supabase.from('tags').insert([payload]);
+      if (error) throw error;
+    }
+    clearTagForm();
+    loadAllData();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+document.getElementById('clear-tag-form-btn').addEventListener('click', clearTagForm);
 
 // SUBMIT ADMIN: USUÁRIOS
 document.getElementById('user-form').addEventListener('submit', async (e) => {
@@ -2723,6 +2846,23 @@ function renderReportsFields() {
       state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
     repAcc.value = selected;
   }
+
+  const repCard = document.getElementById('rep-card');
+  if (repCard && state.cards) {
+    const selected = repCard.value;
+    repCard.innerHTML = '<option value="">Todos (ou s/ cartão)</option>' + 
+      '<option value="any">Qualquer Cartão</option>' + 
+      state.cards.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    repCard.value = selected;
+  }
+
+  const repTag = document.getElementById('rep-tag');
+  if (repTag && state.tags) {
+    const selected = repTag.value;
+    repTag.innerHTML = '<option value="">Todas</option>' + 
+      state.tags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    repTag.value = selected;
+  }
 }
 
 function renderReportsTable() {
@@ -2731,6 +2871,8 @@ function renderReportsTable() {
   const typeVal = document.getElementById('rep-type').value;
   const categoryVal = document.getElementById('rep-category').value;
   const accountVal = document.getElementById('rep-account').value;
+  const cardVal = document.getElementById('rep-card').value;
+  const tagVal = document.getElementById('rep-tag').value;
 
   const tbody = document.getElementById('reports-transactions-tbody');
   if (!tbody) return;
@@ -2766,6 +2908,20 @@ function renderReportsTable() {
       const destAccIdNum = t.destination_account_id || t.destinationAccountId;
       return parseInt(accIdNum) === parseInt(accountVal) || parseInt(destAccIdNum) === parseInt(accountVal);
     });
+  }
+
+  // Filtragem por Cartão de Crédito
+  if (cardVal) {
+    if (cardVal === 'any') {
+      filtered = filtered.filter(t => t.payment_method === 'card' || t.paymentMethod === 'card');
+    } else {
+      filtered = filtered.filter(t => (t.payment_method === 'card' || t.paymentMethod === 'card') && String(t.card_id || t.cardId) === String(cardVal));
+    }
+  }
+
+  // Filtragem por Tag
+  if (tagVal) {
+    filtered = filtered.filter(t => String(t.tag_id || t.tagId) === String(tagVal));
   }
 
   // Salvar no estado das buscas para o exportador CSV de relatórios
@@ -2809,6 +2965,8 @@ function renderReportsTable() {
 
   tbody.innerHTML = filtered.map(t => {
     const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+    const tag = state.tags ? state.tags.find(g => g.id === t.tag_id || g.id === t.tagId) : null;
+    const tagHtml = tag ? ` <span class="badge-tag">#${tag.name}</span>` : '';
     const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
     const whoLaunched = usr ? usr.name : 'Família';
     
@@ -2854,7 +3012,7 @@ function renderReportsTable() {
     return `
       <tr>
         <td>${formatDate(t.date)}</td>
-        <td style="font-weight: 500;">${cleanDescription(t.description)}</td>
+        <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
         <td>
           <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
             ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
@@ -2878,6 +3036,8 @@ document.getElementById('rep-end-date').addEventListener('change', renderReports
 document.getElementById('rep-type').addEventListener('change', renderReportsTable);
 document.getElementById('rep-category').addEventListener('change', renderReportsTable);
 document.getElementById('rep-account').addEventListener('change', renderReportsTable);
+document.getElementById('rep-card').addEventListener('change', renderReportsTable);
+document.getElementById('rep-tag').addEventListener('change', renderReportsTable);
 
 document.getElementById('clear-reports-filters-btn').addEventListener('click', () => {
   document.getElementById('rep-start-date').value = '';
@@ -2885,6 +3045,8 @@ document.getElementById('clear-reports-filters-btn').addEventListener('click', (
   document.getElementById('rep-type').value = '';
   document.getElementById('rep-category').value = '';
   document.getElementById('rep-account').value = '';
+  document.getElementById('rep-card').value = '';
+  document.getElementById('rep-tag').value = '';
   renderReportsTable();
 });
 
