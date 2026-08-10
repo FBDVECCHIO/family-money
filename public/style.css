@@ -42,7 +42,7 @@
 html {
   font-size: 15px;
   overflow-x: hidden;
-  max-width: 100vw;
+  max-width: 100%;
   width: 100%;
 }
 
@@ -60,7 +60,7 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   overflow-x: hidden;
-  max-width: 100vw;
+  max-width: 100%;
   width: 100%;
 }
 
@@ -1235,7 +1235,7 @@ tr:hover td {
     display: none !important;
   }
   
-  /* Barra de Navegação Inferior Fixo */
+  /* Barra de Navegação Inferior Fixo e Estático */
   .main-nav {
     order: unset !important;
     position: fixed !important;
@@ -1248,11 +1248,11 @@ tr:hover td {
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
     border-top: 1px solid rgba(168, 85, 247, 0.15) !important;
-    display: flex !important;
-    flex-direction: row !important;
-    justify-content: space-around !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important; /* 4 colunas estáticas e perfeitamente iguais */
+    justify-items: stretch !important;
     align-items: center !important;
-    padding: 0 8px !important;
+    padding: 0 !important;
     margin: 0 !important;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
     z-index: 9999 !important;
@@ -1270,10 +1270,12 @@ tr:hover td {
     padding: 4px 0 !important;
     color: var(--text-muted) !important;
     border-radius: 0 !important;
-    width: 23% !important;
+    width: 100% !important; /* Ocupa exatamente a largura da sua célula do grid */
+    max-width: 100% !important;
     height: 100% !important;
     font-size: 0.68rem !important;
     transition: var(--transition) !important;
+    box-sizing: border-box !important;
   }
   
   .nav-link.active {
@@ -1304,13 +1306,25 @@ tr:hover td {
     display: none !important;
   }
 
-  /* Compactar os cards de previsão de meses de forma adaptável no celular */
+  /* Cards de Previsão em Barra de Rolagem Horizontal (Swiper) no Celular */
   .forecast-grid {
-    gap: 8px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    gap: 12px !important;
+    padding: 2px 2px 12px 2px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    -webkit-overflow-scrolling: touch !important;
   }
   .forecast-card {
+    flex: 0 0 88% !important; /* Exibe 88% da largura para sugerir o próximo card à direita */
+    scroll-snap-align: start !important;
     padding: 12px !important;
     border-radius: 8px !important;
+    box-sizing: border-box !important;
   }
   .forecast-month-label {
     font-size: 0.95rem !important;
@@ -1438,11 +1452,31 @@ tr:hover td {
     gap: 15px !important;
   }
 
-  /* Evitar vazamento horizontal de viewport */
+  /* Evitar vazamento horizontal de viewport e forçar enquadramento de flexbox/grid containers */
   html, body {
     max-width: 100% !important;
     overflow-x: hidden !important;
     position: relative !important;
+  }
+
+  .app-content,
+  .view-container,
+  .sidebar-info,
+  .info-section,
+  .glass,
+  .new-tx-form-wrapper,
+  .inline-detail-card,
+  .inline-detail-lists,
+  .detail-list-box,
+  .dashboard-details-row,
+  .details-chart-card,
+  .details-summary-card,
+  .recent-transactions-card,
+  .chart-wrapper,
+  .table-responsive {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   /* View Header stacking */
@@ -1500,6 +1534,12 @@ tr:hover td {
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
     overflow: hidden !important;
+  }
+
+  .category-progress-labels {
+    font-size: 0.78rem !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
   }
 }
 
