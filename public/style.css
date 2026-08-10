@@ -1626,7 +1626,7 @@ tr:hover td {
 
 .inline-detail-lists {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.35fr; /* Dá mais espaço para o lado direito (itens fixos), reduzindo a faturas de cartão que tem menos colunas */
   gap: 15px;
 }
 
@@ -1637,7 +1637,7 @@ tr:hover td {
 
 .detail-list-box th,
 .detail-list-box td {
-  padding: 10px 8px !important;
+  padding: 10px 5px !important; /* Mais compacto para evitar barras de rolagem */
 }
 
 .detail-list-box h4 {
