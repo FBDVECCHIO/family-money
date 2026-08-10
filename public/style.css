@@ -265,6 +265,8 @@ button, input, select {
   color: #fff;
   font-size: 1rem;
   transition: var(--transition);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-group input:focus, .form-group select:focus {
@@ -1398,6 +1400,8 @@ tr:hover td {
     gap: 6px !important;
     align-items: stretch !important;
     width: 100% !important;
+    height: auto !important; /* Permite expansão vertical */
+    padding: 6px !important;
   }
   .payment-method-toggle .toggle-option {
     flex: none !important;
@@ -1410,6 +1414,7 @@ tr:hover td {
     font-size: 0.85rem !important;
     gap: 8px !important;
     text-align: left !important;
+    height: 40px !important; /* Altura confortável para toque */
   }
 
   .payment-method-toggle.type-toggle {
@@ -1417,12 +1422,15 @@ tr:hover td {
     flex-direction: row !important;
     grid-template-columns: unset !important;
     gap: 8px !important;
+    height: 50px !important; /* Linha de altura fixa */
+    padding: 0 !important;
   }
   .payment-method-toggle.type-toggle .toggle-option {
     flex: 1 !important;
     justify-content: center !important;
     padding: 8px 10px !important;
     font-size: 0.8rem !important;
+    height: 100% !important;
   }
 
   .inline-detail-lists {
@@ -1479,6 +1487,19 @@ tr:hover td {
   .table-responsive table {
     width: 100% !important;
     min-width: 680px !important;
+  }
+
+  /* Ajustar o login e os formulários flutuantes em smartphones */
+  .login-card {
+    padding: 24px 16px !important;
+    border-radius: 16px !important;
+  }
+  
+  .floating-field label {
+    max-width: calc(100% - 32px) !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
   }
 }
 
