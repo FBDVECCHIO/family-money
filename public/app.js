@@ -33,7 +33,8 @@ function formatDate(dateStr) {
   if (!dateStr) return '';
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  const shortYear = parts[0].slice(-2);
+  return `${parts[2]}/${parts[1]}/${shortYear}`;
 }
 
 function cleanDescription(desc) {
@@ -875,14 +876,16 @@ function renderTransactionsTable() {
         <td>${valueHtml}</td>
         <td style="text-align: center;">${receiptHtml}</td>
         <td>
-          <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
-            ${reconcileHtml}
-            <button class="btn-edit" onclick="editTransaction(${t.id})" title="Alterar lançamento">
-              <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
-            </button>
-            <button class="btn-delete" onclick="deleteTransaction(${t.id})" title="Excluir lançamento">
-              <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
-            </button>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: center;">
+            ${reconcileHtml ? `<div style="margin-bottom: 2px;">${reconcileHtml}</div>` : ''}
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <button class="btn-edit" onclick="editTransaction(${t.id})" title="Alterar lançamento">
+                <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
+              </button>
+              <button class="btn-delete" onclick="deleteTransaction(${t.id})" title="Excluir lançamento">
+                <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+              </button>
+            </div>
           </div>
         </td>
       </tr>

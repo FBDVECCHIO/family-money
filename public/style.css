@@ -566,13 +566,13 @@ button, input, select {
 /* ================= GRID DE PREVISÃO DE 6 MESES ================= */
 .forecast-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Auto ajustável por largura de tela */
-  gap: 15px;
+  grid-template-columns: repeat(6, 1fr); /* Força a exibição dos 6 meses na mesma linha horizontal no desktop */
+  gap: 12px;
   margin-bottom: 25px;
 }
 
 .forecast-card {
-  padding: 20px;
+  padding: 14px 10px; /* Reduzido de 20px para economizar espaço horizontal */
   display: flex;
   flex-direction: column;
   position: relative;
@@ -588,28 +588,28 @@ button, input, select {
 
 /* Mês Ativo da Previsão */
 .forecast-month-label {
-  font-size: 1.2rem;
+  font-size: 1.05rem; /* Compactado */
   font-weight: 700;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   color: #fff;
 }
 
 .forecast-month-label span {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
 .forecast-values {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 0.8rem;
-  margin-bottom: 15px;
+  gap: 6px;
+  font-size: 0.78rem;
+  margin-bottom: 12px;
 }
 
 .forecast-val-row {
@@ -632,31 +632,31 @@ button, input, select {
 
 .forecast-card-sobra {
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: 10px;
   border-top: 1px dashed rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .forecast-card-sobra .sobra-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
 }
 
 .forecast-card-sobra .sobra-val {
-  font-size: 1.15rem;
+  font-size: 1.08rem; /* Compactado de 1.15rem */
   font-weight: 700;
   white-space: nowrap;
 }
 
 .forecast-card-projected {
   margin-top: 8px;
-  padding: 8px;
+  padding: 6px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
   text-align: center;
-  font-size: 0.75rem;
+  font-size: 0.72rem; /* Compactado */
   white-space: nowrap;
 }
 
