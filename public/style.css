@@ -1627,11 +1627,17 @@ tr:hover td {
 .inline-detail-lists {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 15px;
 }
 
 .detail-list-box {
   padding: 20px;
+  min-width: 0;
+}
+
+.detail-list-box th,
+.detail-list-box td {
+  padding: 10px 8px !important;
 }
 
 .detail-list-box h4 {

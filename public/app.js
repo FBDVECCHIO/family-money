@@ -877,6 +877,9 @@ function renderTransactionsTable() {
         <td>
           <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
             ${reconcileHtml}
+            <button class="btn-edit" onclick="editTransaction(${t.id})" title="Alterar lançamento">
+              <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
+            </button>
             <button class="btn-delete" onclick="deleteTransaction(${t.id})" title="Excluir lançamento">
               <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
             </button>
@@ -1049,7 +1052,7 @@ function renderMonthlyDetail(monthData) {
         <tr>
           <td style="font-weight: 500;">${b.cardName}</td>
           <td>${dueDayText} ${statusBadge}</td>
-          <td class="red-neon" style="font-weight: 600;">-${formatCurrency(b.totalAmount)}</td>
+          <td class="red-neon" style="font-weight: 600; white-space: nowrap;">-${formatCurrency(b.totalAmount)}</td>
           <td>${actionButton}</td>
         </tr>
       `;
@@ -1607,6 +1610,175 @@ async function reconcileTransaction(id) {
   }
 }
 
+async function revertTransactionBalance(tx) {
+  const isAccount = tx.payment_method === 'account' || tx.paymentMethod === 'account';
+  const isTransfer = tx.payment_method === 'transfer' || tx.paymentMethod === 'transfer';
+  const isEffective = tx.is_effective !== false;
+  const amount = parseFloat(tx.amount);
+  const type = tx.type || (tx.payment_method === 'transfer' ? 'transfer' : 'expense');
+
+  if (!isEffective) return;
+
+  if (isAccount) {
+    const accIdNum = tx.account_id || tx.accountId;
+    if (accIdNum) {
+      const acc = state.accounts.find(a => a.id == accIdNum);
+      if (acc) {
+        const newBalance = type === 'income'
+          ? parseFloat(acc.balance) - amount
+          : parseFloat(acc.balance) + amount;
+        await state.supabase.from('accounts').update({ balance: newBalance }).eq('id', acc.id);
+        acc.balance = newBalance; // Atualiza a memória local
+      }
+    }
+  } else if (isTransfer) {
+    const originIdNum = tx.account_id || tx.accountId;
+    const destIdNum = tx.destination_account_id || tx.destinationAccountId;
+    if (originIdNum && destIdNum) {
+      const originAcc = state.accounts.find(a => a.id == originIdNum);
+      const destAcc = state.accounts.find(a => a.id == destIdNum);
+      if (originAcc && destAcc) {
+        const newOriginBalance = parseFloat(originAcc.balance) + amount;
+        const newDestBalance = parseFloat(destAcc.balance) - amount;
+        await state.supabase.from('accounts').update({ balance: newOriginBalance }).eq('id', originAcc.id);
+        await state.supabase.from('accounts').update({ balance: newDestBalance }).eq('id', destAcc.id);
+        originAcc.balance = newOriginBalance;
+        destAcc.balance = newDestBalance;
+      }
+    }
+  }
+}
+
+function editTransaction(id) {
+  const t = state.transactions.find(tx => tx.id == id);
+  if (!t) return;
+
+  // 1. Guardar o ID no campo oculto
+  document.getElementById('tx-id').value = t.id;
+
+  // 2. Preencher os campos comuns
+  document.getElementById('tx-description').value = cleanDescription(t.description);
+  document.getElementById('tx-amount').value = parseFloat(t.amount);
+  document.getElementById('tx-date').value = t.date;
+  document.getElementById('tx-category').value = t.category_id || t.categoryId || '';
+  document.getElementById('tx-tag').value = t.tag_id || t.tagId || '';
+
+  // 3. Configurar Tipo de Lançamento (Despesa / Receita)
+  const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : 'expense');
+  const typeVal = finalType === 'transfer' ? 'expense' : finalType;
+  
+  document.querySelectorAll('input[name="tx-type"]').forEach(input => {
+    if (input.value === typeVal) {
+      input.checked = true;
+      input.parentElement.classList.add('active');
+    } else {
+      input.parentElement.classList.remove('active');
+    }
+  });
+
+  // 4. Configurar Método de Pagamento
+  document.querySelectorAll('input[name="tx-payment-method"]').forEach(input => {
+    if (input.value === t.payment_method) {
+      input.checked = true;
+      input.parentElement.classList.add('active');
+    } else {
+      input.parentElement.classList.remove('active');
+    }
+  });
+
+  // Disparar evento de mudança para carregar os campos condicionais corretos
+  const methodRadio = document.querySelector(`input[name="tx-payment-method"]:checked`);
+  if (methodRadio) {
+    methodRadio.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  // 5. Configurar valores dos campos condicionais após o toggle carregar
+  if (t.payment_method === 'card') {
+    document.getElementById('tx-card').value = t.card_id || t.cardId || '';
+    document.getElementById('tx-installments').value = t.installments || 1;
+    updateInstallmentPreview();
+  } else if (t.payment_method === 'transfer') {
+    document.getElementById('tx-account').value = t.account_id || t.accountId || '';
+    document.getElementById('tx-destination-account').value = t.destination_account_id || t.destinationAccountId || '';
+  } else {
+    document.getElementById('tx-account').value = t.account_id || t.accountId || '';
+  }
+
+  // 6. Checkbox de Efetivado & Recorrência
+  document.getElementById('tx-is-effective').checked = t.is_effective !== false;
+  document.getElementById('tx-is-recurring').checked = t.description.includes('[R:');
+
+  // 7. Configurar Recibo/Comprovante se existir
+  const previewContainer = document.getElementById('tx-receipt-preview-container');
+  const previewImg = document.getElementById('tx-receipt-preview-img');
+  const receiptStatus = document.getElementById('tx-receipt-status');
+  const receiptBase64 = document.getElementById('tx-receipt-base64');
+
+  if (t.receipt_url) {
+    previewContainer.classList.remove('hide');
+    previewImg.src = t.receipt_url;
+    receiptStatus.textContent = 'Comprovante carregado';
+    receiptBase64.value = t.receipt_url;
+  } else {
+    previewContainer.classList.add('hide');
+    previewImg.src = '';
+    receiptStatus.textContent = 'Nenhum recibo anexado';
+    receiptBase64.value = '';
+  }
+
+  // 8. Mudar cabeçalho e botão do formulário
+  document.getElementById('tx-form-title').innerText = 'Alterar Lançamento Realizado';
+  document.getElementById('tx-form-subtitle').innerText = 'Altere os dados da transação selecionada';
+  
+  const submitBtn = document.getElementById('tx-submit-btn');
+  submitBtn.innerHTML = '<i data-lucide="check"></i> Atualizar Lançamento';
+  submitBtn.classList.remove('btn-primary');
+  submitBtn.classList.add('btn-warning');
+  
+  document.getElementById('clear-tx-form-btn').classList.remove('hide');
+
+  lucide.createIcons();
+
+  // 9. Mudar para a aba de Lançamentos
+  document.querySelector('.nav-link[data-tab="new-tx"]').click();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function clearTransactionForm() {
+  document.getElementById('tx-id').value = '';
+  document.getElementById('new-transaction-form').reset();
+  document.querySelectorAll('#new-transaction-form .toggle-option').forEach(opt => opt.classList.remove('active'));
+  
+  const defaultType = document.querySelector('input[name="tx-type"][value="expense"]');
+  if (defaultType) {
+    defaultType.checked = true;
+    defaultType.parentElement.classList.add('active');
+  }
+  const defaultMethod = document.querySelector('input[name="tx-payment-method"][value="card"]');
+  if (defaultMethod) {
+    defaultMethod.checked = true;
+    defaultMethod.parentElement.classList.add('active');
+    defaultMethod.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  document.getElementById('tx-form-title').innerText = 'Novo Lançamento de Gastos / Entradas';
+  document.getElementById('tx-form-subtitle').innerText = 'Lançamento rápido e objetivo para controle no dia a dia';
+  
+  const submitBtn = document.getElementById('tx-submit-btn');
+  submitBtn.innerHTML = '<i data-lucide="check"></i> Confirmar Lançamento';
+  submitBtn.classList.remove('btn-warning');
+  submitBtn.classList.add('btn-primary');
+
+  document.getElementById('clear-tx-form-btn').classList.add('hide');
+
+  document.getElementById('tx-receipt-preview-container').classList.add('hide');
+  document.getElementById('tx-receipt-preview-img').src = '';
+  document.getElementById('tx-receipt-status').textContent = 'Nenhum recibo anexado';
+  document.getElementById('tx-receipt-base64').value = '';
+
+  lucide.createIcons();
+}
+
 async function deleteTransaction(id) {
   if (!confirm('Deseja realmente remover esta transação? Isso reajustará os saldos.')) return;
   try {
@@ -1616,24 +1788,7 @@ async function deleteTransaction(id) {
     const { error } = await state.supabase.from('transactions').delete().eq('id', id);
     if (error) throw error;
 
-    // Se a transação foi paga à vista do saldo bancário e já estava efetivada, estornar o valor na conta
-    const isAccount = txToDelete.payment_method === 'account' || txToDelete.paymentMethod === 'account';
-    const accIdNum = txToDelete.account_id || txToDelete.accountId;
-    const isEffective = txToDelete.is_effective !== false;
-
-    if (isAccount && accIdNum && isEffective) {
-      const acc = state.accounts.find(a => a.id == accIdNum);
-      if (acc) {
-        // Se era despesa, soma de volta. Se era receita, subtrai.
-        const amount = parseFloat(txToDelete.amount);
-        const finalType = txToDelete.type || 'expense';
-        const newBalance = finalType === 'income'
-          ? parseFloat(acc.balance) - amount
-          : parseFloat(acc.balance) + amount;
-
-        await state.supabase.from('accounts').update({ balance: newBalance }).eq('id', acc.id);
-      }
-    }
+    await revertTransactionBalance(txToDelete);
 
     loadAllData();
   } catch (err) {
@@ -2439,6 +2594,9 @@ function updateInstallmentPreview() {
 document.getElementById('tx-amount').addEventListener('input', updateInstallmentPreview);
 document.getElementById('tx-installments').addEventListener('change', updateInstallmentPreview);
 
+// Cancelar Edição do Lançamento
+document.getElementById('clear-tx-form-btn').addEventListener('click', clearTransactionForm);
+
 // Submit Novo Lançamento
 document.getElementById('new-transaction-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2493,7 +2651,7 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       }
     }
 
-    // 2. Inserir Transação no Supabase
+    // 2. Transação no Supabase (Inserir ou Atualizar)
     const newTx = {
       description: finalDescription,
       amount,
@@ -2511,15 +2669,32 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       receipt_url: receiptUrlVal
     };
 
-    const { error: insertError } = await state.supabase.from('transactions').insert([newTx]);
-    if (insertError) throw insertError;
+    const txId = document.getElementById('tx-id').value;
 
-    // 2. Se for débito/crédito em conta imediato, atualizar saldo (APENAS SE EFETIVADO)
+    if (txId) {
+      // ESTORNO: Reverter saldo da transação antiga antes de atualizar
+      const oldTx = state.transactions.find(tx => tx.id == txId);
+      if (oldTx) {
+        await revertTransactionBalance(oldTx);
+      }
+
+      // ATUALIZAÇÃO
+      const { error: updateError } = await state.supabase
+        .from('transactions')
+        .update(newTx)
+        .eq('id', parseInt(txId));
+      if (updateError) throw updateError;
+    } else {
+      // INSERÇÃO
+      const { error: insertError } = await state.supabase.from('transactions').insert([newTx]);
+      if (insertError) throw insertError;
+    }
+
+    // APLICAR NOVO SALDO (APENAS SE EFETIVADO)
     if (paymentMethod === 'account' && accountId && isEffective) {
       const accIdNum = parseInt(accountId);
       const acc = state.accounts.find(a => a.id == accIdNum);
       if (acc) {
-        // Se for receita, soma ao saldo. Se for despesa, subtrai.
         const newBalance = finalType === 'income' 
           ? parseFloat(acc.balance) + amount 
           : parseFloat(acc.balance) - amount;
@@ -2530,10 +2705,7 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
           .eq('id', accIdNum);
         if (updateError) throw updateError;
       }
-    }
-
-    // 3. Se for transferência, deduzir da conta de origem e somar na de destino (APENAS SE EFETIVADO)
-    if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
+    } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
       const originIdNum = parseInt(accountId);
       const destIdNum = parseInt(destinationAccountId);
 
@@ -2564,20 +2736,8 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
     // Recarregar todos os dados do Supabase na memória local e recalcular previsões
     await loadAllData();
 
-    // Limpar o formulário e resetar preview de recibo
-    document.getElementById('new-transaction-form').reset();
-    document.getElementById('tx-receipt-base64').value = '';
-    document.getElementById('tx-receipt-preview-container').classList.add('hide');
-    document.getElementById('tx-receipt-preview-img').src = '';
-    document.getElementById('tx-receipt-status').textContent = 'Nenhum recibo anexado';
-    
-    // Resetar toggle active states do formulário de novo lançamento
-    document.querySelectorAll('#new-transaction-form .toggle-option').forEach(opt => opt.classList.remove('active'));
-    // Definir as defaults corretas
-    document.querySelector('input[value="card"]').parentElement.classList.add('active');
-    document.querySelector('input[value="card"]').click();
-    document.querySelector('input[value="expense"]').parentElement.classList.add('active');
-    document.querySelector('input[value="expense"]').click();
+    // Limpar o formulário e redefinir estado padrão
+    clearTransactionForm();
 
     document.getElementById('installment-preview-text').classList.add('hide');
 
