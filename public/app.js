@@ -18,7 +18,8 @@ let state = {
   editingEntity: {
     type: null,
     id: null
-  }
+  },
+  expandedCardBills: new Set()
 };
 
 // ================= UTILS E FORMATADORES =================
@@ -1024,10 +1025,12 @@ function renderMonthlyDetail(monthData) {
         groupedBills[b.cardId] = {
           cardId: b.cardId,
           cardName: b.cardName,
-          totalAmount: 0
+          totalAmount: 0,
+          items: []
         };
       }
       groupedBills[b.cardId].totalAmount += parseFloat(b.amount);
+      groupedBills[b.cardId].items.push(b);
     });
 
     cardsTbody.innerHTML = Object.values(groupedBills).map(b => {
@@ -1051,12 +1054,74 @@ function renderMonthlyDetail(monthData) {
              <i data-lucide="credit-card" style="width: 12px; height: 12px;"></i> Efetivar Fatura
            </button>`;
 
+      const isExpanded = state.expandedCardBills && state.expandedCardBills.has(b.cardId);
+      const expandBtnHtml = `
+        <button class="btn-expand-bill" id="btn-expand-${b.cardId}" onclick="toggleBillDetails(${b.cardId})" title="Expandir/recolher compras da fatura">
+          <i data-lucide="${isExpanded ? 'minus-circle' : 'plus-circle'}" style="width: 12px; height: 12px;"></i> 
+          ${isExpanded ? 'Recolher' : 'Ver Lançamentos'}
+        </button>
+      `;
+
+      const itemsTableRows = b.items.map(item => {
+        const itemDate = item.date ? formatDate(item.date) : '-';
+        const itemVal = formatCurrency(item.amount);
+        let itemActions = '';
+
+        if (item.txId) {
+          itemActions = `
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+              <button class="btn-edit" onclick="editTransaction(${item.txId})" title="Alterar compra" style="padding: 2px; width: auto; height: auto;">
+                <i data-lucide="edit-2" style="width: 13px; height: 13px;"></i>
+              </button>
+              <button class="btn-delete" onclick="deleteTransaction(${item.txId})" title="Remover compra" style="padding: 2px; width: auto; height: auto;">
+                <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i>
+              </button>
+            </div>
+          `;
+        } else {
+          itemActions = `<span style="color: var(--text-muted); font-size: 0.72rem; font-style: italic;">Recorrência</span>`;
+        }
+
+        return `
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.02);">
+            <td style="padding: 6px 4px;">${itemDate}</td>
+            <td style="padding: 6px 4px; font-weight: 500;">${item.description}</td>
+            <td style="padding: 6px 4px; color: var(--neon-red); font-weight: 600;">-${itemVal}</td>
+            <td style="padding: 6px 4px; text-align: right;">${itemActions}</td>
+          </tr>
+        `;
+      }).join('');
+
       return `
         <tr>
-          <td style="font-weight: 500;">${b.cardName}</td>
+          <td style="font-weight: 500;">
+            <div style="display: flex; flex-direction: column;">
+              <span>${b.cardName}</span>
+              ${expandBtnHtml}
+            </div>
+          </td>
           <td>${dueDayText} ${statusBadge}</td>
           <td class="red-neon" style="font-weight: 600; white-space: nowrap;">-${formatCurrency(b.totalAmount)}</td>
           <td>${actionButton}</td>
+        </tr>
+        <tr id="details-card-${b.cardId}" class="${isExpanded ? '' : 'hide'}" style="background: rgba(255, 255, 255, 0.015);">
+          <td colspan="4" style="padding: 8px 12px;">
+            <div style="border-left: 2px solid var(--neon-purple); padding-left: 12px; margin: 4px 0;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem;">
+                <thead>
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                    <th style="padding: 4px; font-weight: 500; color: var(--text-muted); width: 20%; border-bottom: none;">Data</th>
+                    <th style="padding: 4px; font-weight: 500; color: var(--text-muted); width: 45%; border-bottom: none;">Descrição</th>
+                    <th style="padding: 4px; font-weight: 500; color: var(--text-muted); width: 20%; border-bottom: none;">Valor</th>
+                    <th style="padding: 4px; font-weight: 500; color: var(--text-muted); width: 15%; text-align: right; border-bottom: none;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsTableRows}
+                </tbody>
+              </table>
+            </div>
+          </td>
         </tr>
       `;
     }).join('');
@@ -1781,6 +1846,28 @@ function clearTransactionForm() {
 
   lucide.createIcons();
 }
+
+window.toggleBillDetails = function(cardId) {
+  if (!state.expandedCardBills) {
+    state.expandedCardBills = new Set();
+  }
+  
+  const detailsRow = document.getElementById(`details-card-${cardId}`);
+  const btn = document.getElementById(`btn-expand-${cardId}`);
+  if (!detailsRow || !btn) return;
+
+  const isHidden = detailsRow.classList.contains('hide');
+  if (isHidden) {
+    detailsRow.classList.remove('hide');
+    state.expandedCardBills.add(cardId);
+    btn.innerHTML = `<i data-lucide="minus-circle" style="width: 12px; height: 12px;"></i> Recolher`;
+  } else {
+    detailsRow.classList.add('hide');
+    state.expandedCardBills.delete(cardId);
+    btn.innerHTML = `<i data-lucide="plus-circle" style="width: 12px; height: 12px;"></i> Ver Lançamentos`;
+  }
+  lucide.createIcons();
+};
 
 async function deleteTransaction(id) {
   if (!confirm('Deseja realmente remover esta transação? Isso reajustará os saldos.')) return;

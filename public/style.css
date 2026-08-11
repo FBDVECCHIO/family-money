@@ -1898,3 +1898,25 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Estilo para expansão de faturas de cartão */
+.btn-expand-bill {
+  background: transparent;
+  border: none;
+  color: var(--pastel-purple);
+  cursor: pointer;
+  font-size: 0.72rem !important;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  margin-top: 4px;
+  transition: var(--transition);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.btn-expand-bill:hover {
+  color: var(--neon-purple-bright);
+}
