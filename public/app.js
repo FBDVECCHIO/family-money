@@ -1424,85 +1424,84 @@ async function payCardBill(cardId, year, month, amount) {
     return;
   }
   
-  const acc = state.accounts.find(a => a.id == card.account_id);
-  if (!acc) {
-    alert('Conta bancária associada ao cartão não encontrada!');
-    return;
-  }
-  
-  const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  const monthName = months[month] || 'Mês';
-  const label = `${monthName}/${String(year).slice(-2)}`;
-  
-  if (!confirm(`Efetivar o pagamento de R$ ${amount.toFixed(2)} da fatura do cartão ${card.name} debitando da conta ${acc.name}?`)) {
-    return;
-  }
-  
-  try {
-    // 1. Inserir registro de fatura paga
-    const { error: errorPaid } = await state.supabase
-      .from('paid_card_bills')
-      .insert([{ card_id: cardId, year, month, amount }]);
-    if (errorPaid) throw errorPaid;
-    
-    // 2. Inserir a transação correspondente no extrato
-    const txPayment = {
-      description: `Pagamento Fatura ${card.name} - ${label}`,
-      amount,
-      date: new Date().toISOString().split('T')[0],
-      category_id: null,
-      payment_method: 'account',
-      type: 'expense',
-      is_effective: true,
-      card_id: null,
-      installments: 1,
-      account_id: card.account_id,
-      user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
-    };
-    
-    const { error: errorTx } = await state.supabase.from('transactions').insert([txPayment]);
-    if (errorTx) throw errorTx;
-    
-    // 3. Atualizar o saldo da conta vinculada
-    const newBalance = parseFloat(acc.balance) - amount;
-    const { error: errorAcc } = await state.supabase
-      .from('accounts')
-      .update({ balance: newBalance })
-      .eq('id', card.account_id);
-    if (errorAcc) throw errorAcc;
-
-    // 4. Reconciliar transações individuais do cartão que pertencem a esta fatura
-    const cardTransactionsToReconcile = state.transactions.filter(t => {
-      const cardIdNum = t.card_id || t.cardId;
-      if (parseInt(cardIdNum) !== parseInt(cardId)) return false;
-
-      const isCard = t.payment_method === 'card' || t.paymentMethod === 'card';
-      if (!isCard) return false;
-
-      // Calcular a fatura a qual esta transação pertence
-      const closingDayVal = card.closing_day || card.closingDay;
-      const dueDayVal = card.due_day || card.dueDay;
-      const firstBill = getCardPaymentMonthAndYear(t.date, closingDayVal, dueDayVal);
-      
-      return parseInt(firstBill.year) === parseInt(year) && parseInt(firstBill.month) === parseInt(month);
-    });
-
-    if (cardTransactionsToReconcile.length > 0) {
-      const ids = cardTransactionsToReconcile.map(t => t.id);
-      console.log(`Reconciliando ${ids.length} transações do cartão ${card.name} para a fatura de ${monthName}/${year}`);
-      
-      const { error: errorReconcile } = await state.supabase
-        .from('transactions')
-        .update({ is_effective: true })
-        .in('id', ids);
-      if (errorReconcile) throw errorReconcile;
+  // Exibir pop-up para selecionar de qual conta realizar o débito da fatura
+  promptAccountSelection(`Efetivar Fatura: ${card.name}`, card.account_id, async (selectedAccountId) => {
+    const acc = state.accounts.find(a => a.id == selectedAccountId);
+    if (!acc) {
+      alert('Conta bancária selecionada não encontrada!');
+      return;
     }
     
-    alert(`Fatura do cartão ${card.name} paga com sucesso!`);
-    loadAllData();
-  } catch (err) {
-    alert('Erro ao pagar fatura: ' + err.message);
-  }
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const monthName = months[month] || 'Mês';
+    const label = `${monthName}/${String(year).slice(-2)}`;
+    
+    try {
+      // 1. Inserir registro de fatura paga
+      const { error: errorPaid } = await state.supabase
+        .from('paid_card_bills')
+        .insert([{ card_id: cardId, year, month, amount }]);
+      if (errorPaid) throw errorPaid;
+      
+      // 2. Inserir a transação correspondente no extrato
+      const txPayment = {
+        description: `Pagamento Fatura ${card.name} - ${label}`,
+        amount,
+        date: new Date().toISOString().split('T')[0],
+        category_id: null,
+        payment_method: 'account',
+        type: 'expense',
+        is_effective: true,
+        card_id: null,
+        installments: 1,
+        account_id: selectedAccountId,
+        user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
+      };
+      
+      const { error: errorTx } = await state.supabase.from('transactions').insert([txPayment]);
+      if (errorTx) throw errorTx;
+      
+      // 3. Atualizar o saldo da conta selecionada
+      const newBalance = parseFloat(acc.balance) - amount;
+      const { error: errorAcc } = await state.supabase
+        .from('accounts')
+        .update({ balance: newBalance })
+        .eq('id', selectedAccountId);
+      if (errorAcc) throw errorAcc;
+
+      // 4. Reconciliar transações individuais do cartão que pertencem a esta fatura
+      const cardTransactionsToReconcile = state.transactions.filter(t => {
+        const cardIdNum = t.card_id || t.cardId;
+        if (parseInt(cardIdNum) !== parseInt(cardId)) return false;
+
+        const isCard = t.payment_method === 'card' || t.paymentMethod === 'card';
+        if (!isCard) return false;
+
+        // Calcular a fatura a qual esta transação pertence
+        const closingDayVal = card.closing_day || card.closingDay;
+        const dueDayVal = card.due_day || card.dueDay;
+        const firstBill = getCardPaymentMonthAndYear(t.date, closingDayVal, dueDayVal);
+        
+        return parseInt(firstBill.year) === parseInt(year) && parseInt(firstBill.month) === parseInt(month);
+      });
+
+      if (cardTransactionsToReconcile.length > 0) {
+        const ids = cardTransactionsToReconcile.map(t => t.id);
+        console.log(`Reconciliando ${ids.length} transações do cartão ${card.name} para a fatura de ${monthName}/${year}`);
+        
+        const { error: errorReconcile } = await state.supabase
+          .from('transactions')
+          .update({ is_effective: true })
+          .in('id', ids);
+        if (errorReconcile) throw errorReconcile;
+      }
+      
+      alert(`Fatura do cartão ${card.name} paga com sucesso a partir da conta ${acc.name}!`);
+      loadAllData();
+    } catch (err) {
+      alert('Erro ao pagar fatura: ' + err.message);
+    }
+  });
 }
 
 function promptAccountSelection(title, defaultAccountId, callback) {
