@@ -58,7 +58,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=4.8">
+  <link rel="stylesheet" href="style.css?v=5.0">
 </head>
 <body>
 
@@ -157,6 +157,11 @@
           <i data-lucide="plus-circle"></i>
           <span class="nav-text-desktop">Novo Lançamento</span>
           <span class="nav-text-mobile">Novo</span>
+        </button>
+        <button class="nav-link" data-tab="calculator" id="calculator-nav-btn">
+          <i data-lucide="calculator"></i>
+          <span class="nav-text-desktop">Calculadora</span>
+          <span class="nav-text-mobile">Calc</span>
         </button>
         <button class="nav-link" id="admin-nav-btn" data-tab="admin">
           <i data-lucide="settings"></i>
@@ -662,6 +667,237 @@
           </div>
         </div>
 
+        </div>
+
+        <!-- TELA 4: CALCULADORA FINANCEIRA -->
+        <div id="view-calculator" class="tab-view">
+          <div class="view-header">
+            <div>
+              <h2>Calculadora & Simuladores Financeiros</h2>
+              <p class="subtitle text-pastel-purple">Simule investimentos e financiamentos para planejar melhor o caixa familiar</p>
+            </div>
+          </div>
+
+          <!-- Abas internas da calculadora -->
+          <div class="admin-tabs" style="margin-bottom: 20px; display: flex; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; flex-wrap: wrap;">
+            <button class="btn btn-outline active" onclick="switchCalcSubTab('calc-invest')" id="tab-btn-calc-invest">
+              <i data-lucide="trending-up" style="width: 14px; height: 14px; vertical-align: middle;"></i> Investimentos
+            </button>
+            <button class="btn btn-outline" onclick="switchCalcSubTab('calc-finance')" id="tab-btn-calc-finance">
+              <i data-lucide="home" style="width: 14px; height: 14px; vertical-align: middle;"></i> Financiamentos
+            </button>
+            <button class="btn btn-outline" onclick="switchCalcSubTab('calc-compare')" id="tab-btn-calc-compare">
+              <i data-lucide="scale" style="width: 14px; height: 14px; vertical-align: middle;"></i> Simples vs Compostos
+            </button>
+          </div>
+
+          <!-- SUB-TELA 1: INVESTIMENTOS -->
+          <div id="calc-invest" class="calc-sub-view">
+            <div class="dashboard-details-row" style="grid-template-columns: 1fr 1.2fr; gap: 20px; display: grid;">
+              <div class="glass" style="padding: 20px;">
+                <h4 style="margin: 0 0 20px 0; color: #a855f7;"><i data-lucide="trending-up" style="vertical-align: middle; margin-right: 8px;"></i>Simulador de Juros Compostos</h4>
+                
+                <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                  <div class="form-group">
+                    <label>Valor Inicial (R$)</label>
+                    <input type="number" id="invest-initial" value="1000" step="100" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Aporte Mensal (R$)</label>
+                    <input type="number" id="invest-monthly" value="200" step="50" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Taxa de Juros (%)</label>
+                    <input type="number" id="invest-rate" value="10" step="0.1" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Tipo de Taxa</label>
+                    <select id="invest-rate-type" class="input-field" style="width: 100%;">
+                      <option value="yearly">Ao Ano (% a.a.)</option>
+                      <option value="monthly">Ao Mês (% a.m.)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Período</label>
+                    <input type="number" id="invest-period" value="5" step="1" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Unidade</label>
+                    <select id="invest-period-type" class="input-field" style="width: 100%;">
+                      <option value="years">Anos</option>
+                      <option value="months">Meses</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <button onclick="calculateInvestments()" class="btn btn-primary" style="width: 100%; margin-top: 20px;">
+                  <i data-lucide="calculator"></i> Calcular Rendimento
+                </button>
+              </div>
+
+              <div class="glass" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4 style="margin: 0 0 20px 0; color: #a855f7;">Resultados Estimados</h4>
+                  
+                  <div style="display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Valor Total Acumulado</div>
+                      <div id="invest-res-total" class="green-neon" style="font-size: 1.8rem; font-weight: 700;">R$ 0,00</div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                      <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Total Investido</div>
+                        <div id="invest-res-invested" style="font-size: 1.2rem; font-weight: 600; color: #fff;">R$ 0,00</div>
+                      </div>
+                      
+                      <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Rendimento em Juros</div>
+                        <div id="invest-res-interest" class="purple-neon" style="font-size: 1.2rem; font-weight: 600;">R$ 0,00</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Resumo Textual -->
+                <p id="invest-res-text" style="font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 15px;">
+                  Preencha os dados à esquerda e clique em calcular para estimar o crescimento do seu patrimônio.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA 2: FINANCIAMENTOS -->
+          <div id="calc-finance" class="calc-sub-view hide">
+            <div class="dashboard-details-row" style="grid-template-columns: 1fr 1.2fr; gap: 20px; display: grid;">
+              <div class="glass" style="padding: 20px;">
+                <h4 style="margin: 0 0 20px 0; color: #a855f7;"><i data-lucide="home" style="vertical-align: middle; margin-right: 8px;"></i>Simulador de Financiamento</h4>
+                
+                <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                  <div class="form-group" style="grid-column: span 2;">
+                    <label>Valor Total do Bem (Imóvel / Veículo - R$)</label>
+                    <input type="number" id="finance-total" value="150000" step="5000" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Valor da Entrada (R$)</label>
+                    <input type="number" id="finance-downpayment" value="30000" step="2000" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Taxa de Juros Anual (% a.a.)</label>
+                    <input type="number" id="finance-rate" value="9.5" step="0.1" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Prazo (Meses)</label>
+                    <input type="number" id="finance-term" value="120" step="12" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Sistema de Amortização</label>
+                    <select id="finance-system" class="input-field" style="width: 100%;">
+                      <option value="sac">SAC (Prestações Decrescentes)</option>
+                      <option value="price">PRICE (Prestações Fixas)</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <button onclick="calculateFinance()" class="btn btn-primary" style="width: 100%; margin-top: 20px;">
+                  <i data-lucide="calculator"></i> Simular Financiamento
+                </button>
+              </div>
+
+              <div class="glass" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4 style="margin: 0 0 20px 0; color: #a855f7;">Resumo do Contrato</h4>
+                  
+                  <div style="display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                      <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Valor Financiado</div>
+                        <div id="finance-res-funded" style="font-size: 1.2rem; font-weight: 600; color: #fff;">R$ 0,00</div>
+                      </div>
+                      <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Total Pago ao Final</div>
+                        <div id="finance-res-total" class="red-neon" style="font-size: 1.2rem; font-weight: 600;">R$ 0,00</div>
+                      </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                      <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div id="finance-res-first-label" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Prestação Inicial</div>
+                        <div id="finance-res-first" style="font-size: 1.2rem; font-weight: 600; color: #fff;">R$ 0,00</div>
+                      </div>
+                      <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Juros Totais Pagos</div>
+                        <div id="finance-res-interest" class="purple-neon" style="font-size: 1.2rem; font-weight: 600;">R$ 0,00</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Resumo Textual -->
+                <p id="finance-res-text" style="font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 15px;">
+                  Simule o financiamento para ver o valor das parcelas e o peso real dos juros no valor final do bem.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-TELA 3: JUROS SIMPLES VS COMPOSTOS -->
+          <div id="calc-compare" class="calc-sub-view hide">
+            <div class="dashboard-details-row" style="grid-template-columns: 1fr 1.2fr; gap: 20px; display: grid;">
+              <div class="glass" style="padding: 20px;">
+                <h4 style="margin: 0 0 20px 0; color: #a855f7;"><i data-lucide="scale" style="vertical-align: middle; margin-right: 8px;"></i>Simples vs Compostos</h4>
+                
+                <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                  <div class="form-group" style="grid-column: span 2;">
+                    <label>Capital Inicial (R$)</label>
+                    <input type="number" id="compare-initial" value="10000" step="1000" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Taxa de Juros (% ao mês)</label>
+                    <input type="number" id="compare-rate" value="1" step="0.1" class="input-field" style="width: 100%;">
+                  </div>
+                  <div class="form-group">
+                    <label>Prazo (Meses)</label>
+                    <input type="number" id="compare-period" value="24" step="1" class="input-field" style="width: 100%;">
+                  </div>
+                </div>
+                
+                <button onclick="calculateCompare()" class="btn btn-primary" style="width: 100%; margin-top: 20px;">
+                  <i data-lucide="calculator"></i> Comparar Modelos
+                </button>
+              </div>
+
+              <div class="glass" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4 style="margin: 0 0 20px 0; color: #a855f7;">Efeito da Capitalização</h4>
+                  
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Montante Juros Simples</div>
+                      <div id="compare-res-simple" style="font-size: 1.2rem; font-weight: 600; color: #fff;">R$ 0,00</div>
+                    </div>
+                    
+                    <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Montante Juros Compostos</div>
+                      <div id="compare-res-compound" class="green-neon" style="font-size: 1.2rem; font-weight: 600;">R$ 0,00</div>
+                    </div>
+
+                    <div style="grid-column: span 2; background: rgba(168, 85, 247, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(168, 85, 247, 0.15); text-align: center;">
+                      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Efeito dos Juros sobre Juros (Diferença)</div>
+                      <div id="compare-res-diff" class="purple-neon" style="font-size: 1.5rem; font-weight: 700;">R$ 0,00</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Resumo Textual -->
+                <p id="compare-res-text" style="font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 15px;">
+                  Compara a rentabilidade ou custo linear (Juros Simples) contra a curva de crescimento exponencial (Juros Compostos).
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- TELA 3: ADMINISTRAÇÃO -->
         <div id="view-admin" class="tab-view">
           <div class="view-header">
@@ -1162,19 +1398,19 @@
 
   <!-- Botão e Modal de Diagnóstico do Desenvolvedor -->
   <button id="dev-diag-trigger" style="position: fixed; bottom: 15px; right: 15px; z-index: 999999; background: #6b21a8; color: #fff; border: none; border-radius: 50px; padding: 10px 18px; font-size: 0.8rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 6px;">
-    🛠️ Diagnóstico (v4.8)
+    🛠️ Diagnóstico (v5.0)
   </button>
 
   <div id="dev-diag-modal" class="hide" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
     <div class="glass" style="width: 90%; max-width: 500px; padding: 25px; border-radius: 12px; max-height: 85vh; overflow-y: auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px;">
-        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v4.8)</h3>
+        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v5.0)</h3>
         <button id="dev-diag-close" style="background: transparent; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;">&times;</button>
       </div>
       
       <div style="display: flex; flex-direction: column; gap: 15px; font-size: 0.85rem; text-align: left;">
         <div>
-          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">4.8 (Live)</span>
+          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">5.0 (Live)</span>
         </div>
         <div>
           <strong>Usuário Logado:</strong>
@@ -1203,6 +1439,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=4.8"></script>
+  <script src="app.js?v=5.0"></script>
 </body>
 </html>

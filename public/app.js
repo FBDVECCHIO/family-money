@@ -3467,6 +3467,150 @@ if (devDiagTrigger && devDiagModal) {
   });
 }
 
+// ================= CALCULADORA FINANCEIRA =================
+window.switchCalcSubTab = function(subTabId) {
+  document.querySelectorAll('.calc-sub-view').forEach(view => {
+    view.classList.add('hide');
+  });
+  document.getElementById(subTabId).classList.remove('hide');
+  
+  document.querySelectorAll('.admin-tabs button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  const activeBtnId = 'tab-btn-' + subTabId;
+  const activeBtn = document.getElementById(activeBtnId);
+  if (activeBtn) activeBtn.classList.add('active');
+  
+  lucide.createIcons();
+};
+
+window.calculateInvestments = function() {
+  const initial = parseFloat(document.getElementById('invest-initial').value) || 0;
+  const monthly = parseFloat(document.getElementById('invest-monthly').value) || 0;
+  let rate = parseFloat(document.getElementById('invest-rate').value) || 0;
+  const rateType = document.getElementById('invest-rate-type').value;
+  let period = parseInt(document.getElementById('invest-period').value) || 0;
+  const periodType = document.getElementById('invest-period-type').value;
+
+  const months = periodType === 'years' ? period * 12 : period;
+  let monthlyRateDecimal = 0;
+  
+  if (rateType === 'yearly') {
+    monthlyRateDecimal = Math.pow(1 + (rate / 100), 1 / 12) - 1;
+  } else {
+    monthlyRateDecimal = rate / 100;
+  }
+
+  let totalAccumulated = initial;
+  let totalInvested = initial;
+
+  for (let i = 0; i < months; i++) {
+    totalAccumulated = totalAccumulated * (1 + monthlyRateDecimal) + monthly;
+    totalInvested += monthly;
+  }
+
+  const interestEarned = totalAccumulated - totalInvested;
+
+  document.getElementById('invest-res-total').textContent = formatCurrency(totalAccumulated);
+  document.getElementById('invest-res-invested').textContent = formatCurrency(totalInvested);
+  document.getElementById('invest-res-interest').textContent = formatCurrency(interestEarned);
+
+  const durationStr = periodType === 'years' 
+    ? `${period} ano(s) (${months} meses)` 
+    : `${period} mês(es)`;
+
+  document.getElementById('invest-res-text').innerHTML = `
+    Investindo <strong>${formatCurrency(initial)}</strong> de início mais <strong>${formatCurrency(monthly)}/mês</strong> 
+    durante <strong>${durationStr}</strong> com rentabilidade de <strong>${rate}% ${rateType === 'yearly' ? 'a.a.' : 'a.m.'}</strong>, 
+    seu patrimônio crescerá <strong>${((totalAccumulated / totalInvested - 1) * 100).toFixed(1)}%</strong> sobre o valor total investido.
+  `;
+};
+
+window.calculateFinance = function() {
+  const total = parseFloat(document.getElementById('finance-total').value) || 0;
+  const downpayment = parseFloat(document.getElementById('finance-downpayment').value) || 0;
+  const yearlyRate = parseFloat(document.getElementById('finance-rate').value) || 0;
+  const termMonths = parseInt(document.getElementById('finance-term').value) || 0;
+  const system = document.getElementById('finance-system').value;
+
+  const fundedAmount = total - downpayment;
+  if (fundedAmount <= 0) {
+    alert('O valor da entrada deve ser menor que o valor total do bem!');
+    return;
+  }
+
+  const monthlyRateDecimal = (yearlyRate / 100) / 12;
+  let totalPaid = 0;
+  let firstInstallment = 0;
+  let lastInstallment = 0;
+
+  if (system === 'price') {
+    if (monthlyRateDecimal === 0) {
+      firstInstallment = fundedAmount / termMonths;
+    } else {
+      firstInstallment = fundedAmount * (monthlyRateDecimal * Math.pow(1 + monthlyRateDecimal, termMonths)) / (Math.pow(1 + monthlyRateDecimal, termMonths) - 1);
+    }
+    lastInstallment = firstInstallment;
+    totalPaid = firstInstallment * termMonths;
+  } else {
+    const amortization = fundedAmount / termMonths;
+    let remainingBalance = fundedAmount;
+    
+    for (let m = 1; m <= termMonths; m++) {
+      const interest = remainingBalance * monthlyRateDecimal;
+      const installment = amortization + interest;
+      
+      if (m === 1) firstInstallment = installment;
+      if (m === termMonths) lastInstallment = installment;
+      
+      totalPaid += installment;
+      remainingBalance -= amortization;
+    }
+  }
+
+  const totalInterest = totalPaid - fundedAmount;
+
+  document.getElementById('finance-res-funded').textContent = formatCurrency(fundedAmount);
+  document.getElementById('finance-res-total').textContent = formatCurrency(totalPaid + downpayment);
+  document.getElementById('finance-res-interest').textContent = formatCurrency(totalInterest);
+
+  if (system === 'price') {
+    document.getElementById('finance-res-first-label').textContent = 'Prestação Mensal (Fixa)';
+    document.getElementById('finance-res-first').textContent = formatCurrency(firstInstallment);
+  } else {
+    document.getElementById('finance-res-first-label').textContent = 'Prestação Inicial / Final';
+    document.getElementById('finance-res-first').innerHTML = `${formatCurrency(firstInstallment)} <span style="font-size: 0.75rem; color: var(--text-muted);">/ ${formatCurrency(lastInstallment)}</span>`;
+  }
+
+  document.getElementById('finance-res-text').innerHTML = `
+    Para financiar <strong>${formatCurrency(fundedAmount)}</strong> (total de ${formatCurrency(total)} menos entrada de ${formatCurrency(downpayment)}) 
+    em <strong>${termMonths} meses</strong> a uma taxa de <strong>${yearlyRate}% a.a.</strong> no sistema <strong>${system.toUpperCase()}</strong>: 
+    você pagará um total de <strong>${formatCurrency(totalInterest)}</strong> apenas em juros, o que representa <strong>${((totalInterest / fundedAmount) * 100).toFixed(1)}%</strong> do valor financiado.
+  `;
+};
+
+window.calculateCompare = function() {
+  const initial = parseFloat(document.getElementById('compare-initial').value) || 0;
+  const rate = parseFloat(document.getElementById('compare-rate').value) || 0;
+  const period = parseInt(document.getElementById('compare-period').value) || 0;
+
+  const rateDecimal = rate / 100;
+  const totalSimple = initial * (1 + rateDecimal * period);
+  const totalCompound = initial * Math.pow(1 + rateDecimal, period);
+  const diff = totalCompound - totalSimple;
+
+  document.getElementById('compare-res-simple').textContent = formatCurrency(totalSimple);
+  document.getElementById('compare-res-compound').textContent = formatCurrency(totalCompound);
+  document.getElementById('compare-res-diff').textContent = formatCurrency(diff);
+
+  document.getElementById('compare-res-text').innerHTML = `
+    Investindo <strong>${formatCurrency(initial)}</strong> por <strong>${period} meses</strong> com taxa de <strong>${rate}% a.m.</strong>: 
+    Os juros compostos rendem <strong>${formatCurrency(totalCompound - initial)}</strong> no total, enquanto os juros simples renderiam <strong>${formatCurrency(totalSimple - initial)}</strong>. 
+    O efeito dos "juros sobre juros" gerou um ganho adicional de <strong>${formatCurrency(diff)}</strong> (<strong>${((diff / (totalSimple - initial)) * 100).toFixed(1)}%</strong> a mais).
+  `;
+};
+
 if (devDiagClose && devDiagModal) {
   devDiagClose.addEventListener('click', () => {
     devDiagModal.classList.add('hide');
@@ -3478,5 +3622,16 @@ window.addEventListener('DOMContentLoaded', () => {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('tx-date').value = today;
   
+  // Executar simulações iniciais para exibir valores realistas na primeira visita à calculadora
+  setTimeout(() => {
+    try {
+      calculateInvestments();
+      calculateFinance();
+      calculateCompare();
+    } catch(e) {
+      console.warn("Erro ao iniciar simulações:", e);
+    }
+  }, 1000);
+
   initApp();
 });

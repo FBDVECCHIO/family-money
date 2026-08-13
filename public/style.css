@@ -1249,7 +1249,7 @@ tr:hover td {
     -webkit-backdrop-filter: blur(12px) !important;
     border-top: 1px solid rgba(168, 85, 247, 0.15) !important;
     display: grid !important;
-    grid-template-columns: repeat(4, 1fr) !important; /* 4 colunas estáticas e perfeitamente iguais */
+    grid-template-columns: repeat(5, 1fr) !important; /* 5 colunas estáticas e perfeitamente iguais */
     justify-items: stretch !important;
     align-items: center !important;
     padding: 0 !important;
