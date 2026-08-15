@@ -850,7 +850,7 @@ function renderTransactionsTable() {
       matchesDate = matchesDate && (t.date <= filterEndDate);
     }
 
-    return matchesSearch && matchesUser && matchesPaymentMethod && matchesCategory && matchesMinVal && matchesDate;
+    return matchesPaymentMethod && matchesCategory && matchesMinVal && matchesDate;
   });
 
   // Controlar Paginação
