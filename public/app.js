@@ -806,8 +806,6 @@ function renderDiagnostic() {
 // 5. Tabela de Lançamentos Recentes
 function renderTransactionsTable() {
   const tbody = document.getElementById('transactions-tbody');
-  const searchInput = document.getElementById('tx-search-input').value.toLowerCase();
-  const filterUser = document.getElementById('tx-filter-user').value;
   const filterPaymentMethod = document.getElementById('tx-filter-payment-method').value;
   const filterCategory = document.getElementById('tx-filter-category').value;
   const filterMinVal = parseFloat(document.getElementById('tx-filter-min-val').value) || 0;
@@ -817,15 +815,6 @@ function renderTransactionsTable() {
   // Reset do checkbox "Selecionar Todos"
   const selectAllCb = document.getElementById('tx-select-all');
   if (selectAllCb) selectAllCb.checked = false;
-
-  // Atualizar o dropdown de usuários se necessário
-  const txFilterUserDropdown = document.getElementById('tx-filter-user');
-  if (txFilterUserDropdown && state.users && txFilterUserDropdown.options.length <= 1) {
-    const selectedVal = txFilterUserDropdown.value;
-    txFilterUserDropdown.innerHTML = '<option value="">Quem lançou</option>' +
-      state.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
-    txFilterUserDropdown.value = selectedVal;
-  }
 
   // Atualizar o dropdown de categorias se necessário
   const txFilterCategoryDropdown = document.getElementById('tx-filter-category');
@@ -838,9 +827,6 @@ function renderTransactionsTable() {
 
   // Filtrar
   let filtered = state.transactions.filter(t => {
-    const matchesSearch = t.description.toLowerCase().includes(searchInput);
-    const matchesUser = filterUser ? (parseInt(t.user_id || t.userId) === parseInt(filterUser)) : true;
-    
     let matchesPaymentMethod = true;
     if (filterPaymentMethod) {
       matchesPaymentMethod = (t.payment_method || t.paymentMethod) === filterPaymentMethod;
@@ -3218,8 +3204,6 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
 document.getElementById('clear-user-form-btn').addEventListener('click', clearUserForm);
 
 // BUSCA E FILTROS
-document.getElementById('tx-search-input').addEventListener('input', () => { state.transactionsPage = 1; renderTransactionsTable(); });
-document.getElementById('tx-filter-user').addEventListener('change', () => { state.transactionsPage = 1; renderTransactionsTable(); });
 document.getElementById('tx-filter-payment-method').addEventListener('change', () => { state.transactionsPage = 1; renderTransactionsTable(); });
 document.getElementById('tx-filter-category').addEventListener('change', () => { state.transactionsPage = 1; renderTransactionsTable(); });
 document.getElementById('tx-filter-min-val').addEventListener('input', () => { state.transactionsPage = 1; renderTransactionsTable(); });
@@ -3814,8 +3798,6 @@ if (devDiagClose && devDiagModal) {
 
 // ================= FILTROS E PAGINAÇÃO DE LANÇAMENTOS =================
 window.clearTxFilters = function() {
-  document.getElementById('tx-search-input').value = '';
-  document.getElementById('tx-filter-user').value = '';
   document.getElementById('tx-filter-payment-method').value = '';
   document.getElementById('tx-filter-category').value = '';
   document.getElementById('tx-filter-min-val').value = '';
