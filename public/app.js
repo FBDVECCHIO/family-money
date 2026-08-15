@@ -1018,7 +1018,7 @@ function renderMonthlyDetail(monthData) {
   if (monthData.cardBills.length === 0) {
     cardsTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sem faturas neste mês.</td></tr>`;
   } else {
-    // Agrupar faturas por cartão
+    // Identificar quais cartões têm faturas no mês selecionado
     const groupedBills = {};
     monthData.cardBills.forEach(b => {
       if (!groupedBills[b.cardId]) {
@@ -1026,31 +1026,80 @@ function renderMonthlyDetail(monthData) {
           cardId: b.cardId,
           cardName: b.cardName,
           totalAmount: 0,
-          items: []
+          items: [],
+          year: monthData.year,
+          month: monthData.month,
+          isPaid: false
         };
       }
-      groupedBills[b.cardId].totalAmount += parseFloat(b.amount);
-      groupedBills[b.cardId].items.push(b);
+    });
+
+    // Para cada cartão, buscar a primeira fatura pendente na linha do tempo a partir do mês selecionado
+    Object.keys(groupedBills).forEach(cardId => {
+      const cardIdNum = parseInt(cardId);
+      const b = groupedBills[cardId];
+      
+      let targetYear = monthData.year;
+      let targetMonth = monthData.month;
+      let foundActiveBill = false;
+      
+      // Encontrar o index do mês atual no forecast
+      let currentMonthIndex = state.forecast.findIndex(m => m.year === targetYear && m.month === targetMonth);
+      
+      while (currentMonthIndex !== -1 && currentMonthIndex < state.forecast.length) {
+        const forecastMonth = state.forecast[currentMonthIndex];
+        
+        // Verificar se a fatura está paga neste mês
+        const isPaid = state.paidCardBills.some(pb => 
+          parseInt(pb.card_id) === cardIdNum && 
+          parseInt(pb.year) === parseInt(forecastMonth.year) && 
+          parseInt(pb.month) === parseInt(forecastMonth.month)
+        );
+        
+        const cardBillsInMonth = forecastMonth.cardBills.filter(cb => parseInt(cb.cardId) === cardIdNum);
+        
+        if (!isPaid) {
+          // Achamos a primeira fatura pendente!
+          b.totalAmount = cardBillsInMonth.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+          b.items = cardBillsInMonth;
+          b.year = forecastMonth.year;
+          b.month = forecastMonth.month;
+          b.isPaid = false;
+          foundActiveBill = true;
+          break;
+        } else {
+          // Se já está paga, vamos avançar para o próximo mês
+          currentMonthIndex++;
+        }
+      }
+      
+      // Se todas as faturas do forecast estiverem pagas para este cartão,
+      // mostramos a fatura do último mês do forecast como paga
+      if (!foundActiveBill) {
+        const lastForecastMonth = state.forecast[state.forecast.length - 1];
+        const cardBillsInLastMonth = lastForecastMonth.cardBills.filter(cb => parseInt(cb.cardId) === cardIdNum);
+        
+        b.totalAmount = cardBillsInLastMonth.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+        b.items = cardBillsInLastMonth;
+        b.year = lastForecastMonth.year;
+        b.month = lastForecastMonth.month;
+        b.isPaid = true;
+      }
     });
 
     cardsTbody.innerHTML = Object.values(groupedBills).map(b => {
       const card = state.cards.find(c => c.id === parseInt(b.cardId));
-      const dueDayText = card ? `Dia ${card.due_day || card.dueDay}` : 'N/A';
+      const dueDay = card ? (card.due_day || card.dueDay || 10) : 10;
+      const monthNumStr = String(b.month + 1).padStart(2, '0');
+      const dueDayText = `${String(dueDay).padStart(2, '0')}/${monthNumStr}`;
       
-      // Verificar se a fatura já foi paga neste mês e ano
-      const isPaid = state.paidCardBills.some(pb => 
-        parseInt(pb.card_id) === parseInt(b.cardId) && 
-        parseInt(pb.year) === parseInt(monthData.year) && 
-        parseInt(pb.month) === parseInt(monthData.month)
-      );
-
-      const statusBadge = isPaid 
+      const statusBadge = b.isPaid 
         ? `<span class="badge-category" style="background: rgba(57, 255, 20, 0.1); color: var(--neon-green); border: 1px solid rgba(57, 255, 20, 0.2);">Pago</span>`
         : `<span class="badge-pending">Pendente</span>`;
 
-      const actionButton = isPaid 
+      const actionButton = b.isPaid 
         ? `<span style="color: var(--text-muted); font-size: 0.8rem;"><i data-lucide="check-circle" style="width: 14px; height: 14px; color: var(--neon-green); vertical-align: middle;"></i></span>`
-        : `<button class="btn-reconcile" onclick="payCardBill(${b.cardId}, ${monthData.year}, ${monthData.month}, ${b.totalAmount})" title="Efetivar Pagamento da Fatura">
+        : `<button class="btn-reconcile" onclick="payCardBill(${b.cardId}, ${b.year}, ${b.month}, ${b.totalAmount})" title="Efetivar Pagamento da Fatura">
              <i data-lucide="credit-card" style="width: 12px; height: 12px;"></i> Efetivar Fatura
            </button>`;
 
