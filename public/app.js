@@ -587,23 +587,38 @@ function renderDashboard() {
   cardsContainer.innerHTML = state.forecast.map((m, idx) => {
     const isBalanceNegative = m.projectedBalance < 0;
     
-    // Agrupar faturas por cartão
-    const billsByCard = {};
+    // Agrupar faturas por vencimento (Até dia 10 vs Pós dia 10)
+    let amountUpTo10 = 0;
+    let amountAfter10 = 0;
+    
     m.cardBills.forEach(c => {
-      const name = c.cardName || 'Cartão';
-      billsByCard[name] = (billsByCard[name] || 0) + c.amount;
+      const cardObj = state.cards.find(card => card.id === parseInt(c.cardId));
+      const dueDay = cardObj ? (cardObj.due_day || cardObj.dueDay || 10) : 10;
+      if (dueDay <= 10) {
+        amountUpTo10 += parseFloat(c.amount || 0);
+      } else {
+        amountAfter10 += parseFloat(c.amount || 0);
+      }
     });
 
-    const subtotalsHtml = Object.keys(billsByCard).map(cardName => {
-      const amt = billsByCard[cardName];
-      if (amt === 0) return '';
-      return `
+    const subtotalsHtmlArr = [];
+    if (amountUpTo10 > 0) {
+      subtotalsHtmlArr.push(`
         <div style="font-size: 0.7rem; color: rgba(255,255,255,0.45); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
-          <span style="overflow: hidden; text-overflow: ellipsis; max-width: 100px;">• ${cardName}:</span>
-          <span>-${formatCurrency(amt)}</span>
+          <span>• Até Dia 10:</span>
+          <span>-${formatCurrency(amountUpTo10)}</span>
         </div>
-      `;
-    }).join('');
+      `);
+    }
+    if (amountAfter10 > 0) {
+      subtotalsHtmlArr.push(`
+        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.45); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
+          <span>• Pós Dia 10:</span>
+          <span>-${formatCurrency(amountAfter10)}</span>
+        </div>
+      `);
+    }
+    const subtotalsHtml = subtotalsHtmlArr.join('');
 
     return `
       <div class="forecast-card glass ${isBalanceNegative ? 'alert-deficit' : ''}" data-month-index="${idx}" style="border: 1px solid rgba(168, 85, 247, 0.15); transition: border-color 0.3s ease;">
@@ -1019,75 +1034,100 @@ function renderMonthlyDetail(monthData) {
     cardsTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sem faturas neste mês.</td></tr>`;
   } else {
     // Identificar quais cartões têm faturas no mês selecionado
-    const groupedBills = {};
-    monthData.cardBills.forEach(b => {
-      if (!groupedBills[b.cardId]) {
-        groupedBills[b.cardId] = {
-          cardId: b.cardId,
-          cardName: b.cardName,
-          totalAmount: 0,
-          items: [],
-          year: monthData.year,
-          month: monthData.month,
-          isPaid: false
-        };
-      }
-    });
+    const cardIds = [...new Set(monthData.cardBills.map(b => b.cardId))];
+    const billsToRender = [];
 
-    // Para cada cartão, buscar a primeira fatura pendente na linha do tempo a partir do mês selecionado
-    Object.keys(groupedBills).forEach(cardId => {
+    cardIds.forEach(cardId => {
       const cardIdNum = parseInt(cardId);
-      const b = groupedBills[cardId];
+      const card = state.cards.find(c => c.id === cardIdNum);
+      const cardName = card ? card.name : 'Cartão';
       
-      let targetYear = monthData.year;
-      let targetMonth = monthData.month;
-      let foundActiveBill = false;
+      // 1. Verificar se a fatura do mês selecionado está paga
+      const isPaidThisMonth = state.paidCardBills.some(pb => 
+        parseInt(pb.card_id) === cardIdNum && 
+        parseInt(pb.year) === parseInt(monthData.year) && 
+        parseInt(pb.month) === parseInt(monthData.month)
+      );
       
-      // Encontrar o index do mês atual no forecast
-      let currentMonthIndex = state.forecast.findIndex(m => m.year === targetYear && m.month === targetMonth);
-      
-      while (currentMonthIndex !== -1 && currentMonthIndex < state.forecast.length) {
-        const forecastMonth = state.forecast[currentMonthIndex];
+      if (isPaidThisMonth) {
+        // A) Achar a primeira fatura PENDENTE futura no forecast
+        let foundUnpaid = false;
+        let targetYear = monthData.year;
+        let targetMonth = monthData.month;
+        let currentMonthIndex = state.forecast.findIndex(m => m.year === targetYear && m.month === targetMonth);
         
-        // Verificar se a fatura está paga neste mês
-        const isPaid = state.paidCardBills.some(pb => 
-          parseInt(pb.card_id) === cardIdNum && 
-          parseInt(pb.year) === parseInt(forecastMonth.year) && 
-          parseInt(pb.month) === parseInt(forecastMonth.month)
-        );
-        
-        const cardBillsInMonth = forecastMonth.cardBills.filter(cb => parseInt(cb.cardId) === cardIdNum);
-        
-        if (!isPaid) {
-          // Achamos a primeira fatura pendente!
-          b.totalAmount = cardBillsInMonth.reduce((sum, item) => sum + parseFloat(item.amount), 0);
-          b.items = cardBillsInMonth;
-          b.year = forecastMonth.year;
-          b.month = forecastMonth.month;
-          b.isPaid = false;
-          foundActiveBill = true;
-          break;
-        } else {
-          // Se já está paga, vamos avançar para o próximo mês
+        while (currentMonthIndex !== -1 && currentMonthIndex < state.forecast.length) {
+          const forecastMonth = state.forecast[currentMonthIndex];
+          const isPaidInForecastMonth = state.paidCardBills.some(pb => 
+            parseInt(pb.card_id) === cardIdNum && 
+            parseInt(pb.year) === parseInt(forecastMonth.year) && 
+            parseInt(pb.month) === parseInt(forecastMonth.month)
+          );
+          
+          if (!isPaidInForecastMonth) {
+            const billsInMonth = forecastMonth.cardBills.filter(cb => parseInt(cb.cardId) === cardIdNum);
+            billsToRender.push({
+              cardId: cardIdNum,
+              cardName: cardName,
+              totalAmount: billsInMonth.reduce((sum, item) => sum + parseFloat(item.amount), 0),
+              items: billsInMonth,
+              year: forecastMonth.year,
+              month: forecastMonth.month,
+              isPaid: false,
+              isFaded: false
+            });
+            foundUnpaid = true;
+            break;
+          }
           currentMonthIndex++;
         }
-      }
-      
-      // Se todas as faturas do forecast estiverem pagas para este cartão,
-      // mostramos a fatura do último mês do forecast como paga
-      if (!foundActiveBill) {
-        const lastForecastMonth = state.forecast[state.forecast.length - 1];
-        const cardBillsInLastMonth = lastForecastMonth.cardBills.filter(cb => parseInt(cb.cardId) === cardIdNum);
         
-        b.totalAmount = cardBillsInLastMonth.reduce((sum, item) => sum + parseFloat(item.amount), 0);
-        b.items = cardBillsInLastMonth;
-        b.year = lastForecastMonth.year;
-        b.month = lastForecastMonth.month;
-        b.isPaid = true;
+        // Se todas do forecast estiverem pagas, colocamos a última do forecast como paga
+        if (!foundUnpaid) {
+          const lastForecastMonth = state.forecast[state.forecast.length - 1];
+          const billsInLastMonth = lastForecastMonth.cardBills.filter(cb => parseInt(cb.cardId) === cardIdNum);
+          billsToRender.push({
+            cardId: cardIdNum,
+            cardName: cardName,
+            totalAmount: billsInLastMonth.reduce((sum, item) => sum + parseFloat(item.amount), 0),
+            items: billsInLastMonth,
+            year: lastForecastMonth.year,
+            month: lastForecastMonth.month,
+            isPaid: true,
+            isFaded: false
+          });
+        }
+        
+        // B) Adicionar a fatura PAGA do mês selecionado como item cinza (faded) abaixo
+        const paidBillsInSelectedMonth = monthData.cardBills.filter(cb => parseInt(cb.cardId) === cardIdNum);
+        billsToRender.push({
+          cardId: cardIdNum,
+          cardName: cardName,
+          totalAmount: paidBillsInSelectedMonth.reduce((sum, item) => sum + parseFloat(item.amount), 0),
+          items: paidBillsInSelectedMonth,
+          year: monthData.year,
+          month: monthData.month,
+          isPaid: true,
+          isFaded: true
+        });
+        
+      } else {
+        // Se NÃO está paga no mês selecionado, renderiza apenas ela normalmente
+        const billsInSelectedMonth = monthData.cardBills.filter(cb => parseInt(cb.cardId) === cardIdNum);
+        billsToRender.push({
+          cardId: cardIdNum,
+          cardName: cardName,
+          totalAmount: billsInSelectedMonth.reduce((sum, item) => sum + parseFloat(item.amount), 0),
+          items: billsInSelectedMonth,
+          year: monthData.year,
+          month: monthData.month,
+          isPaid: false,
+          isFaded: false
+        });
       }
     });
 
-    cardsTbody.innerHTML = Object.values(groupedBills).map(b => {
+    cardsTbody.innerHTML = billsToRender.map(b => {
       const card = state.cards.find(c => c.id === parseInt(b.cardId));
       const dueDay = card ? (card.due_day || card.dueDay || 10) : 10;
       const monthNumStr = String(b.month + 1).padStart(2, '0');
@@ -1103,9 +1143,10 @@ function renderMonthlyDetail(monthData) {
              <i data-lucide="credit-card" style="width: 12px; height: 12px;"></i> Efetivar Fatura
            </button>`;
 
-      const isExpanded = state.expandedCardBills && state.expandedCardBills.has(b.cardId);
+      const isExpandedKey = `${b.cardId}-${b.month}`;
+      const isExpanded = state.expandedCardBills && state.expandedCardBills.has(isExpandedKey);
       const expandBtnHtml = `
-        <button class="btn-expand-bill" id="btn-expand-${b.cardId}" onclick="toggleBillDetails(${b.cardId})" title="Expandir/recolher compras da fatura">
+        <button class="btn-expand-bill" id="btn-expand-${b.cardId}-${b.month}" onclick="toggleBillDetails('${b.cardId}-${b.month}')" title="Expandir/recolher compras da fatura">
           <i data-lucide="${isExpanded ? 'minus-circle' : 'plus-circle'}" style="width: 12px; height: 12px;"></i> 
           ${isExpanded ? 'Recolher' : 'Ver Lançamentos'}
         </button>
@@ -1141,8 +1182,11 @@ function renderMonthlyDetail(monthData) {
         `;
       }).join('');
 
+      const rowStyle = b.isFaded ? 'style="opacity: 0.45; filter: grayscale(0.85); background: rgba(255, 255, 255, 0.005);"' : '';
+      const detailsRowStyle = b.isFaded ? 'style="background: rgba(255, 255, 255, 0.01); opacity: 0.55; filter: grayscale(0.85);"' : 'style="background: rgba(255, 255, 255, 0.015);"';
+
       return `
-        <tr>
+        <tr ${rowStyle}>
           <td style="font-weight: 500;">
             <div style="display: flex; flex-direction: column;">
               <span>${b.cardName}</span>
@@ -1153,7 +1197,7 @@ function renderMonthlyDetail(monthData) {
           <td class="red-neon" style="font-weight: 600; white-space: nowrap;">-${formatCurrency(b.totalAmount)}</td>
           <td>${actionButton}</td>
         </tr>
-        <tr id="details-card-${b.cardId}" class="${isExpanded ? '' : 'hide'}" style="background: rgba(255, 255, 255, 0.015);">
+        <tr id="details-card-${b.cardId}-${b.month}" class="${isExpanded ? '' : 'hide'}" ${detailsRowStyle}>
           <td colspan="4" style="padding: 8px 12px;">
             <div style="border-left: 2px solid var(--neon-purple); padding-left: 12px; margin: 4px 0;">
               <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem;">
@@ -1895,23 +1939,23 @@ function clearTransactionForm() {
   lucide.createIcons();
 }
 
-window.toggleBillDetails = function(cardId) {
+window.toggleBillDetails = function(cardIdWithMonth) {
   if (!state.expandedCardBills) {
     state.expandedCardBills = new Set();
   }
   
-  const detailsRow = document.getElementById(`details-card-${cardId}`);
-  const btn = document.getElementById(`btn-expand-${cardId}`);
+  const detailsRow = document.getElementById(`details-card-${cardIdWithMonth}`);
+  const btn = document.getElementById(`btn-expand-${cardIdWithMonth}`);
   if (!detailsRow || !btn) return;
 
   const isHidden = detailsRow.classList.contains('hide');
   if (isHidden) {
     detailsRow.classList.remove('hide');
-    state.expandedCardBills.add(cardId);
+    state.expandedCardBills.add(cardIdWithMonth);
     btn.innerHTML = `<i data-lucide="minus-circle" style="width: 12px; height: 12px;"></i> Recolher`;
   } else {
     detailsRow.classList.add('hide');
-    state.expandedCardBills.delete(cardId);
+    state.expandedCardBills.delete(cardIdWithMonth);
     btn.innerHTML = `<i data-lucide="plus-circle" style="width: 12px; height: 12px;"></i> Ver Lançamentos`;
   }
   lucide.createIcons();
