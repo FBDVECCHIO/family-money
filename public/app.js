@@ -808,105 +808,202 @@ function renderTransactionsTable() {
   const tbody = document.getElementById('transactions-tbody');
   const searchInput = document.getElementById('tx-search-input').value.toLowerCase();
   const filterUser = document.getElementById('tx-filter-user').value;
+  const filterPaymentMethod = document.getElementById('tx-filter-payment-method').value;
+  const filterCategory = document.getElementById('tx-filter-category').value;
+  const filterMinVal = parseFloat(document.getElementById('tx-filter-min-val').value) || 0;
+  const filterStartDate = document.getElementById('tx-filter-start-date').value;
+  const filterEndDate = document.getElementById('tx-filter-end-date').value;
 
-  // Atualizar o dropdown de usuários de busca se necessário
+  // Reset do checkbox "Selecionar Todos"
+  const selectAllCb = document.getElementById('tx-select-all');
+  if (selectAllCb) selectAllCb.checked = false;
+
+  // Atualizar o dropdown de usuários se necessário
   const txFilterUserDropdown = document.getElementById('tx-filter-user');
   if (txFilterUserDropdown && state.users && txFilterUserDropdown.options.length <= 1) {
     const selectedVal = txFilterUserDropdown.value;
-    txFilterUserDropdown.innerHTML = '<option value="">Todos os usuários</option>' +
+    txFilterUserDropdown.innerHTML = '<option value="">Quem lançou</option>' +
       state.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
     txFilterUserDropdown.value = selectedVal;
   }
 
+  // Atualizar o dropdown de categorias se necessário
+  const txFilterCategoryDropdown = document.getElementById('tx-filter-category');
+  if (txFilterCategoryDropdown && state.categories && txFilterCategoryDropdown.options.length <= 1) {
+    const selectedVal = txFilterCategoryDropdown.value;
+    txFilterCategoryDropdown.innerHTML = '<option value="">Categoria</option>' +
+      state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    txFilterCategoryDropdown.value = selectedVal;
+  }
+
+  // Filtrar
   let filtered = state.transactions.filter(t => {
     const matchesSearch = t.description.toLowerCase().includes(searchInput);
     const matchesUser = filterUser ? (parseInt(t.user_id || t.userId) === parseInt(filterUser)) : true;
-    return matchesSearch && matchesUser;
+    
+    let matchesPaymentMethod = true;
+    if (filterPaymentMethod) {
+      matchesPaymentMethod = (t.payment_method || t.paymentMethod) === filterPaymentMethod;
+    }
+    
+    let matchesCategory = true;
+    if (filterCategory) {
+      matchesCategory = parseInt(t.category_id || t.categoryId) === parseInt(filterCategory);
+    }
+    
+    let matchesMinVal = true;
+    if (filterMinVal > 0) {
+      matchesMinVal = parseFloat(t.amount || 0) >= filterMinVal;
+    }
+    
+    let matchesDate = true;
+    if (filterStartDate) {
+      matchesDate = matchesDate && (t.date >= filterStartDate);
+    }
+    if (filterEndDate) {
+      matchesDate = matchesDate && (t.date <= filterEndDate);
+    }
+
+    return matchesSearch && matchesUser && matchesPaymentMethod && matchesCategory && matchesMinVal && matchesDate;
   });
 
-  tbody.innerHTML = filtered.map(t => {
-    const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
-    const tag = state.tags ? state.tags.find(g => g.id === t.tag_id || g.id === t.tagId) : null;
-    const tagHtml = tag ? ` <span class="badge-tag">#${tag.name}</span>` : '';
-    const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
-    const whoLaunched = usr ? usr.name : 'Família';
-    
-    let pmLabel = '';
-    const cardIdNum = t.card_id || t.cardId;
-    const accIdNum = t.account_id || t.accountId;
-    const destAccIdNum = t.destination_account_id || t.destinationAccountId;
+  // Controlar Paginação
+  if (!state.transactionsPage) {
+    state.transactionsPage = 1;
+  }
+  
+  const limit = 25;
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+  
+  if (state.transactionsPage > totalPages) {
+    state.transactionsPage = totalPages;
+  }
+  if (state.transactionsPage < 1) {
+    state.transactionsPage = 1;
+  }
+  
+  const startIndex = (state.transactionsPage - 1) * limit;
+  const endIndex = startIndex + limit;
+  const paginatedList = filtered.slice(startIndex, endIndex);
 
-    if (t.payment_method === 'card' || t.paymentMethod === 'card') {
-      const card = state.cards.find(c => c.id === cardIdNum);
-      pmLabel = `<i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${card ? card.name : 'Cartão'}`;
-    } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
-      const originAcc = state.accounts.find(a => a.id === accIdNum);
-      const destAcc = state.accounts.find(a => a.id === destAccIdNum);
-      pmLabel = `<i data-lucide="shuffle" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${originAcc ? originAcc.name : 'Origem'} ➔ ${destAcc ? destAcc.name : 'Destino'}`;
-    } else {
-      const acc = state.accounts.find(a => a.id === accIdNum);
-      pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
-    }
+  // Renderizar tabela
+  if (paginatedList.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum lançamento encontrado.</td></tr>`;
+  } else {
+    tbody.innerHTML = paginatedList.map(t => {
+      const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+      const tag = state.tags ? state.tags.find(g => g.id === t.tag_id || g.id === t.tagId) : null;
+      const tagHtml = tag ? ` <span class="badge-tag">#${tag.name}</span>` : '';
+      const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
+      const whoLaunched = usr ? usr.name : 'Família';
+      
+      let pmLabel = '';
+      const cardIdNum = t.card_id || t.cardId;
+      const accIdNum = t.account_id || t.accountId;
+      const destAccIdNum = t.destination_account_id || t.destinationAccountId;
 
-    // Exibir valor formatado dependendo de tipo
-    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
-    const isEffective = t.is_effective !== false;
+      if (t.payment_method === 'card' || t.paymentMethod === 'card') {
+        const card = state.cards.find(c => c.id === cardIdNum);
+        pmLabel = `<i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${card ? card.name : 'Cartão'}`;
+      } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+        const originAcc = state.accounts.find(a => a.id === accIdNum);
+        const destAcc = state.accounts.find(a => a.id === destAccIdNum);
+        pmLabel = `<i data-lucide="shuffle" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${originAcc ? originAcc.name : 'Origem'} ➔ ${destAcc ? destAcc.name : 'Destino'}`;
+      } else {
+        const acc = state.accounts.find(a => a.id === accIdNum);
+        pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
+      }
 
-    let valueHtml = '';
-    if (finalType === 'transfer') {
-      valueHtml = `<span style="font-weight: 600; color: var(--neon-purple);">${formatCurrency(t.amount)}</span>`;
-    } else if (finalType === 'income') {
-      valueHtml = `<span style="font-weight: 600; color: var(--neon-green);">+${formatCurrency(t.amount)}</span>`;
-    } else {
-      valueHtml = `<span style="font-weight: 600; color: var(--neon-red);">-${formatCurrency(t.amount)}</span>`;
-    }
+      const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+      const isEffective = t.is_effective !== false;
 
-    if (!isEffective) {
-      valueHtml += `<br><span class="badge-pending" style="margin-top: 4px;">Pendente</span>`;
-    }
+      let valueHtml = '';
+      if (finalType === 'transfer') {
+        valueHtml = `<span style="font-weight: 600; color: var(--neon-purple);">${formatCurrency(t.amount)}</span>`;
+      } else if (finalType === 'income') {
+        valueHtml = `<span style="font-weight: 600; color: var(--neon-green);">+${formatCurrency(t.amount)}</span>`;
+      } else {
+        valueHtml = `<span style="font-weight: 600; color: var(--neon-red);">-${formatCurrency(t.amount)}</span>`;
+      }
 
-    const receiptHtml = t.receipt_url 
-      ? `<button class="btn-receipt" onclick="viewReceipt(${t.id})" title="Ver Recibo" style="background: rgba(79, 70, 229, 0.1); border: 1px solid rgba(79, 70, 229, 0.3); border-radius: 4px; padding: 4px; cursor: pointer; color: var(--neon-purple); display: inline-flex; align-items: center; justify-content: center; margin-right: 5px;">
-           <i data-lucide="image" style="width: 14px; height: 14px;"></i>
-         </button>` 
-      : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
+      if (!isEffective) {
+        valueHtml += `<br><span class="badge-pending" style="margin-top: 4px;">Pendente</span>`;
+      }
 
-    const reconcileHtml = (!isEffective && t.payment_method !== 'card')
-      ? `<button class="btn-reconcile" onclick="reconcileTransaction(${t.id})" title="Efetivar Lançamento (Abater saldo da conta agora)" style="margin-right: 5px;">
-           <i data-lucide="check" style="width: 12px; height: 12px;"></i> Efetivar
-         </button>`
-      : '';
+      const receiptHtml = t.receipt_url 
+        ? `<button class="btn-receipt" onclick="viewReceipt(${t.id})" title="Ver Recibo" style="background: rgba(79, 70, 229, 0.1); border: 1px solid rgba(79, 70, 229, 0.3); border-radius: 4px; padding: 4px; cursor: pointer; color: var(--neon-purple); display: inline-flex; align-items: center; justify-content: center; margin-right: 5px;">
+             <i data-lucide="image" style="width: 14px; height: 14px;"></i>
+           </button>` 
+        : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
 
-    return `
-      <tr>
-        <td>${formatDate(t.date)}</td>
-        <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
-        <td>
-          <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
-            ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
-          </span>
-        </td>
-        <td>${whoLaunched}</td>
-        <td>${pmLabel}</td>
-        <td>${t.installments > 1 ? `${t.installments}x` : 'À vista'}</td>
-        <td>${valueHtml}</td>
-        <td style="text-align: center;">${receiptHtml}</td>
-        <td>
-          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: center;">
-            ${reconcileHtml ? `<div style="margin-bottom: 2px;">${reconcileHtml}</div>` : ''}
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <button class="btn-edit" onclick="editTransaction(${t.id})" title="Alterar lançamento">
-                <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
-              </button>
-              <button class="btn-delete" onclick="deleteTransaction(${t.id})" title="Excluir lançamento">
-                <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
-              </button>
+      const reconcileHtml = (!isEffective && t.payment_method !== 'card')
+        ? `<button class="btn-reconcile" onclick="reconcileTransaction(${t.id})" title="Efetivar Lançamento (Abater saldo da conta agora)" style="margin-right: 5px;">
+             <i data-lucide="check" style="width: 12px; height: 12px;"></i> Efetivar
+           </button>`
+        : '';
+
+      return `
+        <tr>
+          <td style="text-align: center;"><input type="checkbox" class="tx-select-row" value="${t.id}" style="cursor: pointer; width: 16px; height: 16px;"></td>
+          <td>${formatDate(t.date)}</td>
+          <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
+          <td>
+            <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
+              ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
+            </span>
+          </td>
+          <td>${whoLaunched}</td>
+          <td>${pmLabel}</td>
+          <td>${t.installments > 1 ? `${t.installments}x` : 'À vista'}</td>
+          <td>${valueHtml}</td>
+          <td style="text-align: center;">${receiptHtml}</td>
+          <td>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: center;">
+              ${reconcileHtml ? `<div style="margin-bottom: 2px;">${reconcileHtml}</div>` : ''}
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <button class="btn-edit" onclick="editTransaction(${t.id})" title="Alterar lançamento">
+                  <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
+                </button>
+                <button class="btn-delete" onclick="deleteTransaction(${t.id})" title="Excluir lançamento">
+                  <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                </button>
+              </div>
             </div>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Renderizar controles de paginação
+  const paginationContainer = document.getElementById('tx-pagination-container');
+  if (paginationContainer) {
+    if (totalItems === 0) {
+      paginationContainer.innerHTML = '';
+    } else {
+      paginationContainer.innerHTML = `
+        <span style="font-size: 0.85rem; color: var(--text-muted);">
+          Mostrando ${startIndex + 1} a ${Math.min(endIndex, totalItems)} de ${totalItems} lançamentos
+        </span>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn btn-outline" style="width: auto; padding: 6px 12px; font-size: 0.8rem; height: 32px;" 
+                  onclick="changeTxPage(${state.transactionsPage - 1})" 
+                  ${state.transactionsPage === 1 ? 'disabled' : ''}>
+            <i data-lucide="chevron-left" style="width: 14px; height: 14px; vertical-align: middle;"></i> Anterior
+          </button>
+          <span style="font-size: 0.85rem; color: #fff; font-weight: 500; padding: 0 10px;">
+            Página ${state.transactionsPage} de ${totalPages}
+          </span>
+          <button class="btn btn-outline" style="width: auto; padding: 6px 12px; font-size: 0.8rem; height: 32px;" 
+                  onclick="changeTxPage(${state.transactionsPage + 1})" 
+                  ${state.transactionsPage === totalPages ? 'disabled' : ''}>
+            Próxima <i data-lucide="chevron-right" style="width: 14px; height: 14px; vertical-align: middle;"></i>
+          </button>
+        </div>
+      `;
+    }
+  }
 
   lucide.createIcons();
 }
@@ -3121,8 +3218,13 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
 document.getElementById('clear-user-form-btn').addEventListener('click', clearUserForm);
 
 // BUSCA E FILTROS
-document.getElementById('tx-search-input').addEventListener('input', renderTransactionsTable);
-document.getElementById('tx-filter-user').addEventListener('change', renderTransactionsTable);
+document.getElementById('tx-search-input').addEventListener('input', () => { state.transactionsPage = 1; renderTransactionsTable(); });
+document.getElementById('tx-filter-user').addEventListener('change', () => { state.transactionsPage = 1; renderTransactionsTable(); });
+document.getElementById('tx-filter-payment-method').addEventListener('change', () => { state.transactionsPage = 1; renderTransactionsTable(); });
+document.getElementById('tx-filter-category').addEventListener('change', () => { state.transactionsPage = 1; renderTransactionsTable(); });
+document.getElementById('tx-filter-min-val').addEventListener('input', () => { state.transactionsPage = 1; renderTransactionsTable(); });
+document.getElementById('tx-filter-start-date').addEventListener('change', () => { state.transactionsPage = 1; renderTransactionsTable(); });
+document.getElementById('tx-filter-end-date').addEventListener('change', () => { state.transactionsPage = 1; renderTransactionsTable(); });
 
 // EXPORTAR LANÇAMENTOS EM CSV
 document.getElementById('export-csv-btn').addEventListener('click', () => {
@@ -3709,6 +3811,161 @@ if (devDiagClose && devDiagModal) {
     devDiagModal.classList.add('hide');
   });
 }
+
+// ================= FILTROS E PAGINAÇÃO DE LANÇAMENTOS =================
+window.clearTxFilters = function() {
+  document.getElementById('tx-search-input').value = '';
+  document.getElementById('tx-filter-user').value = '';
+  document.getElementById('tx-filter-payment-method').value = '';
+  document.getElementById('tx-filter-category').value = '';
+  document.getElementById('tx-filter-min-val').value = '';
+  document.getElementById('tx-filter-start-date').value = '';
+  document.getElementById('tx-filter-end-date').value = '';
+  state.transactionsPage = 1;
+  renderTransactionsTable();
+};
+
+window.toggleSelectAllTransactions = function(selectAllCheckbox) {
+  const checkboxes = document.querySelectorAll('.tx-select-row');
+  checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+};
+
+window.changeTxPage = function(page) {
+  state.transactionsPage = page;
+  renderTransactionsTable();
+};
+
+window.exportSelectedTransactionsPDF = function() {
+  const checkedBoxes = document.querySelectorAll('.tx-select-row:checked');
+  if (checkedBoxes.length === 0) {
+    alert('Selecione ao menos um lançamento na tabela usando a caixa de seleção lateral.');
+    return;
+  }
+  
+  const selectedIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+  const selectedTxs = state.transactions.filter(t => selectedIds.includes(t.id));
+  
+  // Ordenar por data decrescente
+  selectedTxs.sort((a, b) => new Date(b.date) - new Date(a.date));
+  
+  const printWindow = window.open('', '_blank', 'width=900,height=700');
+  if (!printWindow) {
+    alert('Por favor, permita pop-ups para gerar o documento de conferência manual.');
+    return;
+  }
+  
+  let rowsHtml = selectedTxs.map((t, idx) => {
+    const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+    const tag = state.tags ? state.tags.find(g => g.id === t.tag_id || g.id === t.tagId) : null;
+    const tagText = tag ? ` #${tag.name}` : '';
+    const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
+    const whoLaunched = usr ? usr.name : 'Família';
+    
+    let pm = '';
+    if (t.payment_method === 'card' || t.paymentMethod === 'card') {
+      const card = state.cards.find(c => c.id === (t.card_id || t.cardId));
+      pm = `Cartão (${card ? card.name : 'N/A'})`;
+    } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+      pm = 'Transferência';
+    } else {
+      const acc = state.accounts.find(a => a.id === (t.account_id || t.accountId));
+      pm = `Conta (${acc ? acc.name : 'N/A'})`;
+    }
+
+    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+    let valColor = '#000';
+    let valPrefix = '';
+    
+    if (finalType === 'transfer') {
+      valColor = '#4f46e5';
+    } else if (finalType === 'income') {
+      valColor = '#16a34a';
+      valPrefix = '+';
+    } else {
+      valColor = '#dc2626';
+      valPrefix = '-';
+    }
+
+    return `
+      <tr>
+        <td style="border: 1px solid #ddd; padding: 8px; text-align: center; font-family: monospace;">[ &nbsp; ]</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${formatDate(t.date)}</td>
+        <td style="border: 1px solid #ddd; padding: 8px; font-weight: 500;">${cleanDescription(t.description)}${tagText}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${cat ? cat.name : 'Geral'}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${whoLaunched}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${pm}</td>
+        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; color: ${valColor}; text-align: right;">${valPrefix}${formatCurrency(t.amount)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Family Money - Conferência Manual</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; margin: 30px; line-height: 1.5; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #a855f7; padding-bottom: 15px; margin-bottom: 25px; }
+          .title { font-size: 1.6rem; font-weight: bold; color: #6b21a8; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.88rem; }
+          th { background: #f3f4f6; border: 1px solid #ddd; padding: 12px 10px; text-align: left; font-weight: 600; }
+          td { border: 1px solid #ddd; padding: 10px 8px; text-align: left; }
+          tr:nth-child(even) { background-color: #f9fafb; }
+          .footer { margin-top: 40px; text-align: center; font-size: 0.8rem; color: #999; border-top: 1px solid #eee; padding-top: 15px; }
+          @media print {
+            body { margin: 15px; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="title">Family Money</div>
+            <div style="font-size: 0.85rem; color: #555; font-weight: 500;">Planilha de Conferência Manual</div>
+          </div>
+          <div style="text-align: right; font-size: 0.85rem; color: #666;">
+            <strong>Gerado em:</strong> ${new Date().toLocaleString('pt-BR')}
+          </div>
+        </div>
+        
+        <p style="font-size: 0.92rem; color: #4b5563; margin-bottom: 20px;">
+          Esta lista de batimento contém <strong>${selectedTxs.length} lançamento(s)</strong> selecionado(s). Use os campos de marcação <strong>[ &nbsp; ]</strong> à esquerda para conciliar fisicamente seus extratos.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60px; text-align: center;">Conf.</th>
+              <th style="width: 90px;">Data</th>
+              <th>Descrição / Lançamento</th>
+              <th>Categoria</th>
+              <th>Quem Lançou</th>
+              <th>Forma Pagto.</th>
+              <th style="text-align: right; width: 120px;">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+        
+        <div class="footer">
+          Family Money v5.4 - Sistema de Gestão Financeira Familiar
+        </div>
+        
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 300);
+          }
+        </script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
 
 // ================= INICIALIZAÇÃO =================
 window.addEventListener('DOMContentLoaded', () => {

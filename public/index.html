@@ -58,7 +58,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=5.3">
+  <link rel="stylesheet" href="style.css?v=5.4">
 </head>
 <body>
 
@@ -339,22 +339,50 @@
 
           <!-- Tabela de Lançamentos Recentes -->
           <div class="recent-transactions-card glass">
-            <div class="card-header">
-              <h3><i data-lucide="list" class="green-neon"></i> Últimos Lançamentos Realizados</h3>
-              <div class="search-filter-row">
-                <input type="text" id="tx-search-input" placeholder="Buscar lançamento...">
-                <select id="tx-filter-user">
-                  <option value="">Todos os usuários</option>
-                  <option value="1">Alexandre</option>
-                  <option value="2">Mariana</option>
-                  <option value="3">Beatriz</option>
+            <div class="card-header" style="display: flex; flex-direction: column; align-items: stretch; gap: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin: 0;"><i data-lucide="list" class="green-neon"></i> Últimos Lançamentos Realizados</h3>
+                <button onclick="exportSelectedTransactionsPDF()" class="btn btn-outline" style="width: auto; padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px; border-color: var(--neon-purple); color: #fff; height: 32px;">
+                  <i data-lucide="file-text" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> PDF Selecionados
+                </button>
+              </div>
+              
+              <div class="search-filter-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; width: 100%;">
+                <input type="text" id="tx-search-input" placeholder="Buscar descrição..." style="grid-column: span 2;">
+                
+                <select id="tx-filter-payment-method">
+                  <option value="">Forma Pagto.</option>
+                  <option value="card">Cartão</option>
+                  <option value="account">Conta</option>
+                  <option value="transfer">Transferência</option>
                 </select>
+                
+                <select id="tx-filter-category">
+                  <option value="">Categoria</option>
+                </select>
+                
+                <select id="tx-filter-user">
+                  <option value="">Quem lançou</option>
+                </select>
+                
+                <div style="display: flex; gap: 5px; align-items: center; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); border-radius: 6px; padding: 0 8px; height: 38px; box-sizing: border-box;">
+                  <span style="font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;">Val ≥ R$</span>
+                  <input type="number" id="tx-filter-min-val" placeholder="Mín" style="width: 100%; border: none; background: transparent; color: #fff; padding: 0; font-size: 0.85rem; outline: none; height: 100%;">
+                </div>
+                
+                <input type="date" id="tx-filter-start-date" placeholder="Início" style="height: 38px;">
+                <input type="date" id="tx-filter-end-date" placeholder="Fim" style="height: 38px;">
+                
+                <button onclick="clearTxFilters()" class="btn btn-outline" style="width: auto; height: 38px; padding: 0 10px;" title="Limpar Filtros">
+                  <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+                </button>
               </div>
             </div>
             <div class="table-responsive">
               <table>
                 <thead>
                   <tr>
+                    <th style="width: 40px; text-align: center;"><input type="checkbox" id="tx-select-all" onclick="toggleSelectAllTransactions(this)" style="cursor: pointer; width: 16px; height: 16px;"></th>
                     <th>Data</th>
                     <th>Lançamento</th>
                     <th>Categoria</th>
@@ -370,6 +398,9 @@
                   <!-- Inserido dinamicamente -->
                 </tbody>
               </table>
+            </div>
+            <div id="tx-pagination-container" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
+              <!-- Dinâmico -->
             </div>
           </div>
 
@@ -1396,19 +1427,19 @@
 
   <!-- Botão e Modal de Diagnóstico do Desenvolvedor -->
   <button id="dev-diag-trigger" style="position: fixed; bottom: 15px; right: 15px; z-index: 999999; background: #6b21a8; color: #fff; border: none; border-radius: 50px; padding: 10px 18px; font-size: 0.8rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 6px;">
-    🛠️ Diagnóstico (v5.3)
+    🛠️ Diagnóstico (v5.4)
   </button>
 
   <div id="dev-diag-modal" class="hide" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
     <div class="glass" style="width: 90%; max-width: 500px; padding: 25px; border-radius: 12px; max-height: 85vh; overflow-y: auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px;">
-        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v5.3)</h3>
+        <h3 style="margin: 0; color: #a855f7;">🛠️ Diagnóstico do Sistema (v5.4)</h3>
         <button id="dev-diag-close" style="background: transparent; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;">&times;</button>
       </div>
       
       <div style="display: flex; flex-direction: column; gap: 15px; font-size: 0.85rem; text-align: left;">
         <div>
-          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">5.3 (Live)</span>
+          <strong>Versão Ativa:</strong> <span style="color: #22c55e;">5.4 (Live)</span>
         </div>
         <div>
           <strong>Usuário Logado:</strong>
@@ -1437,6 +1468,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=5.3"></script>
+  <script src="app.js?v=5.4"></script>
 </body>
 </html>
