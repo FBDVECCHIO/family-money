@@ -459,14 +459,43 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
         // Se estiver vinculado a um cartão de crédito, vai para a fatura do cartão em vez de descontar da conta
         if (cardIdNum) {
           const card = cards.find(c => c.id === cardIdNum);
-          m.cardBills.push({
-            txId: null,
-            cardId: cardIdNum,
-            description: `${item.description} (Assinatura Recorrente)`,
-            amount: amount,
-            cardName: card ? card.name : 'Cartão',
-            date: new Date(m.year, m.month, Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28)).toISOString().split('T')[0]
-          });
+          if (card) {
+            // Evitar duplicação: verificar se já existe lançamento real desta recorrência gerado para este mês/ano
+            const recurrenceTag = `[R:${item.id}]`;
+            const hasRealTx = transactions.some(t => {
+              const isCard = t.payment_method === 'card' || t.paymentMethod === 'card';
+              if (!isCard) return false;
+              if (parseInt(t.card_id || t.cardId) !== cardIdNum) return false;
+              if (!t.description.includes(recurrenceTag)) return false;
+              
+              // Verificar se a transação real pertence ao mesmo mês e ano de compra da recorrência
+              const txDate = new Date(t.date + 'T12:00:00');
+              return txDate.getFullYear() === m.year && txDate.getMonth() === m.month;
+            });
+
+            if (!hasRealTx) {
+              const day = Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28);
+              const dateStr = `${m.year}-${String(m.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              
+              // Calcular a fatura (mês/ano) usando as regras de fechamento do cartão
+              const closingD = card.closing_day || card.closingDay;
+              const dueD = card.due_day || card.dueDay;
+              const billTarget = getCardPaymentMonthAndYear(dateStr, closingD, dueD);
+              
+              // Adicionar a despesa virtual no mês correspondente da fatura do forecast
+              const targetMonthObj = forecastMonths.find(fm => fm.year === billTarget.year && fm.month === billTarget.month);
+              if (targetMonthObj) {
+                targetMonthObj.cardBills.push({
+                  txId: null,
+                  cardId: cardIdNum,
+                  description: `${item.description} (Assinatura Recorrente)`,
+                  amount: amount,
+                  cardName: card.name,
+                  date: dateStr
+                });
+              }
+            }
+          }
         } else {
           m.fixedExpenses.push(itemDetail);
         }
