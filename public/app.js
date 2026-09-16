@@ -19,8 +19,73 @@ let state = {
     type: null,
     id: null
   },
-  expandedCardBills: new Set()
+  expandedCardBills: new Set(),
+  // Paginação e controles de lista
+  transactionsPage: 1,
+  transactionsLimit: 25,
+  reportsPage: 1,
+  reportsLimit: 25,
+  // Dicionários Hash Map O(1) para eliminar O(N*M) lookups
+  lookupMaps: {
+    accounts: new Map(),
+    cards: new Map(),
+    categories: new Map(),
+    tags: new Map(),
+    users: new Map()
+  }
 };
+
+// ================= SEGURANÇA E CRIPTOGRAFIA DE SENHAS =================
+const FM_CRYPTO_SALT = 'FM_FAMILY_SALT_2026_SECURE';
+
+async function hashPassword(password) {
+  if (!password) return '';
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + FM_CRYPTO_SALT);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return 'sha256:' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyPassword(plainPassword, storedPassword) {
+  if (!storedPassword) return false;
+  if (storedPassword.startsWith('sha256:')) {
+    const computed = await hashPassword(plainPassword);
+    return computed === storedPassword;
+  }
+  // Suporte de compatibilidade para senhas legadas em texto puro (123)
+  return plainPassword === storedPassword;
+}
+
+// Atualizar tabelas hash para indexação O(1) em memória
+function updateLookupMaps() {
+  state.lookupMaps.accounts = new Map((state.accounts || []).map(a => [a.id, a]));
+  state.lookupMaps.cards = new Map((state.cards || []).map(c => [c.id, c]));
+  state.lookupMaps.categories = new Map((state.categories || []).map(c => [c.id, c]));
+  state.lookupMaps.tags = new Map((state.tags || []).map(t => [t.id, t]));
+  state.lookupMaps.users = new Map((state.users || []).map(u => [u.id, u]));
+}
+
+// Toast de Notificação para Background Jobs / Fila Assíncrona
+function showBgJobToast(message, duration = 3500, isSuccess = false) {
+  const toast = document.getElementById('bg-job-toast');
+  const msgEl = document.getElementById('bg-job-msg');
+  if (!toast || !msgEl) return;
+
+  msgEl.textContent = message;
+  toast.classList.remove('hide');
+  
+  if (duration > 0) {
+    setTimeout(() => {
+      toast.classList.add('hide');
+    }, duration);
+  }
+}
+
+function hideBgJobToast() {
+  const toast = document.getElementById('bg-job-toast');
+  if (toast) toast.classList.add('hide');
+}
 
 // ================= UTILS E FORMATADORES =================
 function formatCurrency(value) {
@@ -97,26 +162,54 @@ async function loadUsersOnly() {
     if (data && data.length > 0) {
       state.users = data;
     } else {
-      console.log('Tabela de usuários vazia no banco. Semeando usuários padrão...');
+      console.log('Tabela de usuários vazia no banco. Semeando usuários padrão em lote...');
       state.users = [
-        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123' },
-        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123' },
-        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123' }
+        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123', is_admin: true, only_self_data: false },
+        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123', is_admin: true, only_self_data: false },
+        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123', is_admin: false, only_self_data: true }
       ];
-      // Auto-semear no banco
-      for (const u of state.users) {
-        await state.supabase.from('app_users').insert([{ name: u.name, email: u.email, password: u.password }]);
-      }
+      // Auto-semear no banco em 1 único Batch Insert (Otimizado, sem loop N+1)
+      const usersToInsert = await Promise.all(state.users.map(async u => ({
+        name: u.name,
+        email: u.email,
+        password: await hashPassword(u.password),
+        is_admin: u.is_admin,
+        only_self_data: u.only_self_data
+      })));
+      await state.supabase.from('app_users').insert(usersToInsert);
     }
   } catch (err) {
     console.warn('Erro ao carregar usuários (usando fallback local):', err);
     state.users = [
-      { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123' },
-      { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123' },
-      { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123' }
+      { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123', is_admin: true, only_self_data: false },
+      { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123', is_admin: true, only_self_data: false },
+      { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123', is_admin: false, only_self_data: true }
     ];
   }
-  
+}
+
+function restoreSavedTxFilters() {
+  try {
+    const saved = sessionStorage.getItem('fm_tx_filters');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const pmEl = document.getElementById('tx-filter-payment-method');
+      const catEl = document.getElementById('tx-filter-category');
+      const minEl = document.getElementById('tx-filter-min-val');
+      const startEl = document.getElementById('tx-filter-start-date');
+      const endEl = document.getElementById('tx-filter-end-date');
+
+      if (pmEl && parsed.paymentMethod !== undefined) pmEl.value = parsed.paymentMethod;
+      if (catEl && parsed.category !== undefined) catEl.value = parsed.category;
+      if (minEl && parsed.minVal) minEl.value = parsed.minVal;
+      if (startEl && parsed.startDate) startEl.value = parsed.startDate;
+      if (endEl && parsed.endDate) endEl.value = parsed.endDate;
+      if (parsed.limit) state.transactionsLimit = parsed.limit;
+      if (parsed.page) state.transactionsPage = parsed.page;
+    }
+  } catch (e) {
+    console.warn('Erro ao restaurar filtros de lançamentos da sessão:', e);
+  }
 }
 
 async function initApp() {
@@ -176,6 +269,7 @@ async function initApp() {
     }
 
     document.getElementById('user-display-name').textContent = activeUserName;
+    restoreSavedTxFilters();
     loadAllData();
     updateSidebarVisibility();
   } else {
@@ -204,7 +298,7 @@ async function autoGenerateRecurringTransactions() {
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth(); // 0-indexed
 
-  let insertedCount = 0;
+  const payloadsToInsert = [];
 
   for (const item of state.fixedItems) {
     // Apenas despesas recorrentes
@@ -226,11 +320,10 @@ async function autoGenerateRecurringTransactions() {
     });
 
     if (!alreadyExists) {
-      // Inserir a transação recorrente para este mês
       const day = Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28);
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       
-      const payload = {
+      payloadsToInsert.push({
         description: `${item.description} [R:${item.id}]`,
         amount: parseFloat(item.amount),
         date: dateStr,
@@ -243,23 +336,22 @@ async function autoGenerateRecurringTransactions() {
         installments: 1,
         account_id: item.account_id || null,
         user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
-      };
-
-      console.log(`Auto-gerando lançamento recorrente: ${payload.description} para a data ${payload.date}`);
-      const { error } = await state.supabase.from('transactions').insert([payload]);
-      if (error) {
-        console.error('Erro ao auto-gerar lançamento:', error);
-      } else {
-        insertedCount++;
-      }
+      });
     }
   }
 
-  // Se inseriu novos lançamentos, recarrega a tabela de transações do Supabase
-  if (insertedCount > 0) {
-    const { data, error } = await state.supabase.from('transactions').select('*').order('date', { ascending: false });
-    if (!error) {
-      state.transactions = data || [];
+  // Executar 1 única operação batch caso haja itens a inserir (Eliminação de N+1)
+  if (payloadsToInsert.length > 0) {
+    console.log(`Auto-gerando ${payloadsToInsert.length} lançamentos recorrentes em 1 única operação batch...`);
+    const { data: insertedData, error } = await state.supabase
+      .from('transactions')
+      .insert(payloadsToInsert)
+      .select('*');
+      
+    if (error) {
+      console.error('Erro ao auto-gerar lançamentos em lote:', error);
+    } else if (insertedData && insertedData.length > 0) {
+      state.transactions = [...insertedData, ...state.transactions];
     }
   }
 }
@@ -269,108 +361,61 @@ async function loadAllData() {
   if (!state.supabase) return;
 
   try {
-    // 1. Carregar contas
-    try {
-      const { data, error } = await state.supabase.from('accounts').select('*').order('name');
-      if (error) throw error;
-      state.accounts = data || [];
-    } catch (err) {
-      console.error('Erro ao carregar contas:', err);
-    }
-
-    // 2. Carregar cartões
-    try {
-      const { data, error } = await state.supabase.from('cards').select('*').order('name');
-      if (error) throw error;
-      state.cards = data || [];
-    } catch (err) {
-      console.error('Erro ao carregar cartões:', err);
-    }
-
-    // 3. Carregar categorias
-    try {
-      const { data, error } = await state.supabase.from('categories').select('*').order('name');
-      if (error) throw error;
-      state.categories = data || [];
-    } catch (err) {
-      console.error('Erro ao carregar categorias:', err);
-    }
-
-    // 3b. Carregar tags
-    try {
-      const { data, error } = await state.supabase.from('tags').select('*').order('name');
-      if (error) {
-        console.warn('Tabela tags não encontrada ou erro ao carregar:', error);
-        state.tags = [];
-      } else {
-        state.tags = data || [];
-      }
-    } catch (err) {
-      console.error('Erro ao carregar tags:', err);
-      state.tags = [];
-    }
-
-    // 4. Carregar itens fixos
-    try {
-      const { data, error } = await state.supabase.from('fixed_items').select('*').order('description');
-      if (error) throw error;
-      state.fixedItems = data || [];
-    } catch (err) {
-      console.error('Erro ao carregar itens fixos:', err);
-    }
-
-    // 5. Carregar transações
-    try {
-      const { data, error } = await state.supabase.from('transactions').select('*').order('date', { ascending: false });
-      if (error) throw error;
-      state.transactions = data || [];
-    } catch (err) {
-      console.error('Erro ao carregar transações:', err);
-    }
-
-    // 6. Carregar faturas pagas (Tratamento resiliente caso a tabela ainda não exista no Supabase)
-    try {
-      const { data, error } = await state.supabase.from('paid_card_bills').select('*');
-      if (error) {
-        console.warn('Tabela paid_card_bills não encontrada ou cache do schema desatualizado:', error);
-        state.paidCardBills = [];
-      } else {
-        state.paidCardBills = data || [];
-      }
-    } catch (err) {
-      console.warn('Erro ao ler tabela paid_card_bills:', err);
-      state.paidCardBills = [];
-    }
-
-    // FILTRO DE PERMISSÕES: Se Beatriz estiver logada, ela só vê o que ela mesma lançou
+    // 1. Construir query de transações com escopo server-side (Segurança de isolamento)
+    let txQuery = state.supabase.from('transactions').select('*').order('date', { ascending: false });
     if (state.user && state.user.only_self_data) {
-      state.transactions = state.transactions.filter(t => t.user_id === state.user.id);
+      txQuery = txQuery.eq('user_id', state.user.id);
     }
 
-    try {
-      const { data, error } = await state.supabase.from('app_users').select('*').order('name');
-      if (error) throw error;
-      state.users = data || [];
-    } catch (err) {
-      console.warn('Erro ao carregar usuários em loadAllData (tabela pode não existir):', err);
-      state.users = (state.users && state.users.length) ? state.users : [
-        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123', is_admin: true, only_self_data: false },
-        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123', is_admin: true, only_self_data: false },
-        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123', is_admin: false, only_self_data: true }
+    // 2. Disparo Paralelo Concorrente de todas as entidades principais (elimina waterfall de 9 round-trips)
+    const [
+      accRes,
+      cardRes,
+      catRes,
+      tagRes,
+      fixedRes,
+      txRes,
+      paidRes,
+      userRes,
+      backupRes
+    ] = await Promise.allSettled([
+      state.supabase.from('accounts').select('*').order('name'),
+      state.supabase.from('cards').select('*').order('name'),
+      state.supabase.from('categories').select('*').order('name'),
+      state.supabase.from('tags').select('*').order('name'),
+      state.supabase.from('fixed_items').select('*').order('description'),
+      txQuery,
+      state.supabase.from('paid_card_bills').select('*'),
+      state.supabase.from('app_users').select('id, name, email, is_admin, only_self_data').order('name'),
+      // Projeção seletiva: seleciona apenas metadados do backup (evita transferir megabytes de jsonb pela rede)
+      state.supabase.from('app_backups').select('id, created_at').order('created_at', { ascending: false })
+    ]);
+
+    // Extração segura e tolerante a falhas dos dados
+    state.accounts = (accRes.status === 'fulfilled' && !accRes.value.error) ? (accRes.value.data || []) : [];
+    state.cards = (cardRes.status === 'fulfilled' && !cardRes.value.error) ? (cardRes.value.data || []) : [];
+    state.categories = (catRes.status === 'fulfilled' && !catRes.value.error) ? (catRes.value.data || []) : [];
+    state.tags = (tagRes.status === 'fulfilled' && !tagRes.value.error) ? (tagRes.value.data || []) : [];
+    state.fixedItems = (fixedRes.status === 'fulfilled' && !fixedRes.value.error) ? (fixedRes.value.data || []) : [];
+    state.transactions = (txRes.status === 'fulfilled' && !txRes.value.error) ? (txRes.value.data || []) : [];
+    state.paidCardBills = (paidRes.status === 'fulfilled' && !paidRes.value.error) ? (paidRes.value.data || []) : [];
+    
+    if (userRes.status === 'fulfilled' && !userRes.value.error && userRes.value.data && userRes.value.data.length > 0) {
+      state.users = userRes.value.data;
+    } else if (!state.users || state.users.length === 0) {
+      state.users = [
+        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', is_admin: true, only_self_data: false },
+        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', is_admin: true, only_self_data: false },
+        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', is_admin: false, only_self_data: true }
       ];
     }
+    
+    state.backups = (backupRes.status === 'fulfilled' && !backupRes.value.error) ? (backupRes.value.data || []) : [];
 
-    // Carregar backups cadastrados
-    try {
-      const { data, error } = await state.supabase.from('app_backups').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      state.backups = data || [];
-    } catch (err) {
-      console.warn('Erro ao carregar backups em loadAllData (tabela pode não existir):', err);
-      state.backups = [];
-    }
+    // Atualizar índices O(1) imediatos
+    updateLookupMaps();
 
-    // Auto-gerar lançamentos recorrentes pendentes do mês corrente
+    // Auto-gerar lançamentos recorrentes pendentes do mês corrente em lote
     try {
       await autoGenerateRecurringTransactions();
     } catch (autoErr) {
@@ -395,24 +440,35 @@ async function loadAllData() {
     renderReportsTable();
     updateDiagnostics();
     
-    // Verificação de backup automático diário (executada em background)
-    try {
-      const todayStr = new Date().toLocaleDateString('pt-BR');
-      const hasBackupToday = state.backups.some(b => new Date(b.created_at).toLocaleDateString('pt-BR') === todayStr);
-      if (!hasBackupToday && state.transactions.length > 0) {
-        console.log('Nenhum backup diário encontrado para hoje. Criando backup silencioso...');
-        createBackupSilently();
-      }
-    } catch (err) {
-      console.warn('Erro na verificação de backup automático:', err);
-    }
+    // Background Job: Verificação de backup automático diário assíncrono (desacoplado da inicialização)
+    scheduleDailyBackupJob();
     
     lucide.createIcons();
   } catch (err) {
     console.error('Erro ao carregar dados do Supabase:', err.message);
-    alert('Erro ao sincronizar dados com o Supabase: ' + err.message);
     updateDiagnostics(err.message);
   }
+}
+
+// Background Job Idempotente para Backup Diário
+function scheduleDailyBackupJob() {
+  setTimeout(async () => {
+    try {
+      const todayStr = new Date().toLocaleDateString('pt-BR');
+      const lastBackupDate = localStorage.getItem('familymoney_last_backup_date');
+      
+      if (lastBackupDate === todayStr) return; // Idempotência garantida
+      
+      if (state.transactions && state.transactions.length > 0) {
+        showBgJobToast('Salvando ponto de restauração diário...');
+        await createBackupSilently();
+        localStorage.setItem('familymoney_last_backup_date', todayStr);
+        showBgJobToast('Ponto de restauração diário concluído.', 2500, true);
+      }
+    } catch (err) {
+      console.warn('Erro na verificação de backup automático em segundo plano:', err);
+    }
+  }, 2500);
 }
 
 // ================= MOTOR DE PROJEÇÃO FINANCEIRA (6 MESES) =================
@@ -841,6 +897,19 @@ function renderTransactionsTable() {
   const filterStartDate = document.getElementById('tx-filter-start-date').value;
   const filterEndDate = document.getElementById('tx-filter-end-date').value;
 
+  // Preservar filtros na sessão
+  try {
+    sessionStorage.setItem('fm_tx_filters', JSON.stringify({
+      paymentMethod: filterPaymentMethod,
+      category: filterCategory,
+      minVal: filterMinVal,
+      startDate: filterStartDate,
+      endDate: filterEndDate,
+      limit: state.transactionsLimit || 25,
+      page: state.transactionsPage || 1
+    }));
+  } catch (e) {}
+
   // Reset do checkbox "Selecionar Todos"
   const selectAllCb = document.getElementById('tx-select-all');
   if (selectAllCb) selectAllCb.checked = false;
@@ -882,12 +951,12 @@ function renderTransactionsTable() {
     return matchesPaymentMethod && matchesCategory && matchesMinVal && matchesDate;
   });
 
-  // Controlar Paginação
+  // Controlar Paginação com Limite Configurável
   if (!state.transactionsPage) {
     state.transactionsPage = 1;
   }
   
-  const limit = 25;
+  const limit = state.transactionsLimit || 25;
   const totalItems = filtered.length;
   const totalPages = Math.ceil(totalItems / limit) || 1;
   
@@ -902,15 +971,28 @@ function renderTransactionsTable() {
   const endIndex = startIndex + limit;
   const paginatedList = filtered.slice(startIndex, endIndex);
 
-  // Renderizar tabela
+  // Renderizar tabela com busca O(1) via hash maps
   if (paginatedList.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum lançamento encontrado.</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10" style="padding: 0;">
+          <div class="table-empty-state">
+            <i data-lucide="search-x"></i>
+            <h4>Nenhum lançamento encontrado</h4>
+            <p>Nenhum registro corresponde aos filtros de data, valor, categoria ou pagamento.</p>
+            <button class="btn btn-outline" onclick="clearTxFilters()" style="width: auto; padding: 8px 16px; font-size: 0.8rem;">
+              <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> Limpar Filtros
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
   } else {
     tbody.innerHTML = paginatedList.map(t => {
-      const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
-      const tag = state.tags ? state.tags.find(g => g.id === t.tag_id || g.id === t.tagId) : null;
+      const cat = state.lookupMaps.categories.get(t.category_id || t.categoryId);
+      const tag = state.lookupMaps.tags.get(t.tag_id || t.tagId);
       const tagHtml = tag ? ` <span class="badge-tag">#${tag.name}</span>` : '';
-      const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
+      const usr = state.lookupMaps.users.get(t.user_id || t.userId);
       const whoLaunched = usr ? usr.name : 'Família';
       
       let pmLabel = '';
@@ -919,14 +1001,14 @@ function renderTransactionsTable() {
       const destAccIdNum = t.destination_account_id || t.destinationAccountId;
 
       if (t.payment_method === 'card' || t.paymentMethod === 'card') {
-        const card = state.cards.find(c => c.id === cardIdNum);
+        const card = state.lookupMaps.cards.get(cardIdNum);
         pmLabel = `<i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${card ? card.name : 'Cartão'}`;
       } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
-        const originAcc = state.accounts.find(a => a.id === accIdNum);
-        const destAcc = state.accounts.find(a => a.id === destAccIdNum);
+        const originAcc = state.lookupMaps.accounts.get(accIdNum);
+        const destAcc = state.lookupMaps.accounts.get(destAccIdNum);
         pmLabel = `<i data-lucide="shuffle" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${originAcc ? originAcc.name : 'Origem'} ➔ ${destAcc ? destAcc.name : 'Destino'}`;
       } else {
-        const acc = state.accounts.find(a => a.id === accIdNum);
+        const acc = state.lookupMaps.accounts.get(accIdNum);
         pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
       }
 
@@ -947,20 +1029,20 @@ function renderTransactionsTable() {
       }
 
       const receiptHtml = t.receipt_url 
-        ? `<button class="btn-receipt" onclick="viewReceipt(${t.id})" title="Ver Recibo" style="background: rgba(79, 70, 229, 0.1); border: 1px solid rgba(79, 70, 229, 0.3); border-radius: 4px; padding: 4px; cursor: pointer; color: var(--neon-purple); display: inline-flex; align-items: center; justify-content: center; margin-right: 5px;">
+        ? `<button class="btn-receipt" onclick="viewReceipt(${t.id})" aria-label="Ver Comprovante" title="Ver Recibo" style="background: rgba(79, 70, 229, 0.1); border: 1px solid rgba(79, 70, 229, 0.3); border-radius: 4px; padding: 4px; cursor: pointer; color: var(--neon-purple); display: inline-flex; align-items: center; justify-content: center; margin-right: 5px;">
              <i data-lucide="image" style="width: 14px; height: 14px;"></i>
            </button>` 
         : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
 
       const reconcileHtml = (!isEffective && t.payment_method !== 'card')
-        ? `<button class="btn-reconcile" onclick="reconcileTransaction(${t.id})" title="Efetivar Lançamento (Abater saldo da conta agora)" style="margin-right: 5px;">
+        ? `<button class="btn-reconcile" onclick="reconcileTransaction(${t.id})" aria-label="Efetivar Lançamento" title="Efetivar Lançamento (Abater saldo da conta agora)" style="margin-right: 5px;">
              <i data-lucide="check" style="width: 12px; height: 12px;"></i> Efetivar
            </button>`
         : '';
 
       return `
         <tr>
-          <td style="text-align: center;"><input type="checkbox" class="tx-select-row" value="${t.id}" style="cursor: pointer; width: 16px; height: 16px;"></td>
+          <td style="text-align: center;"><input type="checkbox" class="tx-select-row" value="${t.id}" aria-label="Selecionar lançamento" style="cursor: pointer; width: 16px; height: 16px;"></td>
           <td>${formatDate(t.date)}</td>
           <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
           <td>
@@ -977,10 +1059,10 @@ function renderTransactionsTable() {
             <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: center;">
               ${reconcileHtml ? `<div style="margin-bottom: 2px;">${reconcileHtml}</div>` : ''}
               <div style="display: flex; align-items: center; gap: 4px;">
-                <button class="btn-edit" onclick="editTransaction(${t.id})" title="Alterar lançamento">
+                <button class="btn-edit" onclick="editTransaction(${t.id})" aria-label="Editar lançamento" title="Alterar lançamento">
                   <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
                 </button>
-                <button class="btn-delete" onclick="deleteTransaction(${t.id})" title="Excluir lançamento">
+                <button class="btn-delete" onclick="deleteTransaction(${t.id})" aria-label="Excluir lançamento" title="Excluir lançamento">
                   <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
                 </button>
               </div>
@@ -991,29 +1073,40 @@ function renderTransactionsTable() {
     }).join('');
   }
 
-  // Renderizar controles de paginação
+  // Renderizar controles de paginação acessíveis
   const paginationContainer = document.getElementById('tx-pagination-container');
   if (paginationContainer) {
     if (totalItems === 0) {
       paginationContainer.innerHTML = '';
     } else {
       paginationContainer.innerHTML = `
-        <span style="font-size: 0.85rem; color: var(--text-muted);">
-          Mostrando ${startIndex + 1} a ${Math.min(endIndex, totalItems)} de ${totalItems} lançamentos
-        </span>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="btn btn-outline" style="width: auto; padding: 6px 12px; font-size: 0.8rem; height: 32px;" 
+        <div class="page-size-selector">
+          <span>Exibir:</span>
+          <select aria-label="Quantidade de lançamentos por página" onchange="changeTxPageSize(this.value)">
+            <option value="10" ${limit === 10 ? 'selected' : ''}>10 por página</option>
+            <option value="25" ${limit === 25 ? 'selected' : ''}>25 por página</option>
+            <option value="50" ${limit === 50 ? 'selected' : ''}>50 por página</option>
+            <option value="100" ${limit === 100 ? 'selected' : ''}>100 por página</option>
+          </select>
+          <span style="margin-left: 8px; font-size: 0.82rem; color: var(--text-muted);">
+            (${startIndex + 1} - ${Math.min(endIndex, totalItems)} de ${totalItems})
+          </span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;" aria-label="Navegação de páginas">
+          <button class="pagination-btn" 
+                  aria-label="Página anterior"
                   onclick="changeTxPage(${state.transactionsPage - 1})" 
                   ${state.transactionsPage === 1 ? 'disabled' : ''}>
-            <i data-lucide="chevron-left" style="width: 14px; height: 14px; vertical-align: middle;"></i> Anterior
+            <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i> Anterior
           </button>
-          <span style="font-size: 0.85rem; color: #fff; font-weight: 500; padding: 0 10px;">
-            Página ${state.transactionsPage} de ${totalPages}
+          <span style="font-size: 0.85rem; color: #fff; font-weight: 500; padding: 0 10px;" aria-live="polite">
+            ${state.transactionsPage} / ${totalPages}
           </span>
-          <button class="btn btn-outline" style="width: auto; padding: 6px 12px; font-size: 0.8rem; height: 32px;" 
+          <button class="pagination-btn" 
+                  aria-label="Próxima página"
                   onclick="changeTxPage(${state.transactionsPage + 1})" 
                   ${state.transactionsPage === totalPages ? 'disabled' : ''}>
-            Próxima <i data-lucide="chevron-right" style="width: 14px; height: 14px; vertical-align: middle;"></i>
+            Próxima <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i>
           </button>
         </div>
       `;
@@ -1406,16 +1499,20 @@ function renderAdminTables() {
   try {
     const accountsTbody = document.getElementById('admin-accounts-tbody');
     if (accountsTbody) {
-      accountsTbody.innerHTML = state.accounts.map(a => `
-        <tr>
-          <td>${a.name}</td>
-          <td class="green-neon" style="font-weight: 600;">${formatCurrency(a.balance)}</td>
-          <td>
-            <button class="btn-edit" onclick="editAccount(${a.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-            <button class="btn-delete" onclick="deleteAccount(${a.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-          </td>
-        </tr>
-      `).join('');
+      if (state.accounts.length === 0) {
+        accountsTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 15px;">Nenhuma conta bancária cadastrada.</td></tr>`;
+      } else {
+        accountsTbody.innerHTML = state.accounts.map(a => `
+          <tr>
+            <td>${a.name}</td>
+            <td class="green-neon" style="font-weight: 600;">${formatCurrency(a.balance)}</td>
+            <td>
+              <button class="btn-edit" onclick="editAccount(${a.id})" aria-label="Editar conta ${a.name}" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+              <button class="btn-delete" onclick="deleteAccount(${a.id})" aria-label="Excluir conta ${a.name}" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+            </td>
+          </tr>
+        `).join('');
+      }
     }
 
     const cardAccSelect = document.getElementById('card-account');
@@ -1431,22 +1528,26 @@ function renderAdminTables() {
   try {
     const cardsTbody = document.getElementById('admin-cards-tbody');
     if (cardsTbody) {
-      cardsTbody.innerHTML = state.cards.map(c => {
-        const accIdNum = c.account_id || c.accountId;
-        const acc = state.accounts.find(a => a.id === accIdNum);
-        return `
-          <tr>
-            <td style="font-weight: 500;">${c.name}</td>
-            <td>Dia ${c.closing_day || c.closingDay}</td>
-            <td>Dia ${c.due_day || c.dueDay}</td>
-            <td>${acc ? acc.name : 'Desconhecida'}</td>
-            <td>
-              <button class="btn-edit" onclick="editCard(${c.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-              <button class="btn-delete" onclick="deleteCard(${c.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-            </td>
-          </tr>
-        `;
-      }).join('');
+      if (state.cards.length === 0) {
+        cardsTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 15px;">Nenhum cartão de crédito cadastrado.</td></tr>`;
+      } else {
+        cardsTbody.innerHTML = state.cards.map(c => {
+          const accIdNum = c.account_id || c.accountId;
+          const acc = state.lookupMaps.accounts.get(accIdNum);
+          return `
+            <tr>
+              <td style="font-weight: 500;">${c.name}</td>
+              <td>Dia ${c.closing_day || c.closingDay}</td>
+              <td>Dia ${c.due_day || c.dueDay}</td>
+              <td>${acc ? acc.name : 'Desconhecida'}</td>
+              <td>
+                <button class="btn-edit" onclick="editCard(${c.id})" aria-label="Editar cartão ${c.name}" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+                <button class="btn-delete" onclick="deleteCard(${c.id})" aria-label="Excluir cartão ${c.name}" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
     }
   } catch (err) {
     console.error('Erro ao renderizar cartões na administração:', err);
@@ -1491,39 +1592,43 @@ function renderAdminTables() {
   try {
     const fixedTbody = document.getElementById('admin-fixed-tbody');
     if (fixedTbody) {
-      fixedTbody.innerHTML = state.fixedItems.map(f => {
-        const accIdNum = f.account_id || f.accountId;
-        const cardIdNum = f.card_id || f.cardId;
-        const catIdNum = f.category_id || f.categoryId;
-        const acc = state.accounts.find(a => a.id === accIdNum);
-        const card = state.cards.find(c => c.id === cardIdNum);
-        const cat = state.categories.find(c => c.id === catIdNum);
-        const catBadge = cat ? `<span class="badge-category" style="background-color: ${cat.color}22; color: ${cat.color}; border: 1px solid ${cat.color}44;">${cat.name}</span>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
-        
-        // Nome da origem (Conta ou Cartão)
-        const sourceLabel = card 
-          ? `<i data-lucide="credit-card" style="width: 12px; height: 12px; color: var(--neon-purple); vertical-align: middle; display: inline-block; margin-right: 4px;"></i>${card.name}` 
-          : (acc ? `<i data-lucide="wallet" style="width: 12px; height: 12px; color: var(--neon-green); vertical-align: middle; display: inline-block; margin-right: 4px;"></i>${acc.name}` : 'Desconhecida');
+      if (state.fixedItems.length === 0) {
+        fixedTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 15px;">Nenhum item fixo cadastrado.</td></tr>`;
+      } else {
+        fixedTbody.innerHTML = state.fixedItems.map(f => {
+          const accIdNum = f.account_id || f.accountId;
+          const cardIdNum = f.card_id || f.cardId;
+          const catIdNum = f.category_id || f.categoryId;
+          const acc = state.lookupMaps.accounts.get(accIdNum);
+          const card = state.lookupMaps.cards.get(cardIdNum);
+          const cat = state.lookupMaps.categories.get(catIdNum);
+          const catBadge = cat ? `<span class="badge-category" style="background-color: ${cat.color}22; color: ${cat.color}; border: 1px solid ${cat.color}44;">${cat.name}</span>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
+          
+          // Nome da origem (Conta ou Cartão)
+          const sourceLabel = card 
+            ? `<i data-lucide="credit-card" style="width: 12px; height: 12px; color: var(--neon-purple); vertical-align: middle; display: inline-block; margin-right: 4px;"></i>${card.name}` 
+            : (acc ? `<i data-lucide="wallet" style="width: 12px; height: 12px; color: var(--neon-green); vertical-align: middle; display: inline-block; margin-right: 4px;"></i>${acc.name}` : 'Desconhecida');
 
-        return `
-          <tr>
-            <td style="font-weight: 500;">${f.description}</td>
-            <td>${formatCurrency(f.amount)}</td>
-            <td>Dia ${f.day_of_month || f.dayOfMonth}</td>
-            <td>
-              <span class="badge-category" style="background: ${f.type === 'income' ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 59, 48, 0.1)'}; color: ${f.type === 'income' ? 'var(--neon-green)' : 'var(--neon-red)'}; border: 1px solid ${f.type === 'income' ? 'rgba(57, 255, 20, 0.2)' : 'rgba(255, 59, 48, 0.2)'}">
-                ${f.type === 'income' ? 'Receita' : 'Despesa'}
-              </span>
-            </td>
-            <td>${catBadge}</td>
-            <td>${sourceLabel}</td>
-            <td>
-              <button class="btn-edit" onclick="editFixed(${f.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-              <button class="btn-delete" onclick="deleteFixed(${f.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-            </td>
-          </tr>
-        `;
-      }).join('');
+          return `
+            <tr>
+              <td style="font-weight: 500;">${f.description}</td>
+              <td>${formatCurrency(f.amount)}</td>
+              <td>Dia ${f.day_of_month || f.dayOfMonth}</td>
+              <td>
+                <span class="badge-category" style="background: ${f.type === 'income' ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 59, 48, 0.1)'}; color: ${f.type === 'income' ? 'var(--neon-green)' : 'var(--neon-red)'}; border: 1px solid ${f.type === 'income' ? 'rgba(57, 255, 20, 0.2)' : 'rgba(255, 59, 48, 0.2)'}">
+                  ${f.type === 'income' ? 'Receita' : 'Despesa'}
+                </span>
+              </td>
+              <td>${catBadge}</td>
+              <td>${sourceLabel}</td>
+              <td>
+                <button class="btn-edit" onclick="editFixed(${f.id})" aria-label="Editar item fixo ${f.description}" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+                <button class="btn-delete" onclick="deleteFixed(${f.id})" aria-label="Excluir item fixo ${f.description}" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
     }
   } catch (err) {
     console.error('Erro ao renderizar itens fixos na administração:', err);
@@ -1533,16 +1638,20 @@ function renderAdminTables() {
   try {
     const categoriesTbody = document.getElementById('admin-categories-tbody');
     if (categoriesTbody) {
-      categoriesTbody.innerHTML = state.categories.map(c => `
-        <tr>
-          <td style="font-weight: 500;">${c.name}</td>
-          <td><i data-lucide="${c.icon}" style="width: 18px; height: 18px; color: ${c.color}"></i></td>
-          <td>
-            <button class="btn-edit" onclick="editCategory(${c.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-            <button class="btn-delete" onclick="deleteCategory(${c.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-          </td>
-        </tr>
-      `).join('');
+      if (state.categories.length === 0) {
+        categoriesTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 15px;">Nenhuma categoria cadastrada.</td></tr>`;
+      } else {
+        categoriesTbody.innerHTML = state.categories.map(c => `
+          <tr>
+            <td style="font-weight: 500;">${c.name}</td>
+            <td><i data-lucide="${c.icon}" style="width: 18px; height: 18px; color: ${c.color}"></i></td>
+            <td>
+              <button class="btn-edit" onclick="editCategory(${c.id})" aria-label="Editar categoria ${c.name}" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+              <button class="btn-delete" onclick="deleteCategory(${c.id})" aria-label="Excluir categoria ${c.name}" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+            </td>
+          </tr>
+        `).join('');
+      }
     }
   } catch (err) {
     console.error('Erro ao renderizar categorias na administração:', err);
@@ -1557,8 +1666,8 @@ function renderAdminTables() {
           <tr>
             <td style="font-weight: 500;">${t.name}</td>
             <td>
-              <button class="btn-edit" onclick="editTag(${t.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-              <button class="btn-delete" onclick="deleteTag(${t.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+              <button class="btn-edit" onclick="editTag(${t.id})" aria-label="Editar tag ${t.name}" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+              <button class="btn-delete" onclick="deleteTag(${t.id})" aria-label="Excluir tag ${t.name}" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
             </td>
           </tr>
         `).join('');
@@ -1570,21 +1679,25 @@ function renderAdminTables() {
     console.error('Erro ao renderizar tags na administração:', err);
   }
 
-  // Usuários
+  // Usuários (Com mascaramento seguro de senhas)
   try {
     const usersTbody = document.getElementById('admin-users-tbody');
     if (usersTbody) {
-      usersTbody.innerHTML = state.users.map(u => `
-        <tr>
-          <td style="font-weight: 500;">${u.name}</td>
-          <td><code>${u.email}</code></td>
-          <td><code>${u.password}</code></td>
-          <td>
-            <button class="btn-edit" onclick="editUser(${u.id})" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
-            <button class="btn-delete" onclick="deleteUser(${u.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-          </td>
-        </tr>
-      `).join('');
+      if (state.users.length === 0) {
+        usersTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 15px;">Nenhum usuário cadastrado.</td></tr>`;
+      } else {
+        usersTbody.innerHTML = state.users.map(u => `
+          <tr>
+            <td style="font-weight: 500;">${u.name}</td>
+            <td><code>${u.email}</code></td>
+            <td><span style="letter-spacing: 2px; color: var(--text-muted); font-size: 0.85rem;" aria-label="Senha protegida">••••••••</span></td>
+            <td>
+              <button class="btn-edit" onclick="editUser(${u.id})" aria-label="Editar usuário ${u.name}" title="Editar"><i data-lucide="edit-3" style="width: 16px; height: 16px;"></i></button>
+              <button class="btn-delete" onclick="deleteUser(${u.id})" aria-label="Excluir usuário ${u.name}" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+            </td>
+          </tr>
+        `).join('');
+      }
     }
   } catch (err) {
     console.error('Erro ao renderizar usuários na administração:', err);
@@ -1594,24 +1707,28 @@ function renderAdminTables() {
   try {
     const backupsTbody = document.getElementById('admin-backups-tbody');
     if (backupsTbody) {
-      backupsTbody.innerHTML = state.backups.map(b => {
-        const dateObj = new Date(b.created_at || b.createdAt);
-        const dateStr = dateObj.toLocaleDateString('pt-BR');
-        const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        return `
-          <tr>
-            <td style="font-weight: 500;">${dateStr}</td>
-            <td><code>${timeStr}</code></td>
-            <td><span class="badge-category" style="background: rgba(57, 255, 20, 0.1); color: var(--neon-green); border: 1px solid rgba(57, 255, 20, 0.2)">Sucesso</span></td>
-            <td>
-              <button class="btn btn-outline" style="padding: 4px 10px; width: auto; font-size: 0.8rem; border-color: rgba(255,255,255,0.2);" onclick="restoreBackup(${b.id})">
-                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;"></i> Restaurar
-              </button>
-              <button class="btn-delete" onclick="deleteBackup(${b.id})" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-            </td>
-          </tr>
-        `;
-      }).join('');
+      if (state.backups.length === 0) {
+        backupsTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 15px;">Nenhum ponto de restauração registrado.</td></tr>`;
+      } else {
+        backupsTbody.innerHTML = state.backups.map(b => {
+          const dateObj = new Date(b.created_at || b.createdAt);
+          const dateStr = dateObj.toLocaleDateString('pt-BR');
+          const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          return `
+            <tr>
+              <td style="font-weight: 500;">${dateStr}</td>
+              <td><code>${timeStr}</code></td>
+              <td><span class="badge-category" style="background: rgba(57, 255, 20, 0.1); color: var(--neon-green); border: 1px solid rgba(57, 255, 20, 0.2)">Disponível</span></td>
+              <td>
+                <button class="btn btn-outline" style="padding: 4px 10px; width: auto; font-size: 0.8rem; border-color: rgba(255,255,255,0.2);" onclick="restoreBackup(${b.id})" aria-label="Restaurar backup de ${dateStr}">
+                  <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;"></i> Restaurar
+                </button>
+                <button class="btn-delete" onclick="deleteBackup(${b.id})" aria-label="Excluir backup de ${dateStr}" title="Excluir"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
     }
   } catch (err) {
     console.error('Erro ao renderizar backups na administração:', err);
@@ -2282,7 +2399,8 @@ function editUser(id) {
   document.getElementById('user-id').value = u.id;
   document.getElementById('user-name').value = u.name;
   document.getElementById('user-email').value = u.email;
-  document.getElementById('user-password').value = u.password;
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-password').placeholder = 'Deixe em branco para não alterar';
   document.getElementById('user-is-admin').checked = u.is_admin !== false;
   document.getElementById('user-only-self-data').checked = u.only_self_data === true;
 
@@ -2294,6 +2412,7 @@ function editUser(id) {
 function clearUserForm() {
   document.getElementById('user-id').value = '';
   document.getElementById('user-form').reset();
+  document.getElementById('user-password').placeholder = '';
   document.getElementById('user-is-admin').checked = true;
   document.getElementById('user-only-self-data').checked = false;
   document.getElementById('user-form-title').textContent = 'Cadastrar Novo Usuário';
@@ -2354,7 +2473,7 @@ async function createBackupSilently() {
   try {
     const { error } = await state.supabase.from('app_backups').insert([{ data: backupData }]);
     if (error) throw error;
-    const { data: backupsData } = await state.supabase.from('app_backups').select('*').order('created_at', { ascending: false });
+    const { data: backupsData } = await state.supabase.from('app_backups').select('id, created_at').order('created_at', { ascending: false });
     state.backups = backupsData || [];
     renderAdminTables();
   } catch (err) {
@@ -2364,6 +2483,7 @@ async function createBackupSilently() {
 
 async function createBackup() {
   if (!state.supabase) return;
+  showBgJobToast('Gerando ponto de restauração...');
   const backupData = {
     accounts: state.accounts,
     cards: state.cards,
@@ -2376,7 +2496,7 @@ async function createBackup() {
   try {
     const { error } = await state.supabase.from('app_backups').insert([{ data: backupData }]);
     if (error) throw error;
-    alert('Backup manual gerado com sucesso!');
+    showBgJobToast('Ponto de restauração manual criado com sucesso!', 3000, true);
     loadAllData();
   } catch (err) {
     alert('Erro ao gerar backup: ' + err.message);
@@ -2385,29 +2505,43 @@ async function createBackup() {
 
 async function restoreBackup(backupId) {
   if (!state.supabase) return;
-  const backup = state.backups.find(b => b.id === backupId);
-  if (!backup) {
-    alert('Backup não encontrado.');
+  const backupMeta = state.backups.find(b => b.id === backupId);
+  if (!backupMeta) {
+    alert('Ponto de restauração não encontrado.');
     return;
   }
 
   const confirmMsg = 'ATENÇÃO!\n\nDeseja realmente restaurar o aplicativo para este ponto de backup?\n' +
-                     'Isso apagará permanentemente todos os dados atuais das tabelas de transações, cartões, contas e usuários, e os substituirá pelos dados desse backup.\n\n' +
+                     'Isso apagará os dados atuais das tabelas de transações, cartões, contas e usuários, e os substituirá pelos dados desse backup.\n\n' +
                      'Esta ação não pode ser desfeita. Confirmar?';
                      
   if (!confirm(confirmMsg)) return;
 
   try {
-    // 1. Limpar todas as tabelas atuais
+    // 1. Buscar payload completo de forma sob-demanda (Lazy Fetch)
+    showBgJobToast('Passo 1/4: Obtendo arquivo de restauração...');
+    const { data: fullBackup, error: fetchErr } = await state.supabase
+      .from('app_backups')
+      .select('data')
+      .eq('id', backupId)
+      .single();
+
+    if (fetchErr || !fullBackup || !fullBackup.data) {
+      throw new Error('Não foi possível obter o arquivo de dados do backup: ' + (fetchErr?.message || 'Arquivo vazio'));
+    }
+
+    const backupObj = fullBackup.data;
+
+    // 2. Limpar todas as tabelas atuais
+    showBgJobToast('Passo 2/4: Limpando base atual com segurança...');
     const tables = ['transactions', 'fixed_items', 'cards', 'categories', 'accounts', 'app_users'];
     for (const t of tables) {
       const { error } = await state.supabase.from(t).delete().neq('id', 0);
       if (error) throw error;
     }
 
-    // 2. Restaurar dados na ordem de dependências
-    const backupObj = backup.data;
-
+    // 3. Restaurar dados na ordem de dependências relacionais
+    showBgJobToast('Passo 3/4: Restaurando entidades e lançamentos...');
     if (backupObj.accounts && backupObj.accounts.length > 0) {
       const { error } = await state.supabase.from('accounts').insert(backupObj.accounts);
       if (error) throw error;
@@ -2433,7 +2567,8 @@ async function restoreBackup(backupId) {
       if (error) throw error;
     }
 
-    alert('Backup restaurado com sucesso!\n\nNota: Se encontrar erros de "duplicate key" ao cadastrar novos itens, execute a seção de ajuste de sequências (setval) no console SQL do seu Supabase.');
+    // 4. Conclusão
+    showBgJobToast('Passo 4/4: Restauração finalizada com sucesso!', 4000, true);
     
     const currentEmail = sessionStorage.getItem('familymoney_user_email');
     const userInBackup = backupObj.users ? backupObj.users.find(u => u.email === currentEmail) : null;
@@ -2443,7 +2578,8 @@ async function restoreBackup(backupId) {
       loadAllData();
     }
   } catch (err) {
-    alert('Erro crítico durante a restauração: ' + err.message + '\n\nRecomenda-se rodar o script schema.sql no Supabase SQL Editor para recriar as tabelas se necessário.');
+    console.error('Erro na restauração:', err);
+    alert('Erro ao restaurar backup: ' + err.message);
   }
 }
 
@@ -2566,7 +2702,17 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     
     if (data && data.length > 0) {
       const dbUser = data[0];
-      if (dbUser.password === typedPassword) {
+      const isMatch = await verifyPassword(typedPassword, dbUser.password);
+      if (isMatch) {
+        // Migração transparente (lazy migration) de senha para hash SHA-256 no Supabase
+        if (!dbUser.password || !dbUser.password.startsWith('sha256:')) {
+          try {
+            const hashed = await hashPassword(typedPassword);
+            await state.supabase.from('app_users').update({ password: hashed }).eq('id', dbUser.id);
+          } catch (migrateErr) {
+            console.warn('Não foi possível migrar senha para hash:', migrateErr);
+          }
+        }
         sessionStorage.setItem('familymoney_user_email', dbUser.email);
         sessionStorage.setItem('familymoney_user_name', dbUser.name);
         authenticated = true;
@@ -2574,11 +2720,16 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     }
     
     if (!authenticated) {
-      const foundUser = state.users.find(u => u.email.toLowerCase().trim() === selectedEmail && u.password === typedPassword);
-      if (foundUser) {
-        sessionStorage.setItem('familymoney_user_email', foundUser.email);
-        sessionStorage.setItem('familymoney_user_name', foundUser.name);
-        authenticated = true;
+      for (const u of state.users) {
+        if (u.email.toLowerCase().trim() === selectedEmail) {
+          const isMatch = await verifyPassword(typedPassword, u.password);
+          if (isMatch) {
+            sessionStorage.setItem('familymoney_user_email', u.email);
+            sessionStorage.setItem('familymoney_user_name', u.name);
+            authenticated = true;
+            break;
+          }
+        }
       }
     }
     
@@ -2594,18 +2745,8 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     errorMsg.classList.remove('hide');
   } catch (err) {
     console.error('Erro de login:', err);
-    let foundUser = state.users.find(u => u.email.toLowerCase().trim() === selectedEmail && u.password === typedPassword);
-    if (foundUser) {
-      sessionStorage.setItem('familymoney_user_email', foundUser.email);
-      sessionStorage.setItem('familymoney_user_name', foundUser.name);
-      errorMsg.classList.add('hide');
-      passwordInput.value = '';
-      if (btn) btn.classList.remove('is-loading');
-      initApp();
-    } else {
-      errorMsg.textContent = 'Erro ao conectar: ' + err.message;
-      errorMsg.classList.remove('hide');
-    }
+    errorMsg.textContent = 'Erro ao conectar: ' + err.message;
+    errorMsg.classList.remove('hide');
   } finally {
     if (btn) btn.classList.remove('is-loading');
   }
@@ -3205,10 +3346,17 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
     const payload = { 
       name, 
       email, 
-      password,
-      is_admin: isAdmin,
+      is_admin: isAdmin, 
       only_self_data: onlySelfData
     };
+
+    // Se forneceu uma nova senha, gera o hash seguro
+    if (password && password.trim().length > 0) {
+      payload.password = await hashPassword(password.trim());
+    } else if (!id) {
+      // Para novo usuário sem senha informada, define padrão criptografado
+      payload.password = await hashPassword('123');
+    }
     
     if (id) {
       const { error } = await state.supabase.from('app_users').update(payload).eq('id', id);
@@ -3220,14 +3368,7 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
     clearUserForm();
     loadAllData();
   } catch (err) {
-    alert(err.message);
-    // Fallback em memória para teste
-    if (!id) {
-      const tempId = Date.now();
-      state.users.push({ id: tempId, name, email, password, is_admin: isAdmin, only_self_data: onlySelfData });
-      clearUserForm();
-      renderAdminTables();
-    }
+    alert('Erro ao salvar usuário: ' + err.message);
   }
 });
 document.getElementById('clear-user-form-btn').addEventListener('click', clearUserForm);
@@ -3388,15 +3529,15 @@ function renderReportsTable() {
   // Salvar no estado das buscas para o exportador CSV de relatórios
   state.filteredReports = filtered;
 
-  // Calcular Resumos do Filtro
+  // Calcular Resumos do Filtro com buscas O(1)
   let totalIncome = 0;
   let totalExpense = 0;
 
   filtered.forEach(t => {
-    const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
+    const cat = state.lookupMaps.categories.get(t.category_id || t.categoryId);
     const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
 
-    if (finalType === 'transfer') return; // Transferências são neutras em termos de receita/despesa líquida
+    if (finalType === 'transfer') return;
 
     if (finalType === 'income') {
       totalIncome += parseFloat(t.amount);
@@ -3414,82 +3555,156 @@ function renderReportsTable() {
   netElem.textContent = `${netBalance >= 0 ? '+' : ''}${formatCurrency(netBalance)}`;
   netElem.className = netBalance >= 0 ? 'green-neon' : 'red-neon';
 
+  // Paginação da Tabela de Relatórios
+  if (!state.reportsPage) {
+    state.reportsPage = 1;
+  }
+  const repLimit = state.reportsLimit || 25;
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / repLimit) || 1;
+
+  if (state.reportsPage > totalPages) state.reportsPage = totalPages;
+  if (state.reportsPage < 1) state.reportsPage = 1;
+
+  const startIndex = (state.reportsPage - 1) * repLimit;
+  const endIndex = startIndex + repLimit;
+  const paginatedReports = filtered.slice(startIndex, endIndex);
+
   // Renderizar a tabela
-  if (filtered.length === 0) {
+  if (totalItems === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum lançamento encontrado para os filtros selecionados</td>
+        <td colspan="8" style="padding: 0;">
+          <div class="table-empty-state">
+            <i data-lucide="filter-x"></i>
+            <h4>Nenhum lançamento encontrado para este filtro</h4>
+            <p>Tente ajustar o intervalo de datas ou remover filtros de categoria/cartão.</p>
+            <button class="btn btn-outline" onclick="document.getElementById('clear-reports-filters-btn').click()" style="width: auto; padding: 8px 16px; font-size: 0.8rem;">
+              <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> Limpar Filtros
+            </button>
+          </div>
+        </td>
       </tr>
     `;
-    return;
+  } else {
+    tbody.innerHTML = paginatedReports.map(t => {
+      const cat = state.lookupMaps.categories.get(t.category_id || t.categoryId);
+      const tag = state.lookupMaps.tags.get(t.tag_id || t.tagId);
+      const tagHtml = tag ? ` <span class="badge-tag">#${tag.name}</span>` : '';
+      const usr = state.lookupMaps.users.get(t.user_id || t.userId);
+      const whoLaunched = usr ? usr.name : 'Família';
+      
+      let pmLabel = '';
+      const cardIdNum = t.card_id || t.cardId;
+      const accIdNum = t.account_id || t.accountId;
+      const destAccIdNum = t.destination_account_id || t.destinationAccountId;
+
+      if (t.payment_method === 'card' || t.paymentMethod === 'card') {
+        const card = state.lookupMaps.cards.get(cardIdNum);
+        pmLabel = `<i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${card ? card.name : 'Cartão'}`;
+      } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
+        const originAcc = state.lookupMaps.accounts.get(accIdNum);
+        const destAcc = state.lookupMaps.accounts.get(destAccIdNum);
+        pmLabel = `<i data-lucide="shuffle" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${originAcc ? originAcc.name : 'Origem'} ➔ ${destAcc ? destAcc.name : 'Destino'}`;
+      } else {
+        const acc = state.lookupMaps.accounts.get(accIdNum);
+        pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
+      }
+
+      const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+
+      let valueHtml = '';
+      const isEffective = t.is_effective !== false;
+      if (finalType === 'transfer') {
+        valueHtml = `<span style="font-weight: 600; color: var(--neon-purple);">${formatCurrency(t.amount)}</span>`;
+      } else if (finalType === 'income') {
+        valueHtml = `<span style="font-weight: 600; color: var(--neon-green);">+${formatCurrency(t.amount)}</span>`;
+      } else {
+        valueHtml = `<span style="font-weight: 600; color: var(--neon-red);">-${formatCurrency(t.amount)}</span>`;
+      }
+
+      if (!isEffective) {
+        valueHtml += `<br><span class="badge-pending" style="margin-top: 4px;">Pendente</span>`;
+      }
+
+      const receiptHtml = t.receipt_url 
+        ? `<button class="btn-receipt" onclick="viewReceipt(${t.id})" aria-label="Ver Comprovante" title="Ver Recibo" style="background: rgba(79, 70, 229, 0.1); border: 1px solid rgba(79, 70, 229, 0.3); border-radius: 4px; padding: 4px; cursor: pointer; color: var(--neon-purple); display: inline-flex; align-items: center; justify-content: center;">
+             <i data-lucide="image" style="width: 14px; height: 14px;"></i>
+           </button>` 
+        : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
+
+      return `
+        <tr>
+          <td>${formatDate(t.date)}</td>
+          <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
+          <td>
+            <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
+              ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
+            </span>
+          </td>
+          <td>${whoLaunched}</td>
+          <td>${pmLabel}</td>
+          <td>${t.installments > 1 ? `${t.installments}x` : 'À vista'}</td>
+          <td>${valueHtml}</td>
+          <td style="text-align: center;">${receiptHtml}</td>
+        </tr>
+      `;
+    }).join('');
   }
 
-  tbody.innerHTML = filtered.map(t => {
-    const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
-    const tag = state.tags ? state.tags.find(g => g.id === t.tag_id || g.id === t.tagId) : null;
-    const tagHtml = tag ? ` <span class="badge-tag">#${tag.name}</span>` : '';
-    const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
-    const whoLaunched = usr ? usr.name : 'Família';
-    
-    let pmLabel = '';
-    const cardIdNum = t.card_id || t.cardId;
-    const accIdNum = t.account_id || t.accountId;
-    const destAccIdNum = t.destination_account_id || t.destinationAccountId;
-
-    if (t.payment_method === 'card' || t.paymentMethod === 'card') {
-      const card = state.cards.find(c => c.id === cardIdNum);
-      pmLabel = `<i data-lucide="credit-card" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${card ? card.name : 'Cartão'}`;
-    } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
-      const originAcc = state.accounts.find(a => a.id === accIdNum);
-      const destAcc = state.accounts.find(a => a.id === destAccIdNum);
-      pmLabel = `<i data-lucide="shuffle" style="width: 14px; height: 14px; color: var(--neon-purple);"></i> ${originAcc ? originAcc.name : 'Origem'} ➔ ${destAcc ? destAcc.name : 'Destino'}`;
+  // Renderizar controles de paginação de relatórios
+  const repPaginationContainer = document.getElementById('reports-pagination-container');
+  if (repPaginationContainer) {
+    if (totalItems === 0) {
+      repPaginationContainer.innerHTML = '';
     } else {
-      const acc = state.accounts.find(a => a.id === accIdNum);
-      pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
-    }
-
-    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
-
-    let valueHtml = '';
-    const isEffective = t.is_effective !== false;
-    if (finalType === 'transfer') {
-      valueHtml = `<span style="font-weight: 600; color: var(--neon-purple);">${formatCurrency(t.amount)}</span>`;
-    } else if (finalType === 'income') {
-      valueHtml = `<span style="font-weight: 600; color: var(--neon-green);">+${formatCurrency(t.amount)}</span>`;
-    } else {
-      valueHtml = `<span style="font-weight: 600; color: var(--neon-red);">-${formatCurrency(t.amount)}</span>`;
-    }
-
-    if (!isEffective) {
-      valueHtml += `<br><span class="badge-pending" style="margin-top: 4px;">Pendente</span>`;
-    }
-
-    const receiptHtml = t.receipt_url 
-      ? `<button class="btn-receipt" onclick="viewReceipt(${t.id})" title="Ver Recibo" style="background: rgba(79, 70, 229, 0.1); border: 1px solid rgba(79, 70, 229, 0.3); border-radius: 4px; padding: 4px; cursor: pointer; color: var(--neon-purple); display: inline-flex; align-items: center; justify-content: center;">
-           <i data-lucide="image" style="width: 14px; height: 14px;"></i>
-         </button>` 
-      : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
-
-    return `
-      <tr>
-        <td>${formatDate(t.date)}</td>
-        <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
-        <td>
-          <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
-            ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
+      repPaginationContainer.innerHTML = `
+        <div class="page-size-selector">
+          <span>Exibir:</span>
+          <select aria-label="Quantidade de itens por página nos relatórios" onchange="changeReportsPageSize(this.value)">
+            <option value="10" ${repLimit === 10 ? 'selected' : ''}>10 por página</option>
+            <option value="25" ${repLimit === 25 ? 'selected' : ''}>25 por página</option>
+            <option value="50" ${repLimit === 50 ? 'selected' : ''}>50 por página</option>
+            <option value="100" ${repLimit === 100 ? 'selected' : ''}>100 por página</option>
+          </select>
+          <span style="margin-left: 8px; font-size: 0.82rem; color: var(--text-muted);">
+            (${startIndex + 1} - ${Math.min(endIndex, totalItems)} de ${totalItems})
           </span>
-        </td>
-        <td>${whoLaunched}</td>
-        <td>${pmLabel}</td>
-        <td>${t.installments > 1 ? `${t.installments}x` : 'À vista'}</td>
-        <td>${valueHtml}</td>
-        <td style="text-align: center;">${receiptHtml}</td>
-      </tr>
-    `;
-  }).join('');
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;" aria-label="Navegação de páginas do relatório">
+          <button class="pagination-btn" 
+                  aria-label="Página anterior"
+                  onclick="changeReportsPage(${state.reportsPage - 1})" 
+                  ${state.reportsPage === 1 ? 'disabled' : ''}>
+            <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i> Anterior
+          </button>
+          <span style="font-size: 0.85rem; color: #fff; font-weight: 500; padding: 0 10px;" aria-live="polite">
+            ${state.reportsPage} / ${totalPages}
+          </span>
+          <button class="pagination-btn" 
+                  aria-label="Próxima página"
+                  onclick="changeReportsPage(${state.reportsPage + 1})" 
+                  ${state.reportsPage === totalPages ? 'disabled' : ''}>
+            Próxima <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i>
+          </button>
+        </div>
+      `;
+    }
+  }
 
   lucide.createIcons();
 }
+
+window.changeReportsPage = function(page) {
+  state.reportsPage = page;
+  renderReportsTable();
+};
+
+window.changeReportsPageSize = function(size) {
+  state.reportsLimit = parseInt(size) || 25;
+  state.reportsPage = 1;
+  renderReportsTable();
+};
 
 // Event Listeners dos Filtros de Relatório
 document.getElementById('rep-start-date').addEventListener('change', renderReportsTable);
@@ -3846,6 +4061,12 @@ window.changeTxPage = function(page) {
   renderTransactionsTable();
 };
 
+window.changeTxPageSize = function(size) {
+  state.transactionsLimit = parseInt(size) || 25;
+  state.transactionsPage = 1;
+  renderTransactionsTable();
+};
+
 window.exportSelectedTransactionsPDF = function() {
   const checkedBoxes = document.querySelectorAll('.tx-select-row:checked');
   if (checkedBoxes.length === 0) {
@@ -3853,6 +4074,8 @@ window.exportSelectedTransactionsPDF = function() {
     return;
   }
   
+  showBgJobToast('Preparando documento de conferência para impressão...', 2500);
+
   const selectedIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
   const selectedTxs = state.transactions.filter(t => selectedIds.includes(t.id));
   
@@ -3866,20 +4089,20 @@ window.exportSelectedTransactionsPDF = function() {
   }
   
   let rowsHtml = selectedTxs.map((t, idx) => {
-    const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
-    const tag = state.tags ? state.tags.find(g => g.id === t.tag_id || g.id === t.tagId) : null;
+    const cat = state.lookupMaps.categories.get(t.category_id || t.categoryId);
+    const tag = state.lookupMaps.tags.get(t.tag_id || t.tagId);
     const tagText = tag ? ` #${tag.name}` : '';
-    const usr = state.users.find(u => u.id === t.user_id || u.id === t.userId);
+    const usr = state.lookupMaps.users.get(t.user_id || t.userId);
     const whoLaunched = usr ? usr.name : 'Família';
     
     let pm = '';
     if (t.payment_method === 'card' || t.paymentMethod === 'card') {
-      const card = state.cards.find(c => c.id === (t.card_id || t.cardId));
+      const card = state.lookupMaps.cards.get(t.card_id || t.cardId);
       pm = `Cartão (${card ? card.name : 'N/A'})`;
     } else if (t.payment_method === 'transfer' || t.paymentMethod === 'transfer') {
       pm = 'Transferência';
     } else {
-      const acc = state.accounts.find(a => a.id === (t.account_id || t.accountId));
+      const acc = state.lookupMaps.accounts.get(t.account_id || t.accountId);
       pm = `Conta (${acc ? acc.name : 'N/A'})`;
     }
 
