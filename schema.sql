@@ -183,17 +183,42 @@ SELECT setval('paid_card_bills_id_seq', (SELECT COALESCE(MAX(id), 1) FROM paid_c
 -- =====================================================================
 -- 5. SEGURANÇA E POLÍTICAS RLS (ROW LEVEL SECURITY)
 -- =====================================================================
--- Para máxima segurança no Supabase, execute o bloco abaixo:
--- ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE cards ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE fixed_items ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE app_backups ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE paid_card_bills ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+-- Habilitar RLS em todas as tabelas públicas (resolve alerta rls_disabled_in_public)
+ALTER TABLE IF EXISTS public.accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.fixed_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.app_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.app_backups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.paid_card_bills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.tags ENABLE ROW LEVEL SECURITY;
 
--- Exemplo de política de acesso total por Anon Key autorizada:
--- CREATE POLICY "Acesso completo anon autorizada" ON transactions FOR ALL USING (true) WITH CHECK (true);
+-- Políticas de acesso para a aplicação (roles anon e authenticated)
+DROP POLICY IF EXISTS "Allow all access to accounts" ON public.accounts;
+CREATE POLICY "Allow all access to accounts" ON public.accounts FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to categories" ON public.categories;
+CREATE POLICY "Allow all access to categories" ON public.categories FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to cards" ON public.cards;
+CREATE POLICY "Allow all access to cards" ON public.cards FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to fixed_items" ON public.fixed_items;
+CREATE POLICY "Allow all access to fixed_items" ON public.fixed_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to transactions" ON public.transactions;
+CREATE POLICY "Allow all access to transactions" ON public.transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to app_users" ON public.app_users;
+CREATE POLICY "Allow all access to app_users" ON public.app_users FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to app_backups" ON public.app_backups;
+CREATE POLICY "Allow all access to app_backups" ON public.app_backups FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to paid_card_bills" ON public.paid_card_bills;
+CREATE POLICY "Allow all access to paid_card_bills" ON public.paid_card_bills FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to tags" ON public.tags;
+CREATE POLICY "Allow all access to tags" ON public.tags FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
