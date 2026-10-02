@@ -1,41 +1,50 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
-
-/* ================= SISTEMA DE CORES E VARIÁVEIS ================= */
+/* ================= SISTEMA DE CORES E VARIÁVEIS (APPLE DESIGN SYSTEM - MNOC-X) ================= */
 :root {
-  /* Cores Base (Sólidos - Dark Purple Mode) */
-  --bg-main: #0c0714; /* Roxo escuro profundo para o fundo */
-  --bg-card: #191129; /* Roxo ligeiramente mais claro para os cards (2 pontos acima) */
-  --bg-card-hover: #261a3b; /* Card hover */
-  --bg-input: #0f0a1c; /* Áreas de dropdown/input roxo-grafite bem escuro */
-  --border-color: rgba(168, 85, 247, 0.15); /* Borda com tom roxo neon sutil */
+  /* Cores Base Neutras (Apple Dark Theme - Sem tintas desnecessárias) */
+  --bg-main: #09090b; /* Fundo escuro profundo neutro */
+  --bg-card: rgba(24, 24, 27, 0.72); /* Superfície de vidro fosco Apple */
+  --bg-card-solid: #18181b;
+  --bg-card-hover: rgba(39, 39, 42, 0.85);
+  --bg-input: rgba(255, 255, 255, 0.05); /* Campo com contraste translúcido */
+  --bg-input-focus: rgba(255, 255, 255, 0.08);
+  --border-color: rgba(255, 255, 255, 0.08); /* Borda fina Apple de 1px */
+  --border-color-hover: rgba(255, 255, 255, 0.18);
   
-  /* Cores de Destaque (Neon) */
-  --neon-green: #39ff14; /* Verde neon super brilhante */
-  --neon-green-dim: rgba(57, 255, 20, 0.7);
-  --neon-purple: #a855f7; /* Roxo neon */
+  /* Cores de Ação e Destaque Apple (MNOC-X Design System) */
+  --brand-green: #006B4F; /* Verde institucional sólido */
+  --apple-green: #30d158; /* Verde do sistema Apple */
+  --neon-green: #30d158;
+  --neon-green-dim: rgba(48, 209, 88, 0.8);
+  --neon-purple: #a855f7;
   --neon-purple-bright: #c084fc;
-  --neon-red: #ff3b30; /* Vermelho vibrante para despesas */
+  --apple-red: #ff453a; /* Vermelho do sistema Apple para despesas e ações destrutivas */
+  --neon-red: #ff453a;
   --neon-red-dim: #ef4444;
-  --neon-red-glow: 0 0 8px rgba(255, 59, 48, 0.3);
+  --neon-red-glow: none;
   
-  /* Tons Pastéis e Auxiliares */
-  --pastel-purple: #c084fc; /* Roxo claro */
-  --pastel-green: #a7f3d0; /* Verde claro */
-  --pastel-red: #fca5a5; /* Vermelho claro */
-  --pastel-text: #f4f4f5; /* Texto claro */
-  --text-muted: #a1a1aa; /* Cinza claro para textos secundários */
+  /* Tipografia & Neutros */
+  --pastel-purple: #d8b4fe;
+  --pastel-green: #86efac;
+  --pastel-red: #fca5a5;
+  --pastel-text: #f4f4f5;
+  --foreground: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --text-dim: #71717a;
   
   /* Status */
-  --color-positive: #39ff14;
-  --color-negative: #ff3b30;
+  --color-positive: #30d158;
+  --color-negative: #ff453a;
   
-  /* Fontes e Sombras */
-  --font-family: 'Gotham', 'Montserrat', 'Outfit', sans-serif;
-  --shadow-glow-purple: 0 0 10px rgba(168, 85, 247, 0.15);
-  --shadow-glow-green: 0 0 10px rgba(57, 255, 20, 0.15);
-  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-  --radius: 12px;
-  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Fontes e Sombras Apple */
+  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --shadow-glow-purple: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow-glow-green: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-card: 16px;
+  --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ================= RESET & BASE ================= */
@@ -44,6 +53,7 @@ html {
   overflow-x: hidden;
   max-width: 100%;
   width: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 * {
@@ -54,9 +64,11 @@ html {
 
 body {
   background-color: var(--bg-main);
-  background-image: none;
-  color: #18181b;
+  background-image: radial-gradient(circle at 50% 0%, rgba(39, 39, 42, 0.35) 0%, rgba(9, 9, 11, 0.98) 80%);
+  color: var(--foreground);
   font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
   min-height: 100vh;
   overflow-x: hidden;
@@ -66,7 +78,8 @@ body {
 
 h1, h2, h3, h4 {
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
+  color: #ffffff;
 }
 
 button, input, select {
@@ -78,35 +91,37 @@ button, input, select {
   display: none !important;
 }
 
-/* Glassmorphism / Dark Cards */
+/* Apple Frosted Glass / Translucent Cards */
 .glass {
-  background: #18181b; /* Cinza escuro sólido */
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--bg-card);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
   border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-card);
-  border-radius: var(--radius);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-card);
   transition: var(--transition);
 }
 
 .glass:hover {
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: var(--border-color-hover);
 }
 
-/* Neons */
+/* Apple High-Contrast Accents */
 .green-neon {
   color: var(--neon-green) !important;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+  text-shadow: none !important;
+  font-feature-settings: 'tnum';
 }
 
 .purple-neon {
   color: var(--neon-purple-bright) !important;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+  text-shadow: none !important;
 }
 
 .red-neon {
   color: var(--neon-red) !important;
-  text-shadow: var(--neon-red-glow);
+  text-shadow: none !important;
+  font-feature-settings: 'tnum';
 }
 
 .text-pastel-purple {
@@ -117,52 +132,70 @@ button, input, select {
   color: var(--pastel-green);
 }
 
+/* Badge de Proporção da Receita */
+.apple-revenue-badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-feature-settings: 'tnum';
+}
+
 /* Animações */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .fade-in {
-  animation: fadeIn 0.4s ease forwards;
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* ================= BOTÕES ================= */
+/* ================= BOTÕES (APPLE STYLE - APENAS GO OU STOP PREENCHIDOS) ================= */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 24px;
-  font-size: 0.95rem;
+  padding: 11px 22px;
+  font-size: 0.92rem;
   font-weight: 500;
   border-radius: var(--radius);
   border: 1px solid transparent;
   cursor: pointer;
   transition: var(--transition);
+  letter-spacing: -0.01em;
 }
 
 .btn-primary {
   background: #ffffff;
-  color: #000000;
+  color: #09090b;
   font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
-  background: #e4e4e7;
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+  background: #f4f4f5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 .btn-outline {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
-  color: #ffffff;
+  color: #f4f4f5;
 }
 
 .btn-outline:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--neon-purple);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .btn-block {
@@ -171,20 +204,19 @@ button, input, select {
 }
 
 .btn-death {
-  background: rgba(244, 63, 94, 0.15);
-  border: 1px solid rgba(244, 63, 94, 0.4);
-  color: var(--pastel-red);
+  background: rgba(255, 69, 58, 0.15);
+  border: 1px solid rgba(255, 69, 58, 0.3);
+  color: #ff453a;
 }
 
 .btn-death:hover {
-  background: var(--color-negative);
+  background: var(--apple-red);
   color: #fff;
-  transform: translateY(-2px);
-  box-shadow: 0 0 15px rgba(244, 63, 94, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255, 69, 58, 0.3);
 }
 
-
-/* ================= TELA DE LOGIN ================= */
+/* ================= TELA DE LOGIN (APPLE MODAL GLASS) ================= */
 #login-container, #supabase-setup-container {
   display: flex;
   align-items: center;
@@ -192,7 +224,8 @@ button, input, select {
   min-height: 100vh;
   padding: 20px;
   perspective: 1000px;
-  background-image: linear-gradient(rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.4)), url('login-bg.jpg');
+  background-color: #09090b;
+  background-image: radial-gradient(circle at 50% 25%, rgba(39, 39, 42, 0.45) 0%, rgba(9, 9, 11, 0.95) 85%);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -200,15 +233,17 @@ button, input, select {
 
 .login-card {
   width: 100%;
-  max-width: 420px;
-  padding: 40px 30px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3), 0 0 30px rgba(168, 85, 247, 0.05);
-  backdrop-filter: blur(24px) saturate(1.35);
-  border-radius: 26px;
+  max-width: 400px;
+  padding: 42px 32px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: saturate(190%) blur(24px);
+  -webkit-backdrop-filter: saturate(190%) blur(24px);
+  background: rgba(18, 18, 22, 0.85);
+  border-radius: 20px;
   transform-style: preserve-3d;
   transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease;
   will-change: transform;
 }
 
@@ -1676,43 +1711,60 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   border-color: var(--border-color);
 }
 
-/* Corrigir as bordas no dark mode roxo */
+/* Bordas Apple Design System (Neutras, sem tintas) */
 .glass, .app-header, .main-nav, .detail-list-box h4, .section-header, .account-item, .card-item {
-  border-color: rgba(168, 85, 247, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Customizações dos botões e navegação */
+/* Customizações dos botões e navegação (Apple Style) */
 .btn-primary {
-  background: #a855f7 !important;
-  color: #ffffff !important;
+  background: #ffffff !important;
+  color: #09090b !important;
+  font-weight: 600 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
 }
 .btn-primary:hover {
-  background: #9333ea !important;
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15) !important;
 }
 
 .btn-outline {
-  border-color: rgba(168, 85, 247, 0.4) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   color: #f4f4f5 !important;
+  border-radius: var(--radius) !important;
 }
 .btn-outline:hover {
-  background: rgba(168, 85, 247, 0.1) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
 }
 
-/* Menu Lateral e Cabeçalho */
+/* Menu Lateral e Cabeçalho Apple Frosted Glass */
 .app-header {
-  background: #0f0a1c !important; /* Ligeiramente mais escuro que os cards */
+  background: rgba(18, 18, 22, 0.8) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Nav links inativos no desktop e mobile */
+/* Nav links Apple Style */
 .nav-link {
-  color: #a1a1aa !important; /* Zinc-400 */
+  color: #a1a1aa !important;
+  border-radius: 8px !important;
+  transition: all 0.15s ease !important;
 }
 .nav-link:hover {
   color: #ffffff !important;
-  background: rgba(168, 85, 247, 0.08) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
 }
 .nav-link.active {
   color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  font-weight: 600 !important;
+}
   background: rgba(168, 85, 247, 0.15) !important;
   border-color: rgba(168, 85, 247, 0.3) !important;
 }
@@ -1797,23 +1849,24 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
 }
 
 /* Floating labels e spinner para tela de login premium */
+/* Floating labels e inputs para tela de login Apple Style */
 .floating-field {
   position: relative;
-  margin-bottom: 28px;
+  margin-bottom: 22px;
   display: flex;
   flex-direction: column;
 }
 
 .floating-field input {
   width: 100%;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  padding: 18px 16px 11px 16px;
-  border-radius: 12px;
-  color: #fff;
-  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 19px 16px 7px 16px;
+  border-radius: var(--radius);
+  color: #f4f4f5;
+  font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
 }
 
@@ -1825,31 +1878,32 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
 .floating-field label {
   position: absolute;
   left: 16px;
-  top: 17px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-muted);
+  top: 15px;
+  font-size: 0.88rem;
+  font-weight: 400;
+  color: #a1a1aa;
   pointer-events: none;
-  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   text-transform: none;
-  letter-spacing: normal;
+  letter-spacing: -0.01em;
 }
 
 /* Estado ativo: input em foco ou preenchido */
 .floating-field input:focus ~ label,
 .floating-field input:not(:placeholder-shown) ~ label {
-  top: 6px;
-  left: 14px;
-  font-size: 0.72rem;
-  color: var(--neon-purple);
-  font-weight: 600;
+  top: 5px;
+  left: 16px;
+  font-size: 0.68rem;
+  color: #a1a1aa;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .floating-field input:focus {
-  border-color: var(--neon-purple);
-  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
 /* Tratamento de senha com botão de toggle */
@@ -1864,11 +1918,11 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
 
 .toggle-password-wrapper input:focus ~ label,
 .toggle-password-wrapper input:not(:placeholder-shown) ~ label {
-  top: 6px;
-  left: 14px;
-  font-size: 0.72rem;
-  color: var(--neon-purple);
-  font-weight: 600;
+  top: 5px;
+  left: 16px;
+  font-size: 0.68rem;
+  color: #a1a1aa;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }

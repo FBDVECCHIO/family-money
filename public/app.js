@@ -88,6 +88,16 @@ function hideBgJobToast() {
 }
 
 // ================= UTILS E FORMATADORES =================
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -155,36 +165,36 @@ function initSupabase() {
 
 // ================= CONTROLE DE PÁGINAS E AUTENTICAÇÃO =================
 async function loadUsersOnly() {
+  const defaultFallbackUsers = [
+    { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
+    { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
+    { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: false, only_self_data: true }
+  ];
+  state.users = defaultFallbackUsers;
+
   if (!state.supabase) return;
   try {
     const { data, error } = await state.supabase.from('app_users').select('*').order('name');
-    if (error) throw error;
+    if (error) {
+      console.warn('Aviso ao carregar usuários do Supabase, usando contingência local:', error.message);
+      return;
+    }
     if (data && data.length > 0) {
       state.users = data;
     } else {
       console.log('Tabela de usuários vazia no banco. Semeando usuários padrão em lote...');
-      state.users = [
-        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123', is_admin: true, only_self_data: false },
-        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123', is_admin: true, only_self_data: false },
-        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123', is_admin: false, only_self_data: true }
-      ];
-      // Auto-semear no banco em 1 único Batch Insert (Otimizado, sem loop N+1)
-      const usersToInsert = await Promise.all(state.users.map(async u => ({
+      const usersToInsert = defaultFallbackUsers.map(u => ({
         name: u.name,
         email: u.email,
-        password: await hashPassword(u.password),
+        password: u.password,
         is_admin: u.is_admin,
         only_self_data: u.only_self_data
-      })));
+      }));
       await state.supabase.from('app_users').insert(usersToInsert);
     }
   } catch (err) {
     console.warn('Erro ao carregar usuários (usando fallback local):', err);
-    state.users = [
-      { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: '123', is_admin: true, only_self_data: false },
-      { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: '123', is_admin: true, only_self_data: false },
-      { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: '123', is_admin: false, only_self_data: true }
-    ];
+    state.users = defaultFallbackUsers;
   }
 }
 
@@ -1044,13 +1054,13 @@ function renderTransactionsTable() {
         <tr>
           <td style="text-align: center;"><input type="checkbox" class="tx-select-row" value="${t.id}" aria-label="Selecionar lançamento" style="cursor: pointer; width: 16px; height: 16px;"></td>
           <td>${formatDate(t.date)}</td>
-          <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
+          <td style="font-weight: 500;">${escapeHtml(cleanDescription(t.description))}${tagHtml}</td>
           <td>
             <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
-              ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
+              ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? escapeHtml(cat.name) : 'Geral')}
             </span>
           </td>
-          <td>${whoLaunched}</td>
+          <td>${escapeHtml(whoLaunched)}</td>
           <td>${pmLabel}</td>
           <td>${t.installments > 1 ? `${t.installments}x` : 'À vista'}</td>
           <td>${valueHtml}</td>
@@ -1168,43 +1178,61 @@ function renderMonthlyDetail(monthData) {
   surplusElement.textContent = `${monthData.netSurplus >= 0 ? '+' : ''}${formatCurrency(monthData.netSurplus)}`;
   surplusElement.className = monthData.netSurplus >= 0 ? 'green-neon' : 'red-neon';
 
-  // 1. Resumo por Categoria
+  // 1. Resumo do Mapa de Despesas por Categoria (EXCLUSIVO para despesas - NUNCA incluir receitas)
   const categorySums = {};
   state.categories.forEach(c => {
     categorySums[c.id] = 0;
   });
 
+  // A) Despesas Fixas do mês (apenas tipo expense)
   monthData.fixedExpenses.forEach(e => {
     const dbFixed = state.fixedItems.find(f => f.id === e.id);
-    if (dbFixed && (dbFixed.category_id || dbFixed.categoryId)) {
+    if (dbFixed && (dbFixed.type === 'expense' || !dbFixed.type) && (dbFixed.category_id || dbFixed.categoryId)) {
       const catId = dbFixed.category_id || dbFixed.categoryId;
-      categorySums[catId] = (categorySums[catId] || 0) + e.amount;
+      categorySums[catId] = (categorySums[catId] || 0) + Math.abs(parseFloat(e.amount));
     }
   });
 
+  // B) Faturas de Cartão do mês (sempre são despesas; bloquear se transação vinculada for receita)
   monthData.cardBills.forEach(b => {
     const tx = state.transactions.find(t => t.id === b.txId);
+    if (tx && tx.type === 'income') return; // Exclusão estrita de receitas
     if (tx && (tx.category_id || tx.categoryId)) {
       const catId = tx.category_id || tx.categoryId;
-      categorySums[catId] = (categorySums[catId] || 0) + b.amount;
+      categorySums[catId] = (categorySums[catId] || 0) + Math.abs(parseFloat(b.amount));
     }
   });
 
+  // C) Transações em Conta do mês: APENAS DESPESAS (receitas e transferências estritamente excluídas)
   state.transactions.forEach(t => {
     const catIdNum = t.category_id || t.categoryId;
     const isAccount = t.payment_method === 'account' || t.paymentMethod === 'account';
-    if (isAccount && catIdNum) {
-      const txDate = new Date(t.date + 'T12:00:00');
-      if (txDate.getFullYear() === monthData.year && txDate.getMonth() === monthData.month) {
-        categorySums[catIdNum] = (categorySums[catIdNum] || 0) + t.amount;
-      }
+    if (!isAccount || !catIdNum) return;
+
+    const cat = state.lookupMaps.categories.get(catIdNum);
+    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+    
+    // Assegurar que é estritamente uma despesa (afinal é um mapa de despesa e não de receita)
+    if (finalType !== 'expense') return;
+
+    const txDate = new Date(t.date + 'T12:00:00');
+    if (txDate.getFullYear() === monthData.year && txDate.getMonth() === monthData.month) {
+      categorySums[catIdNum] = (categorySums[catIdNum] || 0) + Math.abs(parseFloat(t.amount));
     }
   });
 
-  const spentCategories = state.categories.map(c => ({
-    ...c,
-    spent: categorySums[c.id] || 0
-  })).filter(c => c.spent > 0);
+  const totalRevenue = monthData.totalIncomes || 0;
+  const spentCategories = state.categories.map(c => {
+    const spent = categorySums[c.id] || 0;
+    const pctOfRevenue = totalRevenue > 0 ? (spent / totalRevenue) * 100 : 0;
+    const pctOfExpenses = totalExpenses > 0 ? (spent / totalExpenses) * 100 : 0;
+    return {
+      ...c,
+      spent,
+      pctOfRevenue,
+      pctOfExpenses
+    };
+  }).filter(c => c.spent > 0);
 
   spentCategories.sort((a, b) => b.spent - a.spent);
 
@@ -1215,18 +1243,25 @@ function renderMonthlyDetail(monthData) {
     categoryBreakdownContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; padding: 15px 0;">Nenhuma despesa categorizada neste mês.</div>`;
   } else {
     categoryBreakdownContainer.innerHTML = spentCategories.map(c => {
-      const pct = (c.spent / maxSpent) * 100;
+      const barWidth = Math.min(100, Math.max(4, (c.spent / maxSpent) * 100));
+      const revenueBadgeText = totalRevenue > 0 
+        ? `${c.pctOfRevenue.toFixed(1)}% da receita`
+        : `${c.pctOfExpenses.toFixed(1)}% das despesas`;
+
       return `
         <div class="category-progress-item">
           <div class="category-progress-labels">
-            <span style="font-weight: 500; display: flex; align-items: center; gap: 6px;">
-              <i data-lucide="${c.icon}" style="width: 14px; height: 14px; color: ${c.color}"></i>
-              ${c.name}
+            <span style="font-weight: 500; display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="${escapeHtml(c.icon || 'tag')}" style="width: 15px; height: 15px; color: ${escapeHtml(c.color || '#a855f7')}"></i>
+              <span>${escapeHtml(c.name)}</span>
             </span>
-            <span class="red-neon" style="font-weight: 600;">${formatCurrency(c.spent)}</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="apple-revenue-badge" title="Representação sobre o total da receita mensal">${revenueBadgeText}</span>
+              <span class="red-neon" style="font-weight: 600; font-feature-settings: 'tnum';">${formatCurrency(c.spent)}</span>
+            </div>
           </div>
           <div class="category-progress-bar-bg">
-            <div class="category-progress-bar-fill" style="width: ${pct}%; background-color: ${c.color};"></div>
+            <div class="category-progress-bar-fill" style="width: ${barWidth}%; background-color: ${escapeHtml(c.color || 'var(--neon-purple)')};"></div>
           </div>
         </div>
       `;
@@ -2689,22 +2724,33 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   }
 
   try {
-    // Buscar o usuário diretamente da tabela app_users pelo email para garantir dados frescos e corretos (case-insensitive)
-    const { data, error } = await state.supabase
-      .from('app_users')
-      .select('*')
-      .ilike('email', selectedEmail)
-      .limit(1);
-
-    if (error) throw error;
-
     let authenticated = false;
-    
-    if (data && data.length > 0) {
-      const dbUser = data[0];
+    let dbUser = null;
+
+    // Tentar consultar usuário fresco diretamente no Supabase
+    if (state.supabase) {
+      try {
+        const { data, error } = await state.supabase
+          .from('app_users')
+          .select('*')
+          .ilike('email', selectedEmail)
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          dbUser = data[0];
+        } else if (error) {
+          console.warn('Consulta ao Supabase retornou aviso (ativando contingência):', error.message);
+        }
+      } catch (sbErr) {
+        console.warn('Conexão ao Supabase instável ou com clock skew (JWT):', sbErr);
+      }
+    }
+
+    // 1. Validar contra o registro do banco
+    if (dbUser) {
       const isMatch = await verifyPassword(typedPassword, dbUser.password);
       if (isMatch) {
-        // Migração transparente (lazy migration) de senha para hash SHA-256 no Supabase
+        // Migração transparente de senha para hash SHA-256 no Supabase caso ainda não esteja
         if (!dbUser.password || !dbUser.password.startsWith('sha256:')) {
           try {
             const hashed = await hashPassword(typedPassword);
@@ -2718,9 +2764,16 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         authenticated = true;
       }
     }
-    
+
+    // 2. Contingência / Fallback local: se o banco falhou ou usuário não foi encontrado via rede
     if (!authenticated) {
-      for (const u of state.users) {
+      const candidateUsers = (state.users && state.users.length > 0) ? state.users : [
+        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
+        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
+        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: false, only_self_data: true }
+      ];
+
+      for (const u of candidateUsers) {
         if (u.email.toLowerCase().trim() === selectedEmail) {
           const isMatch = await verifyPassword(typedPassword, u.password);
           if (isMatch) {
@@ -2732,7 +2785,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         }
       }
     }
-    
+
     if (authenticated) {
       errorMsg.classList.add('hide');
       passwordInput.value = '';
@@ -2740,12 +2793,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
       initApp();
       return;
     }
-    
+
     errorMsg.textContent = 'E-mail ou senha incorretos.';
     errorMsg.classList.remove('hide');
   } catch (err) {
     console.error('Erro de login:', err);
-    errorMsg.textContent = 'Erro ao conectar: ' + err.message;
+    errorMsg.textContent = 'E-mail ou senha incorretos.';
     errorMsg.classList.remove('hide');
   } finally {
     if (btn) btn.classList.remove('is-loading');
@@ -3636,13 +3689,13 @@ function renderReportsTable() {
       return `
         <tr>
           <td>${formatDate(t.date)}</td>
-          <td style="font-weight: 500;">${cleanDescription(t.description)}${tagHtml}</td>
+          <td style="font-weight: 500;">${escapeHtml(cleanDescription(t.description))}${tagHtml}</td>
           <td>
             <span class="badge-category" style="background-color: ${cat ? cat.color + '22' : 'rgba(79, 70, 229, 0.15)'}; color: ${cat ? cat.color : 'var(--neon-purple)'}; border: 1px solid ${cat ? cat.color + '44' : 'rgba(79, 70, 229, 0.3)'}">
-              ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? cat.name : 'Geral')}
+              ${t.payment_method === 'transfer' ? 'Transferência' : (cat ? escapeHtml(cat.name) : 'Geral')}
             </span>
           </td>
-          <td>${whoLaunched}</td>
+          <td>${escapeHtml(whoLaunched)}</td>
           <td>${pmLabel}</td>
           <td>${t.installments > 1 ? `${t.installments}x` : 'À vista'}</td>
           <td>${valueHtml}</td>
