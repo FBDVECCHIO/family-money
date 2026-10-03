@@ -18,14 +18,35 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 async function requestJson(url, options = {}, data = null) {
+  if (typeof fetch === 'function') {
+    const res = await fetch(url, {
+      method: options.method || (data ? 'POST' : 'GET'),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      },
+      body: data ? (typeof data === 'string' ? data : JSON.stringify(data)) : undefined
+    });
+    const text = await res.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch (e) {}
+    if (res.ok) return json || text;
+    throw new Error(json?.error?.message || `HTTP ${res.status}: ${text}`);
+  }
+
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
+    const bodyStr = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : null;
     const reqOptions = {
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || 443,
       path: parsedUrl.pathname + parsedUrl.search,
-      method: options.method || 'GET',
-      headers: options.headers || {}
+      method: options.method || (bodyStr ? 'POST' : 'GET'),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(bodyStr ? { 'Content-Length': Buffer.byteLength(bodyStr) } : {}),
+        ...(options.headers || {})
+      }
     };
 
     const req = https.request(reqOptions, (res) => {
@@ -50,7 +71,7 @@ async function requestJson(url, options = {}, data = null) {
     });
 
     req.on('error', reject);
-    if (data) req.write(typeof data === 'string' ? data : JSON.stringify(data));
+    if (bodyStr) req.write(bodyStr);
     req.end();
   });
 }
@@ -111,7 +132,13 @@ SUA ANÁLISE DO DIA:
 DADOS DA FAMÍLIA:
 ${JSON.stringify(context, null, 2)}`;
 
-  const models = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  const models = [
+    'gemini-flash-latest',
+    'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-3.7-flash',
+    'gemini-2.5-flash-lite'
+  ];
   let lastErr = null;
 
   for (const model of models) {
