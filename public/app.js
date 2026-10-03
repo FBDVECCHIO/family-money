@@ -4910,10 +4910,13 @@ Regras inegociáveis:
     }
   };
 
+  if (localStorage.getItem('fm_gemini_active_model') === 'gemini-2.0-flash') {
+    localStorage.removeItem('fm_gemini_active_model');
+  }
   const preferredModel = localStorage.getItem('fm_gemini_active_model') || 'gemini-3.8-flash';
   const modelsToTry = [
     preferredModel,
-    ...GEMINI_CANDIDATE_MODELS.filter(m => m !== preferredModel)
+    ...GEMINI_CANDIDATE_MODELS.filter(m => m !== preferredModel && m !== 'gemini-2.0-flash')
   ];
 
   let lastError = null;
@@ -4961,14 +4964,19 @@ const GEMINI_CANDIDATE_MODELS = [
 
 async function testGeminiApiKey(apiKey) {
   let lastError = null;
+  // Limpeza de segurança contra versões legadas
+  if (localStorage.getItem('fm_gemini_active_model') === 'gemini-2.0-flash') {
+    localStorage.removeItem('fm_gemini_active_model');
+  }
   const preferredModel = localStorage.getItem('fm_gemini_active_model') || 'gemini-3.8-flash';
   const modelsToTry = [
     preferredModel,
-    ...GEMINI_CANDIDATE_MODELS.filter(m => m !== preferredModel)
+    ...GEMINI_CANDIDATE_MODELS.filter(m => m !== preferredModel && m !== 'gemini-2.0-flash')
   ];
 
   for (const model of modelsToTry) {
     try {
+      console.log(`[Gemini API v6.4] Validando modelo: ${model}...`);
       const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4979,11 +4987,13 @@ async function testGeminiApiKey(apiKey) {
 
       if (testRes.ok) {
         localStorage.setItem('fm_gemini_active_model', model);
+        console.log(`[Gemini API v6.4] Modelo ${model} validado com sucesso!`);
         return { success: true, model };
       }
 
       const errData = await testRes.json().catch(() => ({}));
       const msg = errData.error?.message || `HTTP ${testRes.status}`;
+      console.warn(`[Gemini API v6.4] Falha no modelo ${model}:`, msg);
       lastError = new Error(msg);
 
       if (msg.includes('API_KEY_INVALID') || (testRes.status === 400 && msg.includes('key'))) {
@@ -5119,7 +5129,7 @@ function initAiAgent() {
       if (keyStatusMsg) {
         keyStatusMsg.style.display = 'block';
         keyStatusMsg.style.color = '#38bdf8';
-        keyStatusMsg.textContent = 'Testando conexão com a API Google Gemini...';
+        keyStatusMsg.textContent = 'Testando conexão com Gemini 3.8 Flash (v6.4)...';
       }
 
       try {
