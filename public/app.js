@@ -4715,11 +4715,15 @@ function appendAiChatMessage(sender, text) {
   lucide.createIcons();
 }
 
+// Memória Conversacional do Morgan (Histórico multi-turn da sessão)
+let aiConversationHistory = [];
+
 // 7. Envio e Processamento de Pergunta
 async function handleAiChatSubmit(userQuery) {
   if (!userQuery || !userQuery.trim()) return;
 
-  appendAiChatMessage('user', userQuery.trim());
+  const trimmedQuery = userQuery.trim();
+  appendAiChatMessage('user', trimmedQuery);
 
   const chatMessages = document.getElementById('ai-chat-messages');
   const typingDiv = document.createElement('div');
@@ -4730,7 +4734,7 @@ async function handleAiChatSubmit(userQuery) {
       <i data-lucide="bot" style="width: 16px; height: 16px; color: #10b981;"></i>
     </div>
     <div class="ai-chat-bubble" style="color: var(--text-muted); font-style: italic;">
-      Morgan está analisando suas finanças...
+      Morgan está analisando suas finanças e cruzando dados de mercado...
     </div>
   `;
   chatMessages.appendChild(typingDiv);
@@ -4743,9 +4747,9 @@ async function handleAiChatSubmit(userQuery) {
     let responseText = '';
 
     if (selectedEngine === 'gemini' && geminiKey) {
-      responseText = await callGeminiAgentApi(userQuery, geminiKey);
+      responseText = await callGeminiAgentApi(trimmedQuery, geminiKey);
     } else {
-      responseText = runNativeMorganReasoning(userQuery);
+      responseText = runNativeMorganReasoning(trimmedQuery);
     }
 
     const typingEl = document.getElementById('ai-typing-indicator');
@@ -4753,12 +4757,12 @@ async function handleAiChatSubmit(userQuery) {
 
     appendAiChatMessage('agent', responseText);
   } catch (err) {
-    console.error('Erro no processamento do agente IA:', err);
+    console.error('Erro na chamada ao Google Gemini:', err);
     const typingEl = document.getElementById('ai-typing-indicator');
     if (typingEl) typingEl.remove();
 
-    const fallbackText = runNativeMorganReasoning(userQuery);
-    appendAiChatMessage('agent', fallbackText);
+    const fallbackText = runNativeMorganReasoning(trimmedQuery);
+    appendAiChatMessage('agent', `⚠️ *(Aviso: a API do Google Gemini retornou uma falha temporária: "${escapeHtml(err.message)}". Apresentando análise pelo motor analítico local:)*\n\n${fallbackText}`);
   }
 }
 
@@ -4806,27 +4810,46 @@ ${itemsText}
 🎯 **Plano de Ação:** Aplicando uma redução moderada de 20% nesses itens, a família economiza **${formatCurrency(totalPotential)} todos os meses**, somando **${formatCurrency(totalPotential * 12)} ao ano** para novos investimentos.`;
   }
 
-  // Perguntas sobre Projeção / 6 meses / Risco de déficit
-  if (q.includes('proje') || q.includes('6 mes') || q.includes('futuro') || q.includes('risco') || q.includes('aperto') || q.includes('previs')) {
+  // Perguntas sobre Projeção / Longo Prazo / 2026 / Dezembro / Risco de déficit
+  if (q.includes('proje') || q.includes('6 mes') || q.includes('futuro') || q.includes('risco') || q.includes('aperto') || q.includes('previs') || q.includes('2026') || q.includes('dezembro') || q.includes('ano') || q.includes('como ve') || q.includes('como você')) {
     if (forecast.length === 0) {
-      return "Ainda não há dados suficientes no forecast para projetar os próximos 6 meses. Registre suas receitas recorrentes e despesas fixas em Administração.";
+      return "Ainda não há dados suficientes no forecast para projetar o período. Registre suas receitas recorrentes e despesas fixas em Administração.";
     }
 
-    let forecastSummary = forecast.slice(0, 6).map(f => {
+    let forecastSummary = forecast.slice(0, 12).map(f => {
       const surplus = f.totalIncomes - f.totalExpenses;
       const statusIcon = surplus >= 0 ? '🟢' : '🔴';
-      return `* ${statusIcon} **${f.label}**: Receitas ${formatCurrency(f.totalIncomes)} | Despesas ${formatCurrency(f.totalExpenses)} | Resultado: **${formatCurrency(surplus)}**`;
+      return `* ${statusIcon} **${f.label}**: Receitas ${formatCurrency(f.totalIncomes)} | Despesas ${formatCurrency(f.totalExpenses)} | Resultado: **${formatCurrency(surplus)}** (Acumulado: **${formatCurrency(f.accumulatedBalance)}**)`;
     }).join('\n');
 
-    const hasDeficit = forecast.slice(0, 6).some(f => (f.totalIncomes - f.totalExpenses) < 0);
+    const lastForecast = forecast[forecast.length - 1];
+    const finalAccumulated = lastForecast ? lastForecast.accumulatedBalance : 0;
+    const hasDeficit = forecast.slice(0, 12).some(f => (f.totalIncomes - f.totalExpenses) < 0);
 
-    return `🔮 **Diagnóstico de Fluxo de Caixa para os Próximos 6 Meses:**
+    return `🔮 **Projeção de Fluxo de Caixa e Patrimônio até ${lastForecast ? lastForecast.label : 'o fim do período'}:**
+
+Com base na sua média de receitas recorrentes e faturas previstas, esta é a evolução do seu caixa:
 
 ${forecastSummary}
 
-${hasDeficit ? '⚠️ **Atenção:** Há meses projetados com resultado negativo. Recomendo renegociar despesas fixas ou adiar compras parceladas nesses períodos.' : '✅ **Cenário Favorável:** Todos os próximos meses estão projetados com superávit ou equilíbrio financeiro. Excelente sustentabilidade!'}
+📊 **Resumo Estratégico do CFO Morgan:**
+* **Saldo Acumulado Projetado:** **${formatCurrency(finalAccumulated)}**
+* **Solvência:** ${hasDeficit ? '⚠️ Há meses com risco de pressão de caixa. Recomendo segurar compras parceladas nesses períodos.' : '✅ Excelente! Todos os meses mantêm fluxo líquido positivo ou estável.'}
+* **Oportunidade de Mercado (CDI 100%):** Mantendo a reserva de ${formatCurrency(health.totalLiquid)} aplicada em renda fixa de liquidez diária (~10.65% a.a.), ela renderá aproximadamente **${formatCurrency((health.totalLiquid * 0.1065) / 12)}/mês** líquidos sem risco de crédito.`;
+  }
+  
+  // Perguntas sobre Investimentos / CDI / Selic / Rendimento / Patrimônio
+  if (q.includes('invest') || q.includes('cdi') || q.includes('selic') || q.includes('render') || q.includes('mercado') || q.includes('patrimon') || q.includes('dinheiro parado')) {
+    const monthlyLiquid = (health.totalLiquid * 0.1065) / 12;
+    return `📈 **Diagnóstico de Investimentos & Mercado Financeiro (Selic / CDI):**
 
-💡 *Regra de Morgan:* Monitore sempre a relação entre as faturas de cartão e a renda líquida para não comprometer mais de 30% do faturamento mensal.`;
+* **Patrimônio Líquido em Conta:** **${formatCurrency(health.totalLiquid)}**
+* **Benchmark Nacional:** Taxa Selic em 10,75% a.a. / CDI em 10,65% a.a. (~0,85% ao mês líquido).
+* **Rendimento Potencial:** Se o seu saldo total estiver em um CDB 100% CDI com liquidez diária ou Tesouro Selic, ele gera aproximadamente **${formatCurrency(monthlyLiquid)} por mês** de juros limpos no bolso.
+
+🎯 **Regra de Ouro do CFO Morgan:**
+1. **Reserva de Emergência:** Manter o equivalente a 6 meses de despesas (${formatCurrency(health.monthlyExpenses * 6)}) em liquidez diária.
+2. **Estratégia de Float:** Use o melhor cartão no ciclo e pague 100% da fatura no vencimento. Durante os 30-40 dias, deixe o dinheiro trabalhando no CDI.`;
   }
 
   // Auditoria Completa / Conselhos prioritários
@@ -4853,60 +4876,112 @@ Posso te responder sobre:
 4. Auditoria completa com recomendações prioritárias.`;
 }
 
-// 9. Chamada à API Google Gemini (Free Tier)
+// 9. Chamada à API Google Gemini com Memória e Inteligência Macroeconômica
 async function callGeminiAgentApi(prompt, apiKey) {
   const health = calculateFinancialHealthScore();
   const cardAnalysis = getCardsFloatAnalysis();
   const anomalyData = detectExpenseAnomalies();
-  const forecast = state.forecast || [];
+  const forecast = (state && state.forecast) || [];
+  const accounts = (state && state.accounts) || [];
+  const transactions = (state && state.transactions) || [];
 
-  const contextData = {
-    totalLiquid: health.totalLiquid,
-    monthlyIncome: health.monthlyIncome,
-    monthlyExpenses: health.monthlyExpenses,
-    healthScore: health.score,
-    healthBadge: health.badge,
-    cards: cardAnalysis.map(c => ({
-      name: c.name,
-      closingDay: c.closingDay,
-      dueDay: c.dueDay,
-      floatDaysToday: c.floatDays,
-      statusTip: c.statusTip
+  // Despesas recentes agrupadas por categoria
+  const expensesByCategory = {};
+  transactions
+    .filter(t => t.type === 'expense')
+    .slice(0, 100)
+    .forEach(t => {
+      const cat = (state.lookupMaps && state.lookupMaps.categories.get(t.category_id))?.name || 'Geral';
+      expensesByCategory[cat] = (expensesByCategory[cat] || 0) + (parseFloat(t.amount) || 0);
+    });
+
+  // Linha do tempo completa do Forecast (todos os meses disponíveis até o fim do ano / 2026)
+  const fullTimeline = forecast.map(f => ({
+    mes: f.label,
+    receitasPrevistas: f.totalIncomes,
+    despesasPrevistas: f.totalExpenses,
+    resultadoMes: f.totalIncomes - f.totalExpenses,
+    saldoAcumuladoPrevisto: f.accumulatedBalance
+  }));
+
+  const selicRate = 10.75;
+  const cdiAnnual = 10.65;
+  const monthlyLiquidCdi = (health.totalLiquid * (cdiAnnual / 100)) / 12;
+
+  const richContext = {
+    dataHoje: new Date().toLocaleDateString('pt-BR'),
+    patrimonioLiquidoTotal: health.totalLiquid,
+    contasBancarias: accounts.map(a => ({ nome: a.name, saldo: a.balance, tipo: a.type })),
+    receitaMediaMensal: health.monthlyIncome,
+    despesasMediasMensais: health.monthlyExpenses,
+    taxaPoupancaMensal: `${health.monthlyIncome > 0 ? (((health.monthlyIncome - health.monthlyExpenses) / health.monthlyIncome) * 100).toFixed(1) : 0}%`,
+    scoreSaudeFamiliar: `${health.score}/100 (${health.badge})`,
+    coberturaReservaEmergencia: `${health.coverageMonths} meses`,
+    cartoesCreditoFloat: cardAnalysis.map(c => ({
+      cartao: c.name,
+      diaFechamento: c.closingDay,
+      diaVencimento: c.dueDay,
+      prazoSemJurosSeComprarHoje: `${c.floatDays} dias`,
+      recomendacaoHoje: c.statusTip
     })),
-    discretionaryAnomalies: anomalyData.anomalies,
-    forecastNext3Months: forecast.slice(0, 3).map(f => ({
-      month: f.label,
-      incomes: f.totalIncomes,
-      expenses: f.totalExpenses,
-      surplus: f.totalIncomes - f.totalExpenses
-    }))
+    despesasMesAtualPorCategoria: expensesByCategory,
+    categoriasSuperfluasAlerta: anomalyData.anomalies,
+    projecaoCompletaAteFimDoAno: fullTimeline,
+    cenarioMacroeconomicoBrasil: {
+      taxaSelicMeta: `${selicRate}% a.a.`,
+      taxaCdi: `${cdiAnnual}% a.a.`,
+      inflacaoIPCAEsperada: "4.2% a.a.",
+      rendimentoPotencialSaldoAtualNoCDI: `R$ ${monthlyLiquidCdi.toFixed(2)}/mês líquidos em CDB 100% CDI com liquidez diária`,
+      estrategiaDeFloat: "Comprar no cartão no dia pós-fechamento e manter o valor da fatura rendendo no CDI com liquidez diária até a data de vencimento."
+    }
   };
 
-  const systemInstruction = `Você é Morgan, especialista sênior em finanças pessoais e FP&A familiar com mais de 12 anos de experiência (inspirado no repositório agency-agents).
-Sua missão: fornecer consultoria precisa, rigorosa e prática baseada em fluxo de caixa para a família.
-Regras inegociáveis:
-1. Pense em fluxo de caixa, liquidez e float de cartões de crédito. Receita é vaidade, lucro é sanidade, fluxo de caixa é realidade.
-2. Apresente respostas estruturadas, diretas e acionáveis, em português do Brasil, usando markdown amigável (*, **, itens).
-3. Nunca invente dados: baseie-se estritamente nas finanças da família enviadas no contexto.
-4. Responda em no máximo 3 ou 4 parágrafos objetivos.`;
+  const morganPrompt = `Você é MORGAN, Chief Financial Officer (CFO) sênior de inteligência financeira pessoal e economia familiar (inspirado no repositório agency-agents).
+Você possui visão financeira global, macroeconômica e comportamental.
+
+SUA MISSÃO E POSTURA:
+1. "Receita é vaidade, lucro é sanidade, fluxo de caixa é a realidade."
+2. Você NÃO É UM ROBÔ DE RESPOSTAS PRÉ-PRONTAS: você é um consultor estratégico de alto nível com raciocínio analítico profundo, que analisa qualquer cenário, pergunta ou plano financeiro do usuário.
+3. Use SEMPRE os DADOS REAIS da família enviados abaixo (contas bancárias, saldos, cartões de crédito, faturas, gastos e projeção de fluxo de caixa).
+4. Combine os dados da família com inteligência de mercado e investimentos:
+   - Taxa Selic e CDI atuais no Brasil, rendimento da reserva de emergência em CDB 100% CDI com resgate diário / Tesouro Selic.
+   - Preservação de poder de compra frente à inflação (IPCA) e estratégias de médio/longo prazo (Tesouro IPCA+, renda fixa, diversificação).
+   - Engenharia do Float de Cartão de Crédito: usar o cartão com melhor data de corte para manter o dinheiro rendendo no CDI durante os 30 a 43 dias sem juros antes de quitar a fatura integralmente.
+   - Eliminação de juros caros: jamais permitir que a família entre no rotativo de cartão de crédito (~400% a.a.).
+5. Se o usuário perguntar sobre o futuro (ex: "como vê minhas finanças até Dezembro de 2026?"), faça uma análise completa da 'projecaoCompletaAteFimDoAno', destacando o saldo acumulado previsto, meses de superávit ou atenção, e quanto a família pode acumular e rentabilizar.
+6. Responda de forma direta, lúcida, elegante e bem estruturada em português do Brasil, utilizando markdown (negrito, marcadores e números concretos).
+
+[DADOS FINANCEIROS REAIS DA FAMÍLIA EM TEMPO REAL]
+${JSON.stringify(richContext, null, 2)}
+
+[PERGUNTA DO USUÁRIO]
+${prompt}`;
+
+  // Montar conteúdo com histórico para memória conversacional
+  const contents = [];
+
+  // Adicionar histórico recente para memória
+  if (Array.isArray(aiConversationHistory)) {
+    const historySlice = aiConversationHistory.slice(-4);
+    for (const h of historySlice) {
+      contents.push({
+        role: h.role,
+        parts: [{ text: h.text }]
+      });
+    }
+  }
+
+  // Adicionar a mensagem atual
+  contents.push({
+    role: "user",
+    parts: [{ text: morganPrompt }]
+  });
 
   const payload = {
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: `CONTEXTO FINANCEIRO REAL DA FAMÍLIA:\n${JSON.stringify(contextData, null, 2)}\n\nPERGUNTA DO USUÁRIO:\n${prompt}` }
-        ]
-      }
-    ],
-    systemInstruction: {
-      parts: [
-        { text: systemInstruction }
-      ]
-    },
+    contents: contents,
     generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 800
+      temperature: 0.4,
+      maxOutputTokens: 2048
     }
   };
 
@@ -4931,6 +5006,7 @@ Regras inegociáveis:
   let lastError = null;
   for (const model of modelsToTry) {
     try {
+      console.log(`[Gemini API v6.6] Enviando consulta para modelo: ${model}...`);
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4942,11 +5018,15 @@ Regras inegociáveis:
         const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (candidate) {
           localStorage.setItem('fm_gemini_active_model', model);
+          // Registrar no histórico de memória conversacional
+          aiConversationHistory.push({ role: 'user', text: prompt });
+          aiConversationHistory.push({ role: 'model', text: candidate });
           return candidate;
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
         const errMsg = errorData.error?.message || `HTTP ${response.status}`;
+        console.warn(`[Gemini API v6.6] Falha no modelo ${model}:`, errMsg);
         lastError = new Error(errMsg);
         if (errMsg.includes('API_KEY_INVALID') || (response.status === 400 && errMsg.includes('key'))) {
           throw lastError;
