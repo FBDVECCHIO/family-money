@@ -4740,13 +4740,12 @@ async function handleAiChatSubmit(userQuery) {
   chatMessages.appendChild(typingDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
-  const selectedEngine = localStorage.getItem('fm_ai_engine') || 'native';
   const geminiKey = localStorage.getItem('fm_gemini_api_key');
 
   try {
     let responseText = '';
 
-    if (selectedEngine === 'gemini' && geminiKey) {
+    if (geminiKey) {
       responseText = await callGeminiAgentApi(trimmedQuery, geminiKey);
     } else {
       responseText = runNativeMorganReasoning(trimmedQuery);
@@ -4863,17 +4862,22 @@ ${forecastSummary}
 4. **Próxima Ação Imediata:** Manter os lançamentos do dia rigorosamente conciliados e acompanhar o fechamento da próxima fatura.`;
   }
 
-  // Resposta padrão contextualizada
-  return `Analisando seu patrimônio atual:
-* **Saldo Bancário Total:** ${formatCurrency(health.totalLiquid)}
-* **Score de Saúde:** \`${health.score}/100\` (${health.badge})
-* **Melhor Cartão Hoje:** ${cardAnalysis.length > 0 ? cardAnalysis[0].name : 'Nenhum'}
+  // Resposta padrão contextualizada com inteligência macro e de investimentos
+  const monthlyCdiYield = (health.totalLiquid * 0.1065) / 12;
+  const bestCardName = cardAnalysis.length > 0 ? cardAnalysis[0].name : 'principal';
+  const bestCardDays = cardAnalysis.length > 0 ? cardAnalysis[0].floatDays : 30;
 
-Posso te responder sobre:
-1. Qual cartão usar hoje para obter o maior prazo sem juros.
-2. Onde cortar supérfluos e economizar neste mês.
-3. Projeção detalhada de receitas e faturas para os próximos 6 meses.
-4. Auditoria completa com recomendações prioritárias.`;
+  return `📊 **Análise Estratégica do CFO Morgan:**
+
+* **Patrimônio Líquido em Caixa:** **${formatCurrency(health.totalLiquid)}**
+* **Score de Saúde Financeira:** \`${health.score}/100\` (${health.badge})
+* **Melhor Cartão Hoje:** **${bestCardName}** (${bestCardDays} dias de prazo sem juros)
+* **Cobertura da Reserva:** ${health.coverageMonths} meses de despesas fixas assegurados
+
+💡 **Parecer Financeiro & Recomendações de Mercado:**
+1. **Rendimento em CDI:** Deixar o saldo parado em conta corrente rende 0% e perde para a inflação (IPCA ~4,2% a.a.). Aplicado a 100% do CDI (~10,65% a.a.), seu saldo de ${formatCurrency(health.totalLiquid)} gera aproximadamente **${formatCurrency(monthlyCdiYield)}/mês líquidos** com liquidez diária.
+2. **Estratégia de Float dos Cartões:** Concentre as despesas do dia no **${bestCardName}** para ganhar até ${bestCardDays} dias de prazo, mantendo o dinheiro da fatura rendendo no CDI até a data do vencimento.
+3. **Alocação de Excedentes:** Preserve 6 meses de reserva (${formatCurrency(health.monthlyExpenses * 6)}) e destine excedentes para aportes em Tesouro IPCA+ ou amortização de passivos caros.`;
 }
 
 // 9. Chamada à API Google Gemini com Memória e Inteligência Macroeconômica
@@ -5245,10 +5249,23 @@ function initAiAgent() {
 
       try {
         const result = await testGeminiApiKey(keyVal);
+        // Salvar imediatamente e ativar o motor Gemini sem exigir clique extra
+        localStorage.setItem('fm_ai_engine', 'gemini');
+        localStorage.setItem('fm_gemini_api_key', keyVal);
+        localStorage.setItem('fm_gemini_active_model', result.model);
+        tempEngine = 'gemini';
+        updateEngineUI('gemini');
+
+        const engineIndicator = document.getElementById('ai-engine-active-indicator');
+        if (engineIndicator) {
+          engineIndicator.textContent = `Motor: Google Gemini (${result.model} Ativo)`;
+        }
+
         if (keyStatusMsg) {
           keyStatusMsg.style.color = '#34d399';
-          keyStatusMsg.textContent = `✅ Conexão bem-sucedida! Motor ${result.model} validado e ativo.`;
+          keyStatusMsg.textContent = `✅ Conexão bem-sucedida! Motor ${result.model} ativado automaticamente.`;
         }
+        showToast(`Motor Google Gemini (${result.model}) ativado com sucesso!`);
       } catch (testErr) {
         if (keyStatusMsg) {
           keyStatusMsg.style.color = '#ff453a';
