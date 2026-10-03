@@ -1697,7 +1697,7 @@
         </h4>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 12px 0;">
           <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
-            <strong style="color: #10b981;">Google AI Studio (Gemini 2.0 Flash)</strong>
+            <strong style="color: #10b981;">Google AI Studio (Gemini 3.8 Flash)</strong>
             <p style="font-size: 0.8rem; color: #a1a1aa; margin: 4px 0;">Grátis: até 15 requisições/minuto e 1 milhão de tokens de contexto. Não pede cartão de crédito.</p>
             <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #38bdf8; font-size: 0.78rem; text-decoration: underline;">Obter chave gratuita &rarr;</a>
           </div>
@@ -1723,7 +1723,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function runFinancialAgent(familyData) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3.8-flash" });
   const prompt = `Você é Morgan, especialista sênior em finanças familiares.
 Analise os seguintes dados financeiros e gere um relatório objetivo em 3 tópicos:
 1. Qual cartão de crédito tem maior prazo de compra hoje?
@@ -1792,7 +1792,7 @@ Dados: ${JSON.stringify(familyData)}`;
               ⚡ Nativo (Grátis & Offline)
             </button>
             <button type="button" class="btn btn-outline" id="btn-engine-gemini" style="flex: 1; border-radius: 10px; font-size: 0.85rem;">
-              🧠 Gemini 2.0 Flash (Free AI)
+              🧠 Gemini Flash AI (Free Tier)
             </button>
           </div>
         </div>
@@ -1823,6 +1823,6 @@ Dados: ${JSON.stringify(familyData)}`;
     </div>
   </div>
 
-  <script src="app.js?v=6.2"></script>
+  <script src="app.js?v=6.3"></script>
 </body>
 </html>

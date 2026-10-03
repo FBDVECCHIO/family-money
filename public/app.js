@@ -4652,9 +4652,10 @@ function renderAiAgentTab() {
   // Motor Ativo
   const engineIndicator = document.getElementById('ai-engine-active-indicator');
   const currentEngine = localStorage.getItem('fm_ai_engine') || 'native';
+  const activeGeminiModel = localStorage.getItem('fm_gemini_active_model') || 'gemini-3.8-flash';
   if (engineIndicator) {
     if (currentEngine === 'gemini' && localStorage.getItem('fm_gemini_api_key')) {
-      engineIndicator.textContent = 'Motor: Google Gemini 2.0 Flash (IA Generativa Ativa)';
+      engineIndicator.textContent = `Motor: Google Gemini (${activeGeminiModel} Ativo)`;
     } else {
       engineIndicator.textContent = 'Motor: Analítico Nativo (Ativo & Grátis)';
     }
@@ -4909,22 +4910,94 @@ Regras inegociáveis:
     }
   };
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  const preferredModel = localStorage.getItem('fm_gemini_active_model') || 'gemini-3.8-flash';
+  const modelsToTry = [
+    preferredModel,
+    ...GEMINI_CANDIDATE_MODELS.filter(m => m !== preferredModel)
+  ];
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+  let lastError = null;
+  for (const model of modelsToTry) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (candidate) {
+          localStorage.setItem('fm_gemini_active_model', model);
+          return candidate;
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        const errMsg = errorData.error?.message || `HTTP ${response.status}`;
+        lastError = new Error(errMsg);
+        if (errMsg.includes('API_KEY_INVALID') || (response.status === 400 && errMsg.includes('key'))) {
+          throw lastError;
+        }
+      }
+    } catch (e) {
+      lastError = e;
+      if (e.message && (e.message.includes('API_KEY_INVALID') || e.message.includes('key'))) {
+        throw e;
+      }
+    }
   }
 
-  const data = await response.json();
-  const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!candidate) throw new Error("Resposta vazia da API Gemini.");
+  throw lastError || new Error("Falha ao comunicar com os modelos Gemini disponíveis.");
+}
 
-  return candidate;
+// Lista de modelos Gemini prioritários para cascata de fallback
+const GEMINI_CANDIDATE_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro'
+];
+
+async function testGeminiApiKey(apiKey) {
+  let lastError = null;
+  const preferredModel = localStorage.getItem('fm_gemini_active_model') || 'gemini-3.8-flash';
+  const modelsToTry = [
+    preferredModel,
+    ...GEMINI_CANDIDATE_MODELS.filter(m => m !== preferredModel)
+  ];
+
+  for (const model of modelsToTry) {
+    try {
+      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: "ping" }] }]
+        })
+      });
+
+      if (testRes.ok) {
+        localStorage.setItem('fm_gemini_active_model', model);
+        return { success: true, model };
+      }
+
+      const errData = await testRes.json().catch(() => ({}));
+      const msg = errData.error?.message || `HTTP ${testRes.status}`;
+      lastError = new Error(msg);
+
+      if (msg.includes('API_KEY_INVALID') || (testRes.status === 400 && msg.includes('key'))) {
+        throw lastError;
+      }
+    } catch (err) {
+      lastError = err;
+      if (err.message && (err.message.includes('API_KEY_INVALID') || err.message.includes('key'))) {
+        throw err;
+      }
+    }
+  }
+
+  throw lastError || new Error("Nenhum modelo Gemini compatível respondeu com sucesso.");
 }
 
 // 10. Inicialização dos Ouvintes de Evento do Agente IA
@@ -5046,34 +5119,19 @@ function initAiAgent() {
       if (keyStatusMsg) {
         keyStatusMsg.style.display = 'block';
         keyStatusMsg.style.color = '#38bdf8';
-        keyStatusMsg.textContent = 'Testando conexão com Gemini 2.0 Flash...';
+        keyStatusMsg.textContent = 'Testando conexão com a API Google Gemini...';
       }
 
       try {
-        const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${keyVal}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: "ping" }] }]
-          })
-        });
-
-        if (testRes.ok) {
-          if (keyStatusMsg) {
-            keyStatusMsg.style.color = '#34d399';
-            keyStatusMsg.textContent = '✅ Conexão bem-sucedida! Motor Gemini 2.0 Flash ativo.';
-          }
-        } else {
-          const errData = await testRes.json().catch(() => ({}));
-          if (keyStatusMsg) {
-            keyStatusMsg.style.color = '#ff453a';
-            keyStatusMsg.textContent = `❌ Erro na chave: ${errData.error?.message || 'Chave inválida'}`;
-          }
+        const result = await testGeminiApiKey(keyVal);
+        if (keyStatusMsg) {
+          keyStatusMsg.style.color = '#34d399';
+          keyStatusMsg.textContent = `✅ Conexão bem-sucedida! Motor ${result.model} validado e ativo.`;
         }
       } catch (testErr) {
         if (keyStatusMsg) {
           keyStatusMsg.style.color = '#ff453a';
-          keyStatusMsg.textContent = `❌ Falha de rede: ${testErr.message}`;
+          keyStatusMsg.textContent = `❌ Erro na chave: ${testErr.message}`;
         }
       }
     });
