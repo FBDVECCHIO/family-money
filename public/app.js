@@ -87,6 +87,11 @@ function hideBgJobToast() {
   if (toast) toast.classList.add('hide');
 }
 
+// Helper universal de toast de notificação
+function showToast(message, duration = 3500, isSuccess = false) {
+  showBgJobToast(message, duration, isSuccess);
+}
+
 // ================= UTILS E FORMATADORES =================
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
