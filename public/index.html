@@ -1533,6 +1533,41 @@
               </div>
             </div>
 
+          <!-- Card de Memória Estratégica & Diretrizes Permanentes de Morgan -->
+          <div class="glass" style="padding: 20px; border-radius: 16px; margin-top: 20px; border-left: 4px solid #10b981;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="ai-avatar" style="width: 32px; height: 32px;">
+                  <i data-lucide="brain" style="width: 18px; height: 18px; color: #10b981;"></i>
+                </div>
+                <div>
+                  <h3 style="font-size: 1.05rem; margin: 0; color: #fff;">Memória Estratégica da Família (Diretrizes de Morgan)</h3>
+                  <small style="color: var(--text-muted);">Morgan memoriza essas metas e as aplica ativamente em qualquer conselho, auditoria ou alerta</small>
+                </div>
+              </div>
+              <button type="button" id="save-family-memory-btn" class="btn btn-outline" style="border-radius: 8px; font-size: 0.8rem; padding: 6px 14px; border-color: #10b981; color: #34d399; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="save" style="width: 14px; height: 14px;"></i> Salvar Memória
+              </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
+              <div>
+                <label style="display: block; font-size: 0.8rem; color: #a1a1aa; margin-bottom: 4px;">🎯 Meta Financeira Principal:</label>
+                <input type="text" id="memory-family-goal" placeholder="Ex: Construir reserva de R$ 50.000 até Dez/2026" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: #fff; font-size: 0.85rem;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.8rem; color: #a1a1aa; margin-bottom: 4px;">🛡️ Gastos Intocáveis / Prioridades:</label>
+                <input type="text" id="memory-family-untouchable" placeholder="Ex: Educação dos filhos e plano de saúde não se cortam" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: #fff; font-size: 0.85rem;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.8rem; color: #a1a1aa; margin-bottom: 4px;">⚖️ Perfil de Risco da Família:</label>
+                <select id="memory-family-risk" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: #fff; font-size: 0.85rem;">
+                  <option value="Conservador (Foco em Reserva, Liquidez Diária e Zero Dívidas)">Conservador (Foco em Reserva e Zero Dívidas)</option>
+                  <option value="Moderado (Reserva Segura + Float Inteligente no CDI)" selected>Moderado (Reserva Segura + Float Inteligente no CDI)</option>
+                  <option value="Arrojado (Otimização Máxima de Rendimentos e Aportes)">Arrojado (Otimização Máxima de Rendimentos)</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <!-- Seção de Chat Interativo com o Especialista (Morgan) -->
@@ -1779,7 +1814,7 @@ Dados: ${JSON.stringify(familyData)}`;
           </div>
           <div>
             <h3 style="margin: 0; font-size: 1.15rem; color: #fff;">Configuração do Especialista IA</h3>
-            <small style="color: var(--text-muted);">Defina o motor de raciocínio generativo <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 600; font-size: 0.72rem; margin-left: 4px;">v6.6 - CFO Intelligence & Memory</span></small>
+            <small style="color: var(--text-muted);">Defina o motor de raciocínio generativo <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 600; font-size: 0.72rem; margin-left: 4px;">v6.8 - Permanent Family Memory & CFO Autonomy</span></small>
           </div>
         </div>
         <button id="close-ai-settings-btn" style="background: rgba(255,255,255,0.08); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #fff;">
@@ -1826,6 +1861,6 @@ Dados: ${JSON.stringify(familyData)}`;
     </div>
   </div>
 
-  <script src="app.js?v=6.7&t=1791069500"></script>
+  <script src="app.js?v=6.8&t=1791071000"></script>
 </body>
 </html>

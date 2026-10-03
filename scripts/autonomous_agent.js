@@ -1,4 +1,4 @@
-﻿/**
+/**
  * =========================================================================
  * MORGAN - AGENTE FINANCEIRO AUTÔNOMO INDEPENDENTE 24/7 (Family Money)
  * =========================================================================
@@ -82,6 +82,11 @@ function buildAutonomousFinancialContext() {
       cdi: "10.65% a.a. (~0.85% ao mês líquido)",
       ipca: "4.2% a.a.",
       rendimentoMensalSaldoNoCdi: "R$ 203,88 / mês líquido"
+    },
+    memoriaEstrategicaFamilia: {
+      metaPrincipal: "Construir reserva de liquidez de R$ 50.000 até o final de 2026",
+      despesasInegociaveis: "Educação dos filhos, plano de saúde e alimentação essencial",
+      perfilRisco: "Moderado (Reserva Segura + Float Inteligente no CDI)"
     }
   };
 }
@@ -91,11 +96,17 @@ async function runMorganAutonomousAudit(apiKey, context) {
   const prompt = `Você é MORGAN, Chief Financial Officer (CFO) autônomo da família.
 É 08:00h da manhã e você está gerando o BRIEFING MATINAL PROATIVO DO DIA para a família no celular.
 
-DIRETRIZES:
+DIRETRIZES DA FAMÍLIA (MEMÓRIA PERMANENTE):
+- Meta Principal: "${context.memoriaEstrategicaFamilia.metaPrincipal}"
+- Gastos Intocáveis: "${context.memoriaEstrategicaFamilia.despesasInegociaveis}"
+- Perfil de Risco: "${context.memoriaEstrategicaFamilia.perfilRisco}"
+
+SUA ANÁLISE DO DIA:
 1. Examine a data de hoje (dia ${context.diaDoMesHoje}) e os cartões. Determine com exatidão qual cartão usar HOJE para obter o maior float (prazo sem juros).
 2. Destaque um insight financeiro acionável sobre o patrimônio (ex: rendimento de R$ 22.973 no CDI vs conta corrente).
 3. Aponte se há cartões fechando nos próximos 3 dias que NÃO devem ser usados hoje.
-4. Formate como uma mensagem elegante de WhatsApp/Telegram: use emojis, negritos pontuais e termine com uma frase inspiradora de Morgan.
+4. Lembre brevemente o progresso rumo à meta da família.
+5. Formate como uma mensagem elegante de WhatsApp/Telegram: use emojis, negritos pontuais e termine com uma frase inspiradora de Morgan.
 
 DADOS DA FAMÍLIA:
 ${JSON.stringify(context, null, 2)}`;

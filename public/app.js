@@ -4649,6 +4649,15 @@ function renderAiAgentTab() {
     }
   }
 
+  // Preencher Campos da Memória Estratégica da Família
+  const familyMem = loadFamilyMemory();
+  const goalEl = document.getElementById('memory-family-goal');
+  const untouchableEl = document.getElementById('memory-family-untouchable');
+  const riskEl = document.getElementById('memory-family-risk');
+  if (goalEl) goalEl.value = familyMem.metaPrincipal || '';
+  if (untouchableEl) untouchableEl.value = familyMem.despesasInegociaveis || '';
+  if (riskEl) riskEl.value = familyMem.perfilRisco || 'Moderado (Reserva Segura + Float Inteligente no CDI)';
+
   // Motor Ativo
   const engineIndicator = document.getElementById('ai-engine-active-indicator');
   const currentEngine = localStorage.getItem('fm_ai_engine') || 'native';
@@ -4665,22 +4674,62 @@ function renderAiAgentTab() {
   lucide.createIcons();
 }
 
-// 5. Inicialização da Mensagem de Boas-vindas do Morgan
+// 4.1 Memória Estratégica Persistente da Família
+function loadFamilyMemory() {
+  const saved = localStorage.getItem('fm_family_memory');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch(e) {}
+  }
+  return {
+    metaPrincipal: "Construir reserva de liquidez de R$ 50.000 até o final de 2026",
+    despesasInegociaveis: "Educação dos filhos, plano de saúde e alimentação essencial",
+    perfilRisco: "Moderado (Reserva Segura + Float Inteligente no CDI)"
+  };
+}
+
+function saveFamilyMemory() {
+  const goalEl = document.getElementById('memory-family-goal');
+  const untouchableEl = document.getElementById('memory-family-untouchable');
+  const riskEl = document.getElementById('memory-family-risk');
+
+  const memory = {
+    metaPrincipal: goalEl ? goalEl.value.trim() : "Construir reserva de liquidez de R$ 50.000 até o final de 2026",
+    despesasInegociaveis: untouchableEl ? untouchableEl.value.trim() : "Educação dos filhos, plano de saúde e alimentação essencial",
+    perfilRisco: riskEl ? riskEl.value : "Moderado (Reserva Segura + Float Inteligente no CDI)"
+  };
+
+  localStorage.setItem('fm_family_memory', JSON.stringify(memory));
+  showToast('Memória estratégica gravada! Morgan assimilou as diretrizes da família.');
+}
+
+// 5. Inicialização da Mensagem de Boas-vindas Proativa e Humanizada do Morgan
 function initChatWelcomeMessage(health, cardAnalysis) {
   const chatMessages = document.getElementById('ai-chat-messages');
   if (!chatMessages) return;
   if (chatMessages.children.length === 0) {
-    const bestCard = cardAnalysis.length > 0 ? cardAnalysis[0].name : 'nenhum cartão cadastrado';
-    const bestFloat = cardAnalysis.length > 0 ? `${cardAnalysis[0].floatDays} dias` : '';
+    const familyMem = loadFamilyMemory();
+    const bestCard = cardAnalysis.length > 0 ? cardAnalysis[0] : null;
+    const cardsClosingSoon = cardAnalysis.filter(c => c.daysUntilClosing <= 2 && c.daysUntilClosing >= 0);
+    const monthlyCdiYield = (health.totalLiquid * 0.1065) / 12;
 
-    appendAiChatMessage('agent', `Olá! Eu sou o **Morgan**, seu especialista de plantão em finanças familiares.
+    let proactiveAlert = '';
+    if (cardsClosingSoon.length > 0) {
+      proactiveAlert = `\n\n⚠️ **Alerta Proativo de Morgan:** O cartão **${cardsClosingSoon[0].name}** fecha em ${cardsClosingSoon[0].daysUntilClosing} dia(s). Evite compras nele hoje para não pagar já no vencimento próximo; prefira o **${bestCard ? bestCard.name : 'com maior float'}**!`;
+    } else if (health.totalLiquid > 1000) {
+      proactiveAlert = `\n\n💡 **Oportunidade Proativa do Dia:** Seu saldo de ${formatCurrency(health.totalLiquid)} aplicado em liquidez diária (100% CDI) gera aproximadamente **${formatCurrency(monthlyCdiYield)}/mês** líquidos sem oscilação.`;
+    }
 
-Estou monitorando suas contas, faturas e projeções em tempo real:
+    appendAiChatMessage('agent', `Olá! Eu sou o **Morgan**, Chief Financial Officer da família.
+
+Estou monitorando suas contas, faturas e fluxo de caixa em tempo real:
 * **Score de Saúde Familiar:** \`${health.score}/100\` (${health.badge}).
-* **Melhor Cartão Hoje:** **${bestCard}** (${bestFloat} de prazo sem juros).
-* **Liquidez:** ${health.coverageMonths} meses de cobertura.
+* **Melhor Cartão para Hoje:** **${bestCard ? bestCard.name : 'Nenhum'}** (${bestCard ? bestCard.floatDays + ' dias sem juros' : ''}).
+* **Liquidez da Reserva:** ${health.coverageMonths} meses assegurados.
+* **Diretriz Memorizada:** *"${familyMem.metaPrincipal}"*${proactiveAlert}
 
-Como posso te ajudar a otimizar seus rendimentos e cortar vazamentos hoje? Escolha um dos atalhos acima ou digite sua dúvida.`);
+Como posso te orientar hoje? Escolha um dos atalhos estratégicos acima ou envie sua dúvida.`);
   }
 }
 
@@ -4911,6 +4960,7 @@ async function callGeminiAgentApi(prompt, apiKey) {
   const selicRate = 10.75;
   const cdiAnnual = 10.65;
   const monthlyLiquidCdi = (health.totalLiquid * (cdiAnnual / 100)) / 12;
+  const familyMemory = loadFamilyMemory();
 
   const richContext = {
     dataHoje: new Date().toLocaleDateString('pt-BR'),
@@ -4921,6 +4971,7 @@ async function callGeminiAgentApi(prompt, apiKey) {
     taxaPoupancaMensal: `${health.monthlyIncome > 0 ? (((health.monthlyIncome - health.monthlyExpenses) / health.monthlyIncome) * 100).toFixed(1) : 0}%`,
     scoreSaudeFamiliar: `${health.score}/100 (${health.badge})`,
     coberturaReservaEmergencia: `${health.coverageMonths} meses`,
+    memoriaEstrategicaFamilia: familyMemory,
     cartoesCreditoFloat: cardAnalysis.map(c => ({
       cartao: c.name,
       diaFechamento: c.closingDay,
@@ -4945,15 +4996,20 @@ Você possui visão financeira global, macroeconômica e comportamental.
 
 SUA MISSÃO E POSTURA:
 1. "Receita é vaidade, lucro é sanidade, fluxo de caixa é a realidade."
-2. Você NÃO É UM ROBÔ DE RESPOSTAS PRÉ-PRONTAS: você é um consultor estratégico de alto nível com raciocínio analítico profundo, que analisa qualquer cenário, pergunta ou plano financeiro do usuário.
-3. Use SEMPRE os DADOS REAIS da família enviados abaixo (contas bancárias, saldos, cartões de crédito, faturas, gastos e projeção de fluxo de caixa).
-4. Combine os dados da família com inteligência de mercado e investimentos:
-   - Taxa Selic e CDI atuais no Brasil, rendimento da reserva de emergência em CDB 100% CDI com resgate diário / Tesouro Selic.
-   - Preservação de poder de compra frente à inflação (IPCA) e estratégias de médio/longo prazo (Tesouro IPCA+, renda fixa, diversificação).
+2. Você NÃO É UM ROBÔ DE RESPOSTAS PRÉ-PRONTAS: você é um consultor estratégico familiar de altíssimo nível com raciocínio analítico profundo, que analisa qualquer cenário, pergunta ou plano financeiro do usuário com empatia e naturalidade.
+3. MEMÓRIA E DIRETRIZES DA FAMÍLIA:
+   - Meta Principal: "${familyMemory.metaPrincipal}"
+   - Gastos Intocáveis (Jamais sugira cortar ou comprometer): "${familyMemory.despesasInegociaveis}"
+   - Perfil de Risco: "${familyMemory.perfilRisco}"
+   Sempre pondere se as decisões aproximam ou afastam a família dessa meta principal.
+4. Use SEMPRE os DADOS REAIS da família enviados abaixo (contas bancárias, saldos, cartões de crédito, faturas, gastos e projeção de fluxo de caixa).
+5. Combine os dados da família com inteligência de mercado e investimentos:
+   - Taxa Selic (${selicRate}% a.a.) e CDI (${cdiAnnual}% a.a.) atuais no Brasil, rendimento da reserva de emergência em CDB 100% CDI com resgate diário / Tesouro Selic.
+   - Preservação de poder de compra frente à inflação (IPCA ~4.2% a.a.) e estratégias de médio/longo prazo.
    - Engenharia do Float de Cartão de Crédito: usar o cartão com melhor data de corte para manter o dinheiro rendendo no CDI durante os 30 a 43 dias sem juros antes de quitar a fatura integralmente.
-   - Eliminação de juros caros: jamais permitir que a família entre no rotativo de cartão de crédito (~400% a.a.).
-5. Se o usuário perguntar sobre o futuro (ex: "como vê minhas finanças até Dezembro de 2026?"), faça uma análise completa da 'projecaoCompletaAteFimDoAno', destacando o saldo acumulado previsto, meses de superávit ou atenção, e quanto a família pode acumular e rentabilizar.
-6. Responda de forma direta, lúcida, elegante e bem estruturada em português do Brasil, utilizando markdown (negrito, marcadores e números concretos).
+   - Jamais permitir que a família entre no rotativo de cartão de crédito (~400% a.a.).
+6. Se o usuário perguntar sobre o futuro (ex: "como vê minhas finanças até Dezembro de 2026?"), faça uma análise completa da 'projecaoCompletaAteFimDoAno', destacando o saldo acumulado previsto, meses de superávit ou atenção, e quanto a família pode acumular e rentabilizar.
+7. Responda de forma direta, lúcida, elegante e bem estruturada em português do Brasil, utilizando markdown (negrito, marcadores e números concretos).
 
 [DADOS FINANCEIROS REAIS DA FAMÍLIA EM TEMPO REAL]
 ${JSON.stringify(richContext, null, 2)}
@@ -5307,6 +5363,11 @@ function initAiAgent() {
       }
     });
   });
+
+  const saveMemoryBtn = document.getElementById('save-family-memory-btn');
+  if (saveMemoryBtn) {
+    saveMemoryBtn.addEventListener('click', saveFamilyMemory);
+  }
 }
 
 // ================= INICIALIZAÇÃO =================
