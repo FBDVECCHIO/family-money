@@ -4910,14 +4910,23 @@ Regras inegociáveis:
     }
   };
 
-  if (localStorage.getItem('fm_gemini_active_model') === 'gemini-2.0-flash') {
-    localStorage.removeItem('fm_gemini_active_model');
+  let activeModel = localStorage.getItem('fm_gemini_active_model');
+  let modelsToTry = [];
+
+  if (activeModel && activeModel !== 'gemini-2.0-flash') {
+    modelsToTry.push(activeModel);
   }
-  const preferredModel = localStorage.getItem('fm_gemini_active_model') || 'gemini-3.8-flash';
-  const modelsToTry = [
-    preferredModel,
-    ...GEMINI_CANDIDATE_MODELS.filter(m => m !== preferredModel && m !== 'gemini-2.0-flash')
-  ];
+
+  try {
+    const discovered = await getAvailableGeminiModels(apiKey);
+    discovered.forEach(m => {
+      if (!modelsToTry.includes(m)) modelsToTry.push(m);
+    });
+  } catch(e) {
+    if (modelsToTry.length === 0) {
+      modelsToTry = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+    }
+  }
 
   let lastError = null;
   for (const model of modelsToTry) {
@@ -4954,29 +4963,51 @@ Regras inegociáveis:
   throw lastError || new Error("Falha ao comunicar com os modelos Gemini disponíveis.");
 }
 
-// Lista de modelos Gemini prioritários para cascata de fallback
-const GEMINI_CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
-  'gemini-2.5-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro'
-];
+// Consulta dinamicamente a API do Google (ListModels) para saber exatamente quais modelos esta chave suporta
+async function getAvailableGeminiModels(apiKey) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  const models = (data.models || [])
+    .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+    .map(m => m.name.replace(/^models\//, ''))
+    .filter(name => !name.includes('vision') && !name.includes('embedding') && !name.includes('2.0-flash'));
+
+  // Ordenar priorizando modelos Flash (rápidos e grátis) e versões mais recentes
+  models.sort((a, b) => {
+    const aFlash = a.includes('flash') ? 1 : 0;
+    const bFlash = b.includes('flash') ? 1 : 0;
+    if (aFlash !== bFlash) return bFlash - aFlash;
+    return b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  return models;
+}
 
 async function testGeminiApiKey(apiKey) {
-  let lastError = null;
-  // Limpeza de segurança contra versões legadas
-  if (localStorage.getItem('fm_gemini_active_model') === 'gemini-2.0-flash') {
-    localStorage.removeItem('fm_gemini_active_model');
+  let candidateModels = [];
+  try {
+    console.log('[Gemini API v6.5] Consultando ModelService.ListModels...');
+    candidateModels = await getAvailableGeminiModels(apiKey);
+    console.log('[Gemini API v6.5] Modelos suportados pela chave:', candidateModels);
+  } catch (listErr) {
+    console.warn('[Gemini API v6.5] Falha no ListModels:', listErr.message);
+    if (listErr.message.includes('API_KEY_INVALID') || listErr.message.includes('key not valid')) {
+      throw listErr;
+    }
   }
-  const preferredModel = localStorage.getItem('fm_gemini_active_model') || 'gemini-3.8-flash';
-  const modelsToTry = [
-    preferredModel,
-    ...GEMINI_CANDIDATE_MODELS.filter(m => m !== preferredModel && m !== 'gemini-2.0-flash')
-  ];
 
-  for (const model of modelsToTry) {
+  if (!candidateModels || candidateModels.length === 0) {
+    candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro'];
+  }
+
+  let lastError = null;
+  for (const model of candidateModels) {
     try {
-      console.log(`[Gemini API v6.4] Validando modelo: ${model}...`);
+      console.log(`[Gemini API v6.5] Testando geração com modelo: ${model}...`);
       const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4987,13 +5018,13 @@ async function testGeminiApiKey(apiKey) {
 
       if (testRes.ok) {
         localStorage.setItem('fm_gemini_active_model', model);
-        console.log(`[Gemini API v6.4] Modelo ${model} validado com sucesso!`);
+        console.log(`[Gemini API v6.5] ✅ Modelo operacional confirmado: ${model}`);
         return { success: true, model };
       }
 
       const errData = await testRes.json().catch(() => ({}));
       const msg = errData.error?.message || `HTTP ${testRes.status}`;
-      console.warn(`[Gemini API v6.4] Falha no modelo ${model}:`, msg);
+      console.warn(`[Gemini API v6.5] Modelo ${model} falhou:`, msg);
       lastError = new Error(msg);
 
       if (msg.includes('API_KEY_INVALID') || (testRes.status === 400 && msg.includes('key'))) {
@@ -5129,7 +5160,7 @@ function initAiAgent() {
       if (keyStatusMsg) {
         keyStatusMsg.style.display = 'block';
         keyStatusMsg.style.color = '#38bdf8';
-        keyStatusMsg.textContent = 'Testando conexão com Gemini 3.8 Flash (v6.4)...';
+        keyStatusMsg.textContent = 'Detectando modelos compatíveis na sua conta Google AI...';
       }
 
       try {
