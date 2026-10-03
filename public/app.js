@@ -449,6 +449,7 @@ async function loadAllData() {
     renderReportsFields();
     renderReportsTable();
     updateDiagnostics();
+    renderAiAgentTab();
     
     // Background Job: Verificação de backup automático diário assíncrono (desacoplado da inicialização)
     scheduleDailyBackupJob();
@@ -2858,6 +2859,8 @@ document.querySelectorAll('.nav-link').forEach(btn => {
 
     if (tabName === 'dashboard') {
       loadAllData();
+    } else if (tabName === 'ai-agent') {
+      renderAiAgentTab();
     }
   });
 });
@@ -4254,6 +4257,857 @@ window.exportSelectedTransactionsPDF = function() {
   printWindow.document.close();
 };
 
+// ================= AGENTE ESPECIALISTA IA 24H (MORGAN) =================
+
+// 1. Cálculo de Saúde Financeira Familiar (0 a 100)
+function calculateFinancialHealthScore() {
+  const accounts = state.accounts || [];
+  const forecast = state.forecast || [];
+
+  // Liquidez total disponível em contas correntes e poupança
+  const totalLiquid = accounts.reduce((acc, a) => acc + (parseFloat(a.balance || 0)), 0);
+
+  // Mês atual da projeção
+  const currentMonthForecast = forecast[0] || { totalIncomes: 0, totalExpenses: 0, cardBills: [] };
+  const monthlyIncome = parseFloat(currentMonthForecast.totalIncomes || 0);
+  const monthlyExpenses = parseFloat(currentMonthForecast.totalExpenses || 0);
+
+  // Taxa de Poupança / Superávit
+  const netSurplus = monthlyIncome - monthlyExpenses;
+  const savingsRate = monthlyIncome > 0 ? (netSurplus / monthlyIncome) : 0;
+
+  // Cobertura de Emergência (em meses de despesa)
+  const monthlyBurn = monthlyExpenses > 0 ? monthlyExpenses : 1;
+  const coverageMonths = totalLiquid > 0 ? (totalLiquid / monthlyBurn) : 0;
+
+  // Comprometimento de Renda com Faturas de Cartão
+  const totalCardBills = (currentMonthForecast.cardBills || []).reduce((sum, b) => sum + parseFloat(b.amount || 0), 0);
+  const cardDebtRatio = monthlyIncome > 0 ? (totalCardBills / monthlyIncome) : 0;
+
+  // Cálculo de Pontuação (0 - 100)
+  // Poupança (0 - 35 pts)
+  let savingsPts = 0;
+  if (savingsRate >= 0.25) savingsPts = 35;
+  else if (savingsRate >= 0.15) savingsPts = 28;
+  else if (savingsRate >= 0.05) savingsPts = 20;
+  else if (savingsRate > 0) savingsPts = 12;
+  else savingsPts = 0;
+
+  // Liquidez / Reserva de Emergência (0 - 35 pts)
+  let liquidityPts = 0;
+  if (coverageMonths >= 6) liquidityPts = 35;
+  else if (coverageMonths >= 3) liquidityPts = 28;
+  else if (coverageMonths >= 1) liquidityPts = 18;
+  else if (coverageMonths >= 0.5) liquidityPts = 10;
+  else liquidityPts = 4;
+
+  // Risco de Cartões / Dívida (0 - 30 pts)
+  let debtPts = 0;
+  if (cardDebtRatio <= 0.30) debtPts = 30;
+  else if (cardDebtRatio <= 0.50) debtPts = 22;
+  else if (cardDebtRatio <= 0.70) debtPts = 14;
+  else if (cardDebtRatio <= 0.90) debtPts = 6;
+  else debtPts = 0;
+
+  const totalScore = Math.min(100, Math.max(5, savingsPts + liquidityPts + debtPts));
+
+  let badge = 'Excelente';
+  let badgeColor = '#10b981';
+  let desc = 'Fluxo de caixa saudável e excelente liquidez.';
+
+  if (totalScore >= 80) {
+    badge = 'Excelente';
+    badgeColor = '#10b981';
+    desc = 'Ótimo controle orçamentário e ampla reserva de segurança.';
+  } else if (totalScore >= 65) {
+    badge = 'Saudável';
+    badgeColor = '#06b6d4';
+    desc = 'Orçamento equilibrado com boa margem operacional.';
+  } else if (totalScore >= 50) {
+    badge = 'Atenção';
+    badgeColor = '#f59e0b';
+    desc = 'Despesas e cartões estão consumindo grande parte da receita.';
+  } else {
+    badge = 'Crítico';
+    badgeColor = '#ff453a';
+    desc = 'Risco de liquidez. Recomenda-se corte urgente em supérfluos.';
+  }
+
+  return {
+    score: totalScore,
+    badge,
+    badgeColor,
+    desc,
+    totalLiquid,
+    monthlyIncome,
+    monthlyExpenses,
+    savingsRate: (savingsRate * 100).toFixed(1),
+    coverageMonths: coverageMonths.toFixed(1),
+    totalCardBills,
+    cardDebtRatio: (cardDebtRatio * 100).toFixed(1)
+  };
+}
+
+// 2. Análise de Float e Decisão de Cartões
+function getCardsFloatAnalysis() {
+  const cards = state.cards || [];
+  if (!cards.length) return [];
+
+  const today = new Date();
+  const currentDay = today.getDate();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+  const todayStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+
+  const analysis = cards.map(card => {
+    const closingDay = parseInt(card.closing_day || card.closingDay || 1, 10);
+    const dueDay = parseInt(card.due_day || card.dueDay || 10, 10);
+
+    const billTarget = getCardPaymentMonthAndYear(todayStr, closingDay, dueDay);
+    const dueDate = new Date(billTarget.year, billTarget.month, dueDay, 12, 0, 0);
+
+    const diffTime = dueDate.getTime() - today.getTime();
+    const floatDays = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+
+    let daysUntilClosing = 0;
+    if (currentDay <= closingDay) {
+      daysUntilClosing = closingDay - currentDay;
+    } else {
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      daysUntilClosing = (daysInMonth - currentDay) + closingDay;
+    }
+
+    let statusTip = '';
+    let recommendationLevel = 'neutral';
+
+    if (currentDay === closingDay) {
+      statusTip = 'Fatura fecha HOJE! Compras tarde podem ir para o mês que vem, mas requer atenção.';
+      recommendationLevel = 'warning';
+    } else if (currentDay === closingDay + 1 || currentDay === closingDay + 2) {
+      statusTip = '🔥 Fatura recém-fechada! Máximo prazo sem juros para pagar.';
+      recommendationLevel = 'recommended';
+    } else if (daysUntilClosing <= 3) {
+      statusTip = `Fatura fecha em ${daysUntilClosing} dia(s). Aguarde o fechamento para mais prazo.`;
+      recommendationLevel = 'warning';
+    } else {
+      statusTip = `Prazo de ${floatDays} dias até o vencimento da fatura.`;
+      recommendationLevel = 'neutral';
+    }
+
+    return {
+      card,
+      id: card.id,
+      name: card.name,
+      color: card.color || '#3b82f6',
+      closingDay,
+      dueDay,
+      floatDays,
+      daysUntilClosing,
+      dueDateFormatted: dueDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+      statusTip,
+      recommendationLevel
+    };
+  });
+
+  analysis.sort((a, b) => b.floatDays - a.floatDays);
+  return analysis;
+}
+
+// 3. Detecção de Despesas Crescentes & Supérfluos
+function detectExpenseAnomalies() {
+  const transactions = state.transactions || [];
+  const categories = state.categories || [];
+  const catMap = state.lookupMaps && state.lookupMaps.categories ? state.lookupMaps.categories : new Map();
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const discretionaryKeywords = [
+    'lazer', 'delivery', 'restaurante', 'alimentação fora', 'fast food',
+    'ifood', 'streaming', 'netflix', 'assinatura', 'viagem', 'shopping',
+    'roupas', 'jogos', 'games', 'bar', 'café', 'eletrônicos'
+  ];
+
+  const currentMonthByCat = {};
+  const pastMonthsByCat = {};
+
+  transactions.forEach(t => {
+    if (t.type === 'income' || t.amount > 0) return;
+    const amount = Math.abs(parseFloat(t.amount || 0));
+    if (amount <= 0) return;
+
+    const tDate = t.date ? t.date.substring(0, 7) : '';
+    const catId = t.category_id || t.categoryId;
+    const catObj = catMap.get(catId) || categories.find(c => c.id === catId);
+    const catName = catObj ? catObj.name : 'Outros';
+
+    if (tDate === currentMonthKey) {
+      currentMonthByCat[catName] = (currentMonthByCat[catName] || 0) + amount;
+    } else {
+      pastMonthsByCat[catName] = pastMonthsByCat[catName] || [];
+      pastMonthsByCat[catName].push(amount);
+    }
+  });
+
+  const anomalies = [];
+  let totalSuperfluous = 0;
+
+  Object.entries(currentMonthByCat).forEach(([catName, spent]) => {
+    const isDiscretionary = discretionaryKeywords.some(kw => catName.toLowerCase().includes(kw));
+    const pastAmounts = pastMonthsByCat[catName] || [];
+    const pastAvg = pastAmounts.length ? (pastAmounts.reduce((a, b) => a + b, 0) / Math.max(1, pastAmounts.length / 3)) : spent;
+
+    let growthPct = 0;
+    if (pastAvg > 0) {
+      growthPct = ((spent - pastAvg) / pastAvg) * 100;
+    }
+
+    if (isDiscretionary) {
+      totalSuperfluous += spent;
+    }
+
+    if (isDiscretionary || growthPct >= 20 || spent > 500) {
+      anomalies.push({
+        category: catName,
+        spent,
+        pastAvg,
+        growthPct: Math.round(growthPct),
+        isDiscretionary,
+        potentialSaving: (spent * 0.20),
+        tip: growthPct > 25
+          ? `Alta de +${Math.round(growthPct)}% sobre o histórico. Oportunidade de corte imediato.`
+          : `Gasto discricionário. Reduzir 20% devolve ${formatCurrency(spent * 0.20)}/mês para a reserva.`
+      });
+    }
+  });
+
+  anomalies.sort((a, b) => b.spent - a.spent);
+
+  return {
+    anomalies: anomalies.slice(0, 5),
+    totalSuperfluous
+  };
+}
+
+// 4. Renderização Completa da Aba Especialista IA
+function renderAiAgentTab() {
+  const health = calculateFinancialHealthScore();
+  const cardAnalysis = getCardsFloatAnalysis();
+  const anomalyData = detectExpenseAnomalies();
+
+  // Score
+  const scoreValEl = document.getElementById('ai-health-score-val');
+  const scoreBadgeEl = document.getElementById('ai-health-score-badge');
+  const scoreDescEl = document.getElementById('ai-health-score-desc');
+  const scoreBarEl = document.getElementById('ai-health-score-bar');
+
+  if (scoreValEl) scoreValEl.textContent = health.score;
+  if (scoreBadgeEl) {
+    scoreBadgeEl.textContent = health.badge;
+    scoreBadgeEl.style.color = health.badgeColor;
+    scoreBadgeEl.style.backgroundColor = `${health.badgeColor}22`;
+  }
+  if (scoreDescEl) scoreDescEl.textContent = health.desc;
+  if (scoreBarEl) {
+    scoreBarEl.style.width = `${health.score}%`;
+    scoreBarEl.style.background = health.badgeColor;
+  }
+
+  // Melhor Cartão
+  const bestCardNameEl = document.getElementById('ai-best-card-name');
+  const bestCardDaysEl = document.getElementById('ai-best-card-days');
+  const bestCardReasonEl = document.getElementById('ai-best-card-reason');
+
+  if (cardAnalysis.length > 0) {
+    const best = cardAnalysis[0];
+    if (bestCardNameEl) bestCardNameEl.textContent = best.name;
+    if (bestCardDaysEl) bestCardDaysEl.textContent = `Até ${best.floatDays} dias de prazo`;
+    if (bestCardReasonEl) bestCardReasonEl.textContent = `Vence em ${best.dueDateFormatted}. ${best.statusTip}`;
+  } else {
+    if (bestCardNameEl) bestCardNameEl.textContent = 'Nenhum cartão';
+    if (bestCardDaysEl) bestCardDaysEl.textContent = 'Configure em Administração';
+    if (bestCardReasonEl) bestCardReasonEl.textContent = 'Cadastre cartões com dia de fechamento e vencimento.';
+  }
+
+  // Supérfluos
+  const superfluousValEl = document.getElementById('ai-superfluous-val');
+  const superfluousCatEl = document.getElementById('ai-superfluous-cat');
+  const superfluousRecEl = document.getElementById('ai-superfluous-rec');
+
+  if (superfluousValEl) superfluousValEl.textContent = formatCurrency(anomalyData.totalSuperfluous);
+  if (superfluousCatEl) {
+    if (anomalyData.anomalies.length > 0) {
+      superfluousCatEl.textContent = `Maior foco em: ${escapeHtml(anomalyData.anomalies[0].category)}`;
+    } else {
+      superfluousCatEl.textContent = 'Sem supérfluos anômalos';
+    }
+  }
+  if (superfluousRecEl) {
+    const potSaving = anomalyData.totalSuperfluous * 0.20;
+    superfluousRecEl.textContent = potSaving > 0
+      ? `Cortando 20% você poupa ${formatCurrency(potSaving)}/mês`
+      : 'Despesas essenciais bem controladas';
+  }
+
+  // Diagnóstico de Liquidez
+  const liqStatusEl = document.getElementById('ai-liquidity-status');
+  const liqCoverageEl = document.getElementById('ai-liquidity-coverage');
+  const liqAlertEl = document.getElementById('ai-liquidity-alert');
+
+  if (liqCoverageEl) liqCoverageEl.textContent = `Cobertura: ${health.coverageMonths} meses`;
+  if (liqStatusEl) {
+    if (parseFloat(health.coverageMonths) >= 3) {
+      liqStatusEl.textContent = 'Reserva Segura';
+      liqStatusEl.style.color = '#34d399';
+    } else if (parseFloat(health.coverageMonths) >= 1) {
+      liqStatusEl.textContent = 'Reserva Moderada';
+      liqStatusEl.style.color = '#38bdf8';
+    } else {
+      liqStatusEl.textContent = 'Atenção à Liquidez';
+      liqStatusEl.style.color = '#fbbf24';
+    }
+  }
+  if (liqAlertEl) {
+    if (health.totalLiquid < health.totalCardBills) {
+      liqAlertEl.textContent = `Faturas (${formatCurrency(health.totalCardBills)}) excedem o saldo bancário (${formatCurrency(health.totalLiquid)}).`;
+      liqAlertEl.style.color = '#ff453a';
+    } else {
+      liqAlertEl.textContent = `Saldo bancário de ${formatCurrency(health.totalLiquid)} cobre as faturas previstas.`;
+      liqAlertEl.style.color = '#94a3b8';
+    }
+  }
+
+  // Matriz de Cartões
+  const matrixContainer = document.getElementById('ai-cards-matrix-list');
+  if (matrixContainer) {
+    if (cardAnalysis.length === 0) {
+      matrixContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 20px;">Nenhum cartão cadastrado em Administração.</div>';
+    } else {
+      matrixContainer.innerHTML = cardAnalysis.map((item, idx) => {
+        const isBest = idx === 0;
+        return `
+          <div class="ai-card-item ${isBest ? 'recommended' : ''}">
+            <div class="ai-card-item-left">
+              <div class="ai-card-icon-box" style="background: ${item.color}25; border: 1px solid ${item.color}66; color: ${item.color};">
+                <i data-lucide="credit-card" style="width: 20px; height: 20px;"></i>
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <strong style="color: #fff; font-size: 0.95rem;">${escapeHtml(item.name)}</strong>
+                  ${isBest ? '<span class="ai-score-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 700;">🏆 Recomendado Hoje</span>' : ''}
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                  Fecha dia <strong>${item.closingDay}</strong> &bull; Vence dia <strong>${item.dueDay}</strong> (${item.dueDateFormatted})
+                </div>
+                <div style="font-size: 0.75rem; color: ${item.recommendationLevel === 'warning' ? '#f59e0b' : '#94a3b8'}; margin-top: 2px;">
+                  ${escapeHtml(item.statusTip)}
+                </div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 1.15rem; font-weight: 800; color: ${isBest ? '#10b981' : '#f4f4f5'};">
+                ${item.floatDays} dias
+              </div>
+              <small style="font-size: 0.72rem; color: var(--text-muted);">prazo sem juros</small>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // Anomalias & Supérfluos
+  const anomaliesContainer = document.getElementById('ai-anomalies-list');
+  if (anomaliesContainer) {
+    if (anomalyData.anomalies.length === 0) {
+      anomaliesContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 20px;">Nenhuma anomalia de gastos detectada neste mês. Orçamento bem disciplinado!</div>';
+    } else {
+      anomaliesContainer.innerHTML = anomalyData.anomalies.map(anom => {
+        return `
+          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <strong style="color: #fff; font-size: 0.9rem;">${escapeHtml(anom.category)}</strong>
+                ${anom.growthPct > 0 ? `<span class="badge badge-danger" style="font-size: 0.7rem;">+${anom.growthPct}%</span>` : ''}
+              </div>
+              <small style="color: var(--text-muted); font-size: 0.78rem; display: block; margin-top: 2px;">
+                ${escapeHtml(anom.tip)}
+              </small>
+            </div>
+            <div style="text-align: right; white-space: nowrap;">
+              <span style="font-weight: 700; color: #fbbf24; font-size: 0.95rem;">${formatCurrency(anom.spent)}</span>
+              <small style="display: block; font-size: 0.72rem; color: #10b981;">Poupança: -${formatCurrency(anom.potentialSaving)}</small>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // Motor Ativo
+  const engineIndicator = document.getElementById('ai-engine-active-indicator');
+  const currentEngine = localStorage.getItem('fm_ai_engine') || 'native';
+  if (engineIndicator) {
+    if (currentEngine === 'gemini' && localStorage.getItem('fm_gemini_api_key')) {
+      engineIndicator.textContent = 'Motor: Google Gemini 2.0 Flash (IA Generativa Ativa)';
+    } else {
+      engineIndicator.textContent = 'Motor: Analítico Nativo (Ativo & Grátis)';
+    }
+  }
+
+  initChatWelcomeMessage(health, cardAnalysis);
+  lucide.createIcons();
+}
+
+// 5. Inicialização da Mensagem de Boas-vindas do Morgan
+function initChatWelcomeMessage(health, cardAnalysis) {
+  const chatMessages = document.getElementById('ai-chat-messages');
+  if (!chatMessages) return;
+  if (chatMessages.children.length === 0) {
+    const bestCard = cardAnalysis.length > 0 ? cardAnalysis[0].name : 'nenhum cartão cadastrado';
+    const bestFloat = cardAnalysis.length > 0 ? `${cardAnalysis[0].floatDays} dias` : '';
+
+    appendAiChatMessage('agent', `Olá! Eu sou o **Morgan**, seu especialista de plantão em finanças familiares.
+
+Estou monitorando suas contas, faturas e projeções em tempo real:
+* **Score de Saúde Familiar:** \`${health.score}/100\` (${health.badge}).
+* **Melhor Cartão Hoje:** **${bestCard}** (${bestFloat} de prazo sem juros).
+* **Liquidez:** ${health.coverageMonths} meses de cobertura.
+
+Como posso te ajudar a otimizar seus rendimentos e cortar vazamentos hoje? Escolha um dos atalhos acima ou digite sua dúvida.`);
+  }
+}
+
+// 6. Mensagens do Chat e Renderização
+function appendAiChatMessage(sender, text) {
+  const chatMessages = document.getElementById('ai-chat-messages');
+  if (!chatMessages) return;
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `ai-chat-msg ${sender}`;
+
+  let formattedText = escapeHtml(text)
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.*?)`/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>')
+    .replace(/^\* (.*$)/gim, '<li style="margin-left: 15px;">$1</li>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+
+  msgDiv.innerHTML = `
+    ${sender === 'agent' ? `
+      <div class="ai-avatar" style="width: 28px; height: 28px; flex-shrink: 0; margin-top: 4px;">
+        <i data-lucide="bot" style="width: 16px; height: 16px; color: #10b981;"></i>
+      </div>
+    ` : ''}
+    <div class="ai-chat-bubble">
+      ${formattedText}
+    </div>
+  `;
+
+  chatMessages.appendChild(msgDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  lucide.createIcons();
+}
+
+// 7. Envio e Processamento de Pergunta
+async function handleAiChatSubmit(userQuery) {
+  if (!userQuery || !userQuery.trim()) return;
+
+  appendAiChatMessage('user', userQuery.trim());
+
+  const chatMessages = document.getElementById('ai-chat-messages');
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'ai-chat-msg agent';
+  typingDiv.id = 'ai-typing-indicator';
+  typingDiv.innerHTML = `
+    <div class="ai-avatar" style="width: 28px; height: 28px; flex-shrink: 0;">
+      <i data-lucide="bot" style="width: 16px; height: 16px; color: #10b981;"></i>
+    </div>
+    <div class="ai-chat-bubble" style="color: var(--text-muted); font-style: italic;">
+      Morgan está analisando suas finanças...
+    </div>
+  `;
+  chatMessages.appendChild(typingDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  const selectedEngine = localStorage.getItem('fm_ai_engine') || 'native';
+  const geminiKey = localStorage.getItem('fm_gemini_api_key');
+
+  try {
+    let responseText = '';
+
+    if (selectedEngine === 'gemini' && geminiKey) {
+      responseText = await callGeminiAgentApi(userQuery, geminiKey);
+    } else {
+      responseText = runNativeMorganReasoning(userQuery);
+    }
+
+    const typingEl = document.getElementById('ai-typing-indicator');
+    if (typingEl) typingEl.remove();
+
+    appendAiChatMessage('agent', responseText);
+  } catch (err) {
+    console.error('Erro no processamento do agente IA:', err);
+    const typingEl = document.getElementById('ai-typing-indicator');
+    if (typingEl) typingEl.remove();
+
+    const fallbackText = runNativeMorganReasoning(userQuery);
+    appendAiChatMessage('agent', fallbackText);
+  }
+}
+
+// 8. Motor Heurístico Nativo de Morgan
+function runNativeMorganReasoning(query) {
+  const q = query.toLowerCase();
+  const health = calculateFinancialHealthScore();
+  const cardAnalysis = getCardsFloatAnalysis();
+  const anomalyData = detectExpenseAnomalies();
+  const forecast = state.forecast || [];
+
+  // Perguntas sobre Cartões / Qual cartão usar hoje
+  if (q.includes('cart') || q.includes('prazo') || q.includes('usar hoje') || q.includes('qual')) {
+    if (cardAnalysis.length === 0) {
+      return "Você ainda não possui cartões cadastrados. Vá até a aba **Administração > Cartões** e adicione seus cartões informando o dia de fechamento e dia de vencimento.";
+    }
+    const best = cardAnalysis[0];
+    let cardsDetail = cardAnalysis.map(c => `* **${c.name}**: Fecha dia ${c.closingDay}, vence dia ${c.dueDay}. Se comprar hoje, tem **${c.floatDays} dias** até pagar (${c.dueDateFormatted}).`).join('\n');
+
+    return `🏆 **Minha recomendação tática para hoje:**
+
+Passe as compras de hoje no **${best.name}**. Ele garante **${best.floatDays} dias sem juros** para pagar (vencimento em ${best.dueDateFormatted}).
+
+**Comparativo de todos os seus cartões hoje:**
+${cardsDetail}
+
+💡 *Regra de Morgan:* Compras feitas 1 a 2 dias após a data de fechamento geram o maior float financeiro possível, preservando a liquidez das suas contas.`;
+  }
+
+  // Perguntas sobre Supérfluos / Onde cortar
+  if (q.includes('supérfl') || q.includes('cortar') || q.includes('desnecessár') || q.includes('vazamento') || q.includes('economiz')) {
+    if (anomalyData.anomalies.length === 0) {
+      return `Auditei todos os lançamentos deste mês e **não encontrei anomalias graves de supérfluos**. Suas despesas estão equilibradas dentro das categorias essenciais. Continue mantendo esse padrão!`;
+    }
+
+    let itemsText = anomalyData.anomalies.map(a => `* **${a.category}**: ${formatCurrency(a.spent)} gastos neste mês. Reduzir 20% devolve **${formatCurrency(a.potentialSaving)}/mês** para sua reserva.`).join('\n');
+    const totalPotential = anomalyData.totalSuperfluous * 0.20;
+
+    return `🚨 **Auditoria de Supérfluos & Vazamentos de Orçamento:**
+
+Identifiquei **${formatCurrency(anomalyData.totalSuperfluous)}** concentrados em categorias com alto potencial de otimização:
+
+${itemsText}
+
+🎯 **Plano de Ação:** Aplicando uma redução moderada de 20% nesses itens, a família economiza **${formatCurrency(totalPotential)} todos os meses**, somando **${formatCurrency(totalPotential * 12)} ao ano** para novos investimentos.`;
+  }
+
+  // Perguntas sobre Projeção / 6 meses / Risco de déficit
+  if (q.includes('proje') || q.includes('6 mes') || q.includes('futuro') || q.includes('risco') || q.includes('aperto') || q.includes('previs')) {
+    if (forecast.length === 0) {
+      return "Ainda não há dados suficientes no forecast para projetar os próximos 6 meses. Registre suas receitas recorrentes e despesas fixas em Administração.";
+    }
+
+    let forecastSummary = forecast.slice(0, 6).map(f => {
+      const surplus = f.totalIncomes - f.totalExpenses;
+      const statusIcon = surplus >= 0 ? '🟢' : '🔴';
+      return `* ${statusIcon} **${f.label}**: Receitas ${formatCurrency(f.totalIncomes)} | Despesas ${formatCurrency(f.totalExpenses)} | Resultado: **${formatCurrency(surplus)}**`;
+    }).join('\n');
+
+    const hasDeficit = forecast.slice(0, 6).some(f => (f.totalIncomes - f.totalExpenses) < 0);
+
+    return `🔮 **Diagnóstico de Fluxo de Caixa para os Próximos 6 Meses:**
+
+${forecastSummary}
+
+${hasDeficit ? '⚠️ **Atenção:** Há meses projetados com resultado negativo. Recomendo renegociar despesas fixas ou adiar compras parceladas nesses períodos.' : '✅ **Cenário Favorável:** Todos os próximos meses estão projetados com superávit ou equilíbrio financeiro. Excelente sustentabilidade!'}
+
+💡 *Regra de Morgan:* Monitore sempre a relação entre as faturas de cartão e a renda líquida para não comprometer mais de 30% do faturamento mensal.`;
+  }
+
+  // Auditoria Completa / Conselhos prioritários
+  if (q.includes('auditoria') || q.includes('conselho') || q.includes('priorit') || q.includes('completa') || q.includes('resumo')) {
+    const bestCard = cardAnalysis.length > 0 ? cardAnalysis[0].name : 'Cartão principal';
+    return `📋 **Auditoria Executiva Familiar — Parecer de Morgan:**
+
+1. **Saúde Financeira Geral:** Score \`${health.score}/100\` (${health.badge}). A cobertura atual de liquidez é de **${health.coverageMonths} meses**.
+2. **Estratégia de Cartões:** Concentre as compras do dia no **${bestCard}** para maximizar o prazo até o vencimento.
+3. **Cortes Estratégicos:** Potencial de poupança imediata de **${formatCurrency(anomalyData.totalSuperfluous * 0.20)}/mês** em categorias discricionárias.
+4. **Próxima Ação Imediata:** Manter os lançamentos do dia rigorosamente conciliados e acompanhar o fechamento da próxima fatura.`;
+  }
+
+  // Resposta padrão contextualizada
+  return `Analisando seu patrimônio atual:
+* **Saldo Bancário Total:** ${formatCurrency(health.totalLiquid)}
+* **Score de Saúde:** \`${health.score}/100\` (${health.badge})
+* **Melhor Cartão Hoje:** ${cardAnalysis.length > 0 ? cardAnalysis[0].name : 'Nenhum'}
+
+Posso te responder sobre:
+1. Qual cartão usar hoje para obter o maior prazo sem juros.
+2. Onde cortar supérfluos e economizar neste mês.
+3. Projeção detalhada de receitas e faturas para os próximos 6 meses.
+4. Auditoria completa com recomendações prioritárias.`;
+}
+
+// 9. Chamada à API Google Gemini (Free Tier)
+async function callGeminiAgentApi(prompt, apiKey) {
+  const health = calculateFinancialHealthScore();
+  const cardAnalysis = getCardsFloatAnalysis();
+  const anomalyData = detectExpenseAnomalies();
+  const forecast = state.forecast || [];
+
+  const contextData = {
+    totalLiquid: health.totalLiquid,
+    monthlyIncome: health.monthlyIncome,
+    monthlyExpenses: health.monthlyExpenses,
+    healthScore: health.score,
+    healthBadge: health.badge,
+    cards: cardAnalysis.map(c => ({
+      name: c.name,
+      closingDay: c.closingDay,
+      dueDay: c.dueDay,
+      floatDaysToday: c.floatDays,
+      statusTip: c.statusTip
+    })),
+    discretionaryAnomalies: anomalyData.anomalies,
+    forecastNext3Months: forecast.slice(0, 3).map(f => ({
+      month: f.label,
+      incomes: f.totalIncomes,
+      expenses: f.totalExpenses,
+      surplus: f.totalIncomes - f.totalExpenses
+    }))
+  };
+
+  const systemInstruction = `Você é Morgan, especialista sênior em finanças pessoais e FP&A familiar com mais de 12 anos de experiência (inspirado no repositório agency-agents).
+Sua missão: fornecer consultoria precisa, rigorosa e prática baseada em fluxo de caixa para a família.
+Regras inegociáveis:
+1. Pense em fluxo de caixa, liquidez e float de cartões de crédito. Receita é vaidade, lucro é sanidade, fluxo de caixa é realidade.
+2. Apresente respostas estruturadas, diretas e acionáveis, em português do Brasil, usando markdown amigável (*, **, itens).
+3. Nunca invente dados: baseie-se estritamente nas finanças da família enviadas no contexto.
+4. Responda em no máximo 3 ou 4 parágrafos objetivos.`;
+
+  const payload = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: `CONTEXTO FINANCEIRO REAL DA FAMÍLIA:\n${JSON.stringify(contextData, null, 2)}\n\nPERGUNTA DO USUÁRIO:\n${prompt}` }
+        ]
+      }
+    ],
+    systemInstruction: {
+      parts: [
+        { text: systemInstruction }
+      ]
+    },
+    generationConfig: {
+      temperature: 0.3,
+      maxOutputTokens: 800
+    }
+  };
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!candidate) throw new Error("Resposta vazia da API Gemini.");
+
+  return candidate;
+}
+
+// 10. Inicialização dos Ouvintes de Evento do Agente IA
+function initAiAgent() {
+  const refreshBtn = document.getElementById('ai-refresh-audit-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      renderAiAgentTab();
+      showToast('Auditoria do Especialista IA atualizada com sucesso!');
+    });
+  }
+
+  const openGuideBtn = document.getElementById('ai-guide-open-btn');
+  const closeGuideBtn = document.getElementById('close-ai-guide-btn');
+  const guideModal = document.getElementById('ai-guide-modal');
+
+  if (openGuideBtn && guideModal) {
+    openGuideBtn.addEventListener('click', () => {
+      guideModal.classList.remove('hide');
+    });
+  }
+  if (closeGuideBtn && guideModal) {
+    closeGuideBtn.addEventListener('click', () => {
+      guideModal.classList.add('hide');
+    });
+  }
+  if (guideModal) {
+    guideModal.addEventListener('click', (e) => {
+      if (e.target === guideModal) guideModal.classList.add('hide');
+    });
+  }
+
+  const openSettingsBtn = document.getElementById('ai-settings-open-btn');
+  const closeSettingsBtn = document.getElementById('close-ai-settings-btn');
+  const settingsModal = document.getElementById('ai-settings-modal');
+  const btnNative = document.getElementById('btn-engine-native');
+  const btnGemini = document.getElementById('btn-engine-gemini');
+  const geminiContainer = document.getElementById('gemini-key-container');
+  const keyInput = document.getElementById('ai-gemini-key-input');
+  const saveSettingsBtn = document.getElementById('save-ai-settings-btn');
+  const testKeyBtn = document.getElementById('ai-test-key-btn');
+  const keyStatusMsg = document.getElementById('ai-key-status-msg');
+
+  function updateEngineUI(engine) {
+    if (!btnGemini || !btnNative || !geminiContainer) return;
+    if (engine === 'gemini') {
+      btnGemini.style.background = 'rgba(59, 130, 246, 0.2)';
+      btnGemini.style.borderColor = '#3b82f6';
+      btnGemini.style.color = '#60a5fa';
+
+      btnNative.style.background = 'transparent';
+      btnNative.style.borderColor = 'var(--border-color)';
+      btnNative.style.color = 'var(--text-muted)';
+
+      geminiContainer.style.display = 'flex';
+    } else {
+      btnNative.style.background = 'rgba(16, 185, 129, 0.15)';
+      btnNative.style.borderColor = '#10b981';
+      btnNative.style.color = '#34d399';
+
+      btnGemini.style.background = 'transparent';
+      btnGemini.style.borderColor = 'var(--border-color)';
+      btnGemini.style.color = 'var(--text-muted)';
+
+      geminiContainer.style.display = 'none';
+    }
+  }
+
+  let tempEngine = localStorage.getItem('fm_ai_engine') || 'native';
+
+  if (openSettingsBtn && settingsModal) {
+    openSettingsBtn.addEventListener('click', () => {
+      tempEngine = localStorage.getItem('fm_ai_engine') || 'native';
+      if (keyInput) keyInput.value = localStorage.getItem('fm_gemini_api_key') || '';
+      updateEngineUI(tempEngine);
+      if (keyStatusMsg) keyStatusMsg.style.display = 'none';
+      settingsModal.classList.remove('hide');
+    });
+  }
+
+  if (closeSettingsBtn && settingsModal) {
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.add('hide');
+    });
+  }
+
+  if (settingsModal) {
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) settingsModal.classList.add('hide');
+    });
+  }
+
+  if (btnNative) {
+    btnNative.addEventListener('click', () => {
+      tempEngine = 'native';
+      updateEngineUI(tempEngine);
+    });
+  }
+
+  if (btnGemini) {
+    btnGemini.addEventListener('click', () => {
+      tempEngine = 'gemini';
+      updateEngineUI(tempEngine);
+    });
+  }
+
+  if (testKeyBtn) {
+    testKeyBtn.addEventListener('click', async () => {
+      const keyVal = keyInput ? keyInput.value.trim() : '';
+      if (!keyVal) {
+        if (keyStatusMsg) {
+          keyStatusMsg.style.display = 'block';
+          keyStatusMsg.style.color = '#ff453a';
+          keyStatusMsg.textContent = 'Insira uma chave API antes de testar.';
+        }
+        return;
+      }
+
+      if (keyStatusMsg) {
+        keyStatusMsg.style.display = 'block';
+        keyStatusMsg.style.color = '#38bdf8';
+        keyStatusMsg.textContent = 'Testando conexão com Gemini 2.0 Flash...';
+      }
+
+      try {
+        const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${keyVal}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: "ping" }] }]
+          })
+        });
+
+        if (testRes.ok) {
+          if (keyStatusMsg) {
+            keyStatusMsg.style.color = '#34d399';
+            keyStatusMsg.textContent = '✅ Conexão bem-sucedida! Motor Gemini 2.0 Flash ativo.';
+          }
+        } else {
+          const errData = await testRes.json().catch(() => ({}));
+          if (keyStatusMsg) {
+            keyStatusMsg.style.color = '#ff453a';
+            keyStatusMsg.textContent = `❌ Erro na chave: ${errData.error?.message || 'Chave inválida'}`;
+          }
+        }
+      } catch (testErr) {
+        if (keyStatusMsg) {
+          keyStatusMsg.style.color = '#ff453a';
+          keyStatusMsg.textContent = `❌ Falha de rede: ${testErr.message}`;
+        }
+      }
+    });
+  }
+
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', () => {
+      localStorage.setItem('fm_ai_engine', tempEngine);
+      if (tempEngine === 'gemini' && keyInput) {
+        localStorage.setItem('fm_gemini_api_key', keyInput.value.trim());
+      }
+      if (settingsModal) settingsModal.classList.add('hide');
+      showToast('Configurações do Especialista IA salvas com sucesso!');
+      renderAiAgentTab();
+    });
+  }
+
+  const chatForm = document.getElementById('ai-chat-form');
+  const chatInput = document.getElementById('ai-chat-input');
+
+  if (chatForm && chatInput) {
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = chatInput.value;
+      chatInput.value = '';
+      handleAiChatSubmit(text);
+    });
+  }
+
+  document.querySelectorAll('.ai-chip-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const query = btn.getAttribute('data-query');
+      if (query) {
+        handleAiChatSubmit(query);
+      }
+    });
+  });
+}
+
 // ================= INICIALIZAÇÃO =================
 window.addEventListener('DOMContentLoaded', () => {
   const today = new Date().toISOString().split('T')[0];
@@ -4271,4 +5125,5 @@ window.addEventListener('DOMContentLoaded', () => {
   }, 1000);
 
   initApp();
+  initAiAgent();
 });
