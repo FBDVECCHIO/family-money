@@ -5041,7 +5041,7 @@ ${prompt}`;
     contents: contents,
     generationConfig: {
       temperature: 0.4,
-      maxOutputTokens: 2048
+      maxOutputTokens: 4096
     }
   };
 
