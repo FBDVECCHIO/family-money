@@ -1,4 +1,10 @@
-// FAMILY MONEY - Lógica de Negócio do Cliente com Supabase (SPA)
+// FAMILY MONEY - Lógica de Negócio do Cliente com Supabase (SPA) v6.8.3
+try {
+  if (localStorage.getItem('fm_gemini_active_model') === 'gemini-3.8-flash' || !localStorage.getItem('fm_gemini_active_model')) {
+    localStorage.setItem('fm_gemini_active_model', 'gemini-flash-latest');
+  }
+} catch (e) {}
+
 let state = {
   supabase: null,
   session: null,

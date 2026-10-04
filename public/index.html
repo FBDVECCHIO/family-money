@@ -1582,8 +1582,11 @@
                   <small style="color: var(--text-muted);" id="ai-engine-active-indicator">Motor: Analítico Nativo (Ativo & Grátis)</small>
                 </div>
               </div>
-              <div>
-                <span class="badge badge-success" style="font-size: 0.75rem;">Online 24/7</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge badge-success" style="font-size: 0.75rem;">v6.8.3 • Online 24/7</span>
+                <button type="button" onclick="window.location.href = window.location.pathname + '?v=' + Date.now()" class="btn btn-outline" style="font-size: 0.72rem; padding: 4px 10px; border-radius: 8px; border-color: #38bdf8; color: #38bdf8; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Clique para recarregar com a versão mais recente sem cache">
+                  <i data-lucide="rotate-cw" style="width: 12px; height: 12px;"></i> Recarregar Novo Morgan
+                </button>
               </div>
             </div>
 
@@ -1861,6 +1864,6 @@ Dados: ${JSON.stringify(familyData)}`;
     </div>
   </div>
 
-  <script src="app.js?v=6.8.2&t=1791072500"></script>
+  <script src="app.js?v=6.8.3&t=1791074500"></script>
 </body>
 </html>
