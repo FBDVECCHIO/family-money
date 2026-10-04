@@ -4822,8 +4822,47 @@ function runNativeMorganReasoning(query) {
   const anomalyData = detectExpenseAnomalies();
   const forecast = state.forecast || [];
 
-  // Perguntas sobre Cartões / Qual cartão usar hoje
-  if (q.includes('cart') || q.includes('prazo') || q.includes('usar hoje') || q.includes('qual')) {
+  // 1. Perguntas sobre Sobra / Saldo Final / Quanto vai sobrar / Despesas fixas e cartões
+  if (q.includes('sobr') || q.includes('restar') || q.includes('quanto vai') || q.includes('quanto sobra') || (q.includes('despesa') && q.includes('fixa')) || q.includes('saldo final') || q.includes('fechamento do mes')) {
+    const currentMonthForecast = forecast[0] || { totalIncomes: 0, totalExpenses: 0, cardBills: [] };
+    const monthlyIncome = parseFloat(currentMonthForecast.totalIncomes || 0);
+    const fixedExpenses = (state.fixed_items || []).filter(f => f.type === 'expense').reduce((sum, f) => sum + parseFloat(f.amount || 0), 0);
+    const totalCardBills = (currentMonthForecast.cardBills || []).reduce((sum, b) => sum + parseFloat(b.amount || 0), 0);
+    const totalExpenses = parseFloat(currentMonthForecast.totalExpenses || (fixedExpenses + totalCardBills));
+    const netSurplus = monthlyIncome - totalExpenses;
+
+    const cardsBreakdown = (currentMonthForecast.cardBills || []).map(b => `* **Fatura ${escapeHtml(b.cardName || 'Cartão')}**: ${formatCurrency(b.amount || 0)}`).join('\n');
+
+    return `💰 **Estimativa de Sobra e Fechamento do Mês:**
+
+Com base nas suas receitas previstas, despesas fixas recorrentes e faturas de cartão lançadas, aqui está o seu balanço projetado para este mês:
+
+* **Receitas Totais Previstas:** **${formatCurrency(monthlyIncome)}**
+* **Despesas Fixas Recorrentes:** **${formatCurrency(fixedExpenses)}**
+* **Total em Faturas de Cartão:** **${formatCurrency(totalCardBills)}**
+${cardsBreakdown ? cardsBreakdown + '\n' : ''}* **Total Consolidado de Saídas:** **${formatCurrency(totalExpenses)}**
+
+🎯 **Resultado Líquido Estimado (O que vai sobrar):**
+${netSurplus >= 0 ? `🟢 **${formatCurrency(netSurplus)} de Superávit no mês**` : `🔴 **${formatCurrency(Math.abs(netSurplus))} de Déficit no mês**`}
+
+💡 **Parecer Estratégico do CFO Morgan:**
+${netSurplus > 0
+  ? `Seu fluxo de caixa está saudável com sobra estimada de **${formatCurrency(netSurplus)}**. Recomendo direcionar esse excedente para a sua reserva de liquidez diária (~0,85%/mês no CDI), mantendo a família no rumo da sua meta principal.`
+  : `Atenção: as saídas superam as entradas em ${formatCurrency(Math.abs(netSurplus))}. Recomendo postergar despesas discricionárias e evitar novas compras parceladas no cartão neste ciclo.`}`;
+  }
+
+  // 2. Perguntas sobre Cartões / Qual cartão usar hoje para comprar
+  const isCardPurchaseQuery = (
+    (q.includes('qual') && (q.includes('cart') || q.includes('usar'))) ||
+    q.includes('usar hoje') ||
+    q.includes('melhor cart') ||
+    q.includes('prazo de compra') ||
+    q.includes('comprar hoje') ||
+    q.includes('float') ||
+    (q.includes('cart') && q.includes('hoje'))
+  );
+
+  if (isCardPurchaseQuery && !q.includes('sobr') && !q.includes('quanto') && !q.includes('despesa fixa')) {
     if (cardAnalysis.length === 0) {
       return "Você ainda não possui cartões cadastrados. Vá até a aba **Administração > Cartões** e adicione seus cartões informando o dia de fechamento e dia de vencimento.";
     }
@@ -5045,12 +5084,17 @@ ${prompt}`;
     }
   };
 
+  const stableModels = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'];
   let activeModel = localStorage.getItem('fm_gemini_active_model');
   let modelsToTry = [];
 
-  if (activeModel && activeModel !== 'gemini-2.0-flash') {
+  if (activeModel && stableModels.includes(activeModel)) {
     modelsToTry.push(activeModel);
   }
+
+  stableModels.forEach(m => {
+    if (!modelsToTry.includes(m)) modelsToTry.push(m);
+  });
 
   try {
     const discovered = await getAvailableGeminiModels(apiKey);
@@ -5059,7 +5103,7 @@ ${prompt}`;
     });
   } catch(e) {
     if (modelsToTry.length === 0) {
-      modelsToTry = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+      modelsToTry = stableModels;
     }
   }
 
@@ -5141,7 +5185,7 @@ async function testGeminiApiKey(apiKey) {
   }
 
   if (!candidateModels || candidateModels.length === 0) {
-    candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro'];
+    candidateModels = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'];
   }
 
   let lastError = null;
