@@ -1440,13 +1440,12 @@
             <!-- Card 1: Score de Saúde Financeira -->
             <div class="ai-kpi-card glass">
               <div class="ai-kpi-header">
-                <span>Score de Saúde Familiar</span>
-                <i data-lucide="activity" class="ai-kpi-icon text-emerald"></i>
+                <span class="ai-kpi-title"><i data-lucide="activity" class="ai-kpi-icon text-emerald"></i> Saúde Familiar</span>
+                <span class="ai-score-badge" id="ai-health-score-badge">Analisando...</span>
               </div>
               <div class="ai-score-body">
                 <div class="ai-score-number" id="ai-health-score-val">--</div>
                 <div class="ai-score-meta">
-                  <span class="ai-score-badge" id="ai-health-score-badge">Analisando...</span>
                   <small id="ai-health-score-desc">Calculando métricas em tempo real...</small>
                 </div>
               </div>
@@ -1458,12 +1457,11 @@
             <!-- Card 2: Melhor Cartão Para Hoje -->
             <div class="ai-kpi-card glass">
               <div class="ai-kpi-header">
-                <span>🏆 Cartão Recomendado Hoje</span>
-                <i data-lucide="credit-card" class="ai-kpi-icon text-cyan"></i>
+                <span class="ai-kpi-title"><i data-lucide="credit-card" class="ai-kpi-icon text-cyan"></i> Cartão Recomendado</span>
+                <span class="ai-card-tag" id="ai-best-card-days">Até 40 dias</span>
               </div>
               <div class="ai-card-body">
                 <h4 id="ai-best-card-name" style="margin: 0; font-size: 1.15rem; color: #fff;">Calculando...</h4>
-                <div class="ai-card-tag" id="ai-best-card-days">Até 40 dias de prazo</div>
                 <small id="ai-best-card-reason" style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.3;">Aguarde o fechamento ideal</small>
               </div>
             </div>
@@ -1471,157 +1469,167 @@
             <!-- Card 3: Supérfluos & Gastos Crescentes -->
             <div class="ai-kpi-card glass">
               <div class="ai-kpi-header">
-                <span>🚨 Alerta de Supérfluos</span>
-                <i data-lucide="alert-triangle" class="ai-kpi-icon text-amber"></i>
+                <span class="ai-kpi-title"><i data-lucide="alert-triangle" class="ai-kpi-icon text-amber"></i> Supérfluos do Mês</span>
+                <span class="badge badge-warning" style="font-size: 0.68rem; padding: 2px 6px;">Alerta</span>
               </div>
               <div class="ai-card-body">
                 <div style="font-size: 1.25rem; font-weight: 700; color: #fbbf24;" id="ai-superfluous-val">R$ 0,00</div>
-                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;" id="ai-superfluous-cat">Em lazer e delivery</div>
-                <small id="ai-superfluous-rec" style="color: #94a3b8; font-size: 0.78rem;">Potencial de economia mensal</small>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;" id="ai-superfluous-cat">Em lazer e delivery</div>
+                <small id="ai-superfluous-rec" style="color: #94a3b8; font-size: 0.75rem;">Potencial de economia mensal</small>
               </div>
             </div>
 
             <!-- Card 4: Projeção de Liquidez & Risco -->
             <div class="ai-kpi-card glass">
               <div class="ai-kpi-header">
-                <span>🔮 Diagnóstico de Liquidez</span>
-                <i data-lucide="shield-check" class="ai-kpi-icon text-purple"></i>
+                <span class="ai-kpi-title"><i data-lucide="shield-check" class="ai-kpi-icon text-purple"></i> Reserva & Liquidez</span>
+                <span class="badge badge-info" style="font-size: 0.68rem; padding: 2px 6px;">Projeção</span>
               </div>
               <div class="ai-card-body">
                 <div style="font-size: 1.25rem; font-weight: 700; color: #a78bfa;" id="ai-liquidity-status">Estável</div>
-                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;" id="ai-liquidity-coverage">Cobertura: -- meses</div>
-                <small id="ai-liquidity-alert" style="color: #94a3b8; font-size: 0.78rem;">Sem déficits previstos</small>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;" id="ai-liquidity-coverage">Cobertura: -- meses</div>
+                <small id="ai-liquidity-alert" style="color: #94a3b8; font-size: 0.75rem;">Sem déficits previstos</small>
               </div>
             </div>
 
           </div>
 
-          <!-- Grade Principal: Matriz de Cartões + Painel de Supérfluos -->
-          <div class="ai-main-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; margin-top: 20px;">
-            
-            <!-- Painel Esquerdo: Matriz de Inteligência de Cartões de Crédito -->
-            <div class="glass" style="padding: 22px; border-radius: 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div>
-                  <h3 style="font-size: 1.1rem; margin: 0; display: flex; align-items: center; gap: 8px;">
-                    <i data-lucide="credit-card" class="text-cyan"></i>
-                    Matriz de Float dos Cartões (Melhor Dia de Compra)
-                  </h3>
-                  <small style="color: var(--text-muted);">Decisão inteligente baseada na data de corte e prazo sem juros</small>
-                </div>
-              </div>
-              
-              <div id="ai-cards-matrix-list" style="display: flex; flex-direction: column; gap: 12px;">
-                <!-- Preenchido dinamicamente via JS -->
-              </div>
-            </div>
-
-            <!-- Painel Direito: Auditoria de Gastos Crescentes & Anomalias -->
-            <div class="glass" style="padding: 22px; border-radius: 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div>
-                  <h3 style="font-size: 1.1rem; margin: 0; display: flex; align-items: center; gap: 8px;">
-                    <i data-lucide="trending-down" class="text-amber"></i>
-                    Auditoria de Gastos Crescentes & Supérfluos
-                  </h3>
-                  <small style="color: var(--text-muted);">Detecção de vazamentos de orçamento e tendências de alta</small>
-                </div>
-              </div>
-
-              <div id="ai-anomalies-list" style="display: flex; flex-direction: column; gap: 10px;">
-                <!-- Preenchido dinamicamente via JS -->
-              </div>
-            </div>
-
-          <!-- Card de Memória Estratégica & Diretrizes Permanentes de Morgan -->
-          <div class="glass" style="padding: 20px; border-radius: 16px; margin-top: 20px; border-left: 4px solid #10b981;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+          <!-- Faixa de Memória Estratégica da Família (Diretrizes Ativas de Morgan) -->
+          <div class="ai-memory-strip glass">
+            <div class="ai-memory-header">
               <div style="display: flex; align-items: center; gap: 10px;">
-                <div class="ai-avatar" style="width: 32px; height: 32px;">
-                  <i data-lucide="brain" style="width: 18px; height: 18px; color: #10b981;"></i>
+                <div class="ai-avatar" style="width: 32px; height: 32px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25);">
+                  <i data-lucide="brain" style="width: 17px; height: 17px; color: #10b981;"></i>
                 </div>
                 <div>
-                  <h3 style="font-size: 1.05rem; margin: 0; color: #fff;">Memória Estratégica da Família (Diretrizes de Morgan)</h3>
-                  <small style="color: var(--text-muted);">Morgan memoriza essas metas e as aplica ativamente em qualquer conselho, auditoria ou alerta</small>
+                  <h4 style="font-size: 0.95rem; margin: 0; color: #fff; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    Memória Estratégica Familiar
+                    <span style="font-size: 0.72rem; color: #34d399; background: rgba(16,185,129,0.12); padding: 2px 8px; border-radius: 4px; font-weight: 500;">Diretrizes do Morgan</span>
+                  </h4>
+                  <small style="color: var(--text-muted); font-size: 0.76rem;">Morgan consulta e aplica essas premissas ativamente em qualquer conselho ou auditoria</small>
                 </div>
               </div>
-              <button type="button" id="save-family-memory-btn" class="btn btn-outline" style="border-radius: 8px; font-size: 0.8rem; padding: 6px 14px; border-color: #10b981; color: #34d399; display: flex; align-items: center; gap: 6px;">
+              <button type="button" id="save-family-memory-btn" class="btn btn-outline" style="border-radius: 8px; font-size: 0.78rem; padding: 6px 14px; border-color: #10b981; color: #34d399; display: flex; align-items: center; gap: 6px;">
                 <i data-lucide="save" style="width: 14px; height: 14px;"></i> Salvar Memória
               </button>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
-              <div>
-                <label style="display: block; font-size: 0.8rem; color: #a1a1aa; margin-bottom: 4px;">🎯 Meta Financeira Principal:</label>
-                <input type="text" id="memory-family-goal" placeholder="Ex: Construir reserva de R$ 50.000 até Dez/2026" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: #fff; font-size: 0.85rem;">
+            <div class="ai-memory-inputs">
+              <div class="ai-memory-field">
+                <label for="memory-family-goal">🎯 Meta Financeira Principal:</label>
+                <input type="text" id="memory-family-goal" placeholder="Ex: Construir reserva de R$ 50.000 até Dez/2026">
               </div>
-              <div>
-                <label style="display: block; font-size: 0.8rem; color: #a1a1aa; margin-bottom: 4px;">🛡️ Gastos Intocáveis / Prioridades:</label>
-                <input type="text" id="memory-family-untouchable" placeholder="Ex: Educação dos filhos e plano de saúde não se cortam" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: #fff; font-size: 0.85rem;">
+              <div class="ai-memory-field">
+                <label for="memory-family-untouchable">🛡️ Gastos Intocáveis / Prioridades:</label>
+                <input type="text" id="memory-family-untouchable" placeholder="Ex: Educação dos filhos e plano de saúde não se cortam">
               </div>
-              <div>
-                <label style="display: block; font-size: 0.8rem; color: #a1a1aa; margin-bottom: 4px;">⚖️ Perfil de Risco da Família:</label>
-                <select id="memory-family-risk" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: #fff; font-size: 0.85rem;">
+              <div class="ai-memory-field">
+                <label for="memory-family-risk">⚖️ Perfil de Risco da Família:</label>
+                <select id="memory-family-risk">
                   <option value="Conservador (Foco em Reserva, Liquidez Diária e Zero Dívidas)">Conservador (Foco em Reserva e Zero Dívidas)</option>
-                  <option value="Moderado (Reserva Segura + Float Inteligente no CDI)" selected>Moderado (Reserva Segura + Float Inteligente no CDI)</option>
+                  <option value="Moderado (Reserva Segura + Float Inteligente no CDI)" selected>Moderado (Reserva Segura + Float no CDI)</option>
                   <option value="Arrojado (Otimização Máxima de Rendimentos e Aportes)">Arrojado (Otimização Máxima de Rendimentos)</option>
                 </select>
               </div>
             </div>
           </div>
 
-          <!-- Seção de Chat Interativo com o Especialista (Morgan) -->
-          <div class="glass" style="padding: 24px; border-radius: 16px; margin-top: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid var(--border-color); padding-bottom: 14px; flex-wrap: wrap; gap: 10px;">
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div class="ai-avatar">
-                  <i data-lucide="bot" style="width: 22px; height: 22px; color: #10b981;"></i>
+          <!-- Workspace Operacional do Especialista: Co-Piloto Split (Chat à esquerda, Inteligência & Auditoria à direita) -->
+          <div class="ai-workspace-grid">
+            
+            <!-- Coluna Esquerda: Consultoria & Chat Interativo com Morgan -->
+            <div class="glass ai-chat-panel">
+              <div class="ai-chat-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div class="ai-avatar" style="width: 38px; height: 38px;">
+                    <i data-lucide="bot" style="width: 22px; height: 22px; color: #10b981;"></i>
+                  </div>
+                  <div>
+                    <h3 style="font-size: 1.1rem; margin: 0; color: #fff;">Consultoria Financeira com Morgan</h3>
+                    <small style="color: var(--text-muted); font-size: 0.78rem;" id="ai-engine-active-indicator">Motor: Analítico Nativo (Ativo & Grátis)</small>
+                  </div>
                 </div>
-                <div>
-                  <h3 style="font-size: 1.15rem; margin: 0; color: #fff;">Consultoria Financeira com Morgan</h3>
-                  <small style="color: var(--text-muted);" id="ai-engine-active-indicator">Motor: Analítico Nativo (Ativo & Grátis)</small>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="badge badge-success" style="font-size: 0.72rem; padding: 4px 8px;">v6.8.4 • Online 24/7</span>
+                  <button type="button" onclick="window.location.href = window.location.pathname + '?v=' + Date.now()" class="btn btn-outline" style="font-size: 0.72rem; padding: 4px 10px; border-radius: 8px; border-color: #38bdf8; color: #38bdf8; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Clique para recarregar com a versão mais recente sem cache">
+                    <i data-lucide="rotate-cw" style="width: 12px; height: 12px;"></i> Recarregar Morgan
+                  </button>
                 </div>
               </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="badge badge-success" style="font-size: 0.75rem;">v6.8.3 • Online 24/7</span>
-                <button type="button" onclick="window.location.href = window.location.pathname + '?v=' + Date.now()" class="btn btn-outline" style="font-size: 0.72rem; padding: 4px 10px; border-radius: 8px; border-color: #38bdf8; color: #38bdf8; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Clique para recarregar com a versão mais recente sem cache">
-                  <i data-lucide="rotate-cw" style="width: 12px; height: 12px;"></i> Recarregar Novo Morgan
+
+              <!-- Prompt Chips Rápidos -->
+              <div class="ai-prompt-chips">
+                <button class="ai-chip-btn" data-query="Qual cartão de crédito devo usar hoje para ganhar mais prazo?">
+                  💳 Qual cartão usar hoje?
+                </button>
+                <button class="ai-chip-btn" data-query="Onde estamos gastando mais com coisas supérfluas este mês?">
+                  🚨 Onde cortar supérfluos?
+                </button>
+                <button class="ai-chip-btn" data-query="Olá Morgan, como você vê minhas finanças até Dezembro de 2026 e quais riscos/oportunidades temos?">
+                  🎯 Projeção Estratégica 2026
+                </button>
+                <button class="ai-chip-btn" data-query="Como fazer meu saldo bancário render mais usando CDI e estratégia de float sem risco?">
+                  📈 Rendimento CDI
+                </button>
+                <button class="ai-chip-btn" data-query="Faça uma auditoria completa e me dê 3 conselhos prioritários para este mês.">
+                  📋 Auditoria Completa
                 </button>
               </div>
+
+              <!-- Janela de Mensagens -->
+              <div id="ai-chat-messages" class="ai-chat-box">
+                <!-- Mensagem inicial do Morgan adicionada dinamicamente via JS -->
+              </div>
+
+              <!-- Formulário de Input do Chat -->
+              <form id="ai-chat-form">
+                <input type="text" id="ai-chat-input" placeholder="Faça uma pergunta sobre seus cartões, contas, faturas ou despesas..." required autocomplete="off">
+                <button type="submit" class="btn btn-primary" id="ai-chat-send-btn">
+                  <span>Enviar</span>
+                  <i data-lucide="send" style="width: 15px; height: 15px;"></i>
+                </button>
+              </form>
             </div>
 
-            <!-- Prompt Chips Rápidos -->
-            <div class="ai-prompt-chips" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
-              <button class="ai-chip-btn" data-query="Qual cartão de crédito devo usar hoje para ganhar mais prazo?">
-                💳 Qual cartão usar hoje?
-              </button>
-              <button class="ai-chip-btn" data-query="Onde estamos gastando mais com coisas supérfluas este mês?">
-                🚨 Onde cortar supérfluos?
-              </button>
-              <button class="ai-chip-btn" data-query="Olá Morgan, como você vê minhas finanças até Dezembro de 2026 e quais riscos/oportunidades temos?">
-                🎯 Projeção Estratégica 2026
-              </button>
-              <button class="ai-chip-btn" data-query="Como fazer meu saldo bancário render mais usando CDI e estratégia de float sem risco?">
-                📈 Investimentos & Rendimento CDI
-              </button>
-              <button class="ai-chip-btn" data-query="Faça uma auditoria completa e me dê 3 conselhos prioritários para este mês.">
-                📋 Auditoria Completa das Finanças
-              </button>
+            <!-- Coluna Direita: Stack de Inteligência & Auditoria Ao Vivo -->
+            <div class="ai-analytics-stack">
+              
+              <!-- Card 1: Matriz de Float dos Cartões -->
+              <div class="glass ai-analytics-card">
+                <div class="ai-analytics-header">
+                  <div>
+                    <h3 style="font-size: 1.02rem; margin: 0; display: flex; align-items: center; gap: 8px; color: #fff;">
+                      <i data-lucide="credit-card" class="text-cyan" style="width: 18px; height: 18px;"></i>
+                      Matriz de Float dos Cartões
+                    </h3>
+                    <small style="color: var(--text-muted); font-size: 0.75rem;">Ranking pelo melhor dia de compra sem juros</small>
+                  </div>
+                </div>
+                
+                <div id="ai-cards-matrix-list" class="ai-custom-scroll" style="display: flex; flex-direction: column; gap: 10px; max-height: 270px; overflow-y: auto; padding-right: 4px;">
+                  <!-- Preenchido dinamicamente via JS -->
+                </div>
+              </div>
+
+              <!-- Card 2: Auditoria de Gastos Crescentes & Supérfluos -->
+              <div class="glass ai-analytics-card">
+                <div class="ai-analytics-header">
+                  <div>
+                    <h3 style="font-size: 1.02rem; margin: 0; display: flex; align-items: center; gap: 8px; color: #fff;">
+                      <i data-lucide="trending-down" class="text-amber" style="width: 18px; height: 18px;"></i>
+                      Auditoria de Supérfluos & Vazamentos
+                    </h3>
+                    <small style="color: var(--text-muted); font-size: 0.75rem;">Detecção preditiva de desvios e tendências de alta</small>
+                  </div>
+                </div>
+
+                <div id="ai-anomalies-list" class="ai-custom-scroll" style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; padding-right: 4px;">
+                  <!-- Preenchido dinamicamente via JS -->
+                </div>
+              </div>
+
             </div>
 
-            <!-- Janela de Mensagens -->
-            <div id="ai-chat-messages" class="ai-chat-box" style="height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px; background: rgba(0, 0, 0, 0.25); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 16px;">
-              <!-- Mensagem inicial do Morgan adicionada dinamicamente -->
-            </div>
-
-            <!-- Formulário de Input do Chat -->
-            <form id="ai-chat-form" style="display: flex; gap: 10px;">
-              <input type="text" id="ai-chat-input" placeholder="Faça uma pergunta sobre seus cartões, contas, faturas ou despesas..." style="flex: 1; padding: 12px 18px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); color: #fff; font-size: 0.95rem;" required autocomplete="off">
-              <button type="submit" class="btn btn-primary" id="ai-chat-send-btn" style="border-radius: 10px; padding: 0 20px; display: flex; align-items: center; gap: 8px;">
-                <span>Enviar</span>
-                <i data-lucide="send" style="width: 16px; height: 16px;"></i>
-              </button>
-            </form>
           </div>
 
         </div>
@@ -1864,6 +1872,6 @@ Dados: ${JSON.stringify(familyData)}`;
     </div>
   </div>
 
-  <script src="app.js?v=6.8.3&t=1791074500"></script>
+  <script src="app.js?v=6.8.4&t=1791075600"></script>
 </body>
 </html>

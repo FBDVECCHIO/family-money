@@ -2159,38 +2159,42 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   100% { transform: scale(0.95); opacity: 0.7; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
+/* ================= NOVO LAYOUT DO ESPECIALISTA IA (v6.8.4) ================= */
+
+/* Grid de Indicadores Principais de Saúde e Decisão */
 .ai-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
   margin-top: 14px;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
   .ai-kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 600px) {
   .ai-kpi-grid {
     grid-template-columns: 1fr;
   }
 }
 
 .ai-kpi-card {
-  padding: 18px 20px;
-  border-radius: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   position: relative;
+  min-height: 124px;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .ai-kpi-card:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
 }
 
@@ -2198,26 +2202,35 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: var(--text-muted);
   font-size: 0.8rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.ai-kpi-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #d4d4d8;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .ai-kpi-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .ai-score-body {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 10px;
 }
 
 .ai-score-number {
-  font-size: 2.2rem;
+  font-size: 2.1rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #fff;
@@ -2238,11 +2251,12 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   background: rgba(16, 185, 129, 0.15);
   color: #34d399;
   display: inline-block;
+  white-space: nowrap;
 }
 
 .ai-score-progress-bar {
   width: 100%;
-  height: 6px;
+  height: 5px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
   overflow: hidden;
@@ -2258,19 +2272,193 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
 .ai-card-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .ai-card-tag {
   display: inline-block;
   align-self: flex-start;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 6px;
   background: rgba(6, 182, 212, 0.15);
   color: #22d3ee;
-  margin: 4px 0 2px 0;
+  white-space: nowrap;
+}
+
+/* Faixa de Memória Estratégica da Família */
+.ai-memory-strip {
+  padding: 14px 18px;
+  border-radius: 14px;
+  margin-top: 14px;
+  border-left: 4px solid #10b981;
+  background: rgba(18, 18, 20, 0.65);
+}
+
+.ai-memory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ai-memory-inputs {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .ai-memory-inputs {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ai-memory-field label {
+  display: block;
+  font-size: 0.76rem;
+  color: #a1a1aa;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.ai-memory-field input,
+.ai-memory-field select {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 0.82rem;
+  transition: border-color 0.2s ease;
+}
+
+.ai-memory-field input:focus,
+.ai-memory-field select:focus {
+  border-color: #10b981;
+  outline: none;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Workspace Principal (2 Colunas Split) */
+.ai-workspace-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 0.85fr;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .ai-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Painel de Chat do Morgan */
+.ai-chat-panel {
+  padding: 20px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ai-chat-box {
+  height: 440px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 12px;
+}
+
+#ai-chat-form {
+  display: flex;
+  gap: 10px;
+}
+
+#ai-chat-form input {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.92rem;
+  transition: border-color 0.2s ease;
+}
+
+#ai-chat-form input:focus {
+  border-color: #10b981;
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#ai-chat-form button {
+  border-radius: 10px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+/* Stack Lateral de Inteligência & Auditoria */
+.ai-analytics-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-analytics-card {
+  padding: 18px;
+  border-radius: 16px;
+}
+
+.ai-analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* Rolagem Customizada & Macia */
+.ai-custom-scroll::-webkit-scrollbar,
+.ai-chat-box::-webkit-scrollbar {
+  width: 5px;
+}
+.ai-custom-scroll::-webkit-scrollbar-track,
+.ai-chat-box::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+.ai-custom-scroll::-webkit-scrollbar-thumb,
+.ai-chat-box::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+.ai-custom-scroll::-webkit-scrollbar-thumb:hover,
+.ai-chat-box::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Matriz de Cartoes */
@@ -2278,38 +2466,39 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   transition: all 0.2s ease;
 }
 
 .ai-card-item.recommended {
   border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.05);
+  background: rgba(16, 185, 129, 0.06);
 }
 
 .ai-card-item-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .ai-card-icon-box {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 0.85rem;
   color: #fff;
+  flex-shrink: 0;
 }
 
-/* Chat */
+/* Chat e Chips */
 .ai-avatar {
   width: 36px;
   height: 36px;
@@ -2319,14 +2508,22 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+.ai-prompt-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 
 .ai-prompt-chips .ai-chip-btn {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 20px;
-  padding: 6px 14px;
-  font-size: 0.8rem;
+  padding: 5px 12px;
+  font-size: 0.78rem;
   color: #e4e4e7;
   cursor: pointer;
   transition: all 0.2s ease;
