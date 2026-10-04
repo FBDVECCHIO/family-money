@@ -1765,9 +1765,6 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   background: rgba(255, 255, 255, 0.12) !important;
   font-weight: 600 !important;
 }
-  background: rgba(168, 85, 247, 0.15) !important;
-  border-color: rgba(168, 85, 247, 0.3) !important;
-}
 
 /* Links administrativos */
 .admin-tab-btn {
@@ -2667,4 +2664,421 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   color: #a7f3d0;
   overflow-x: auto;
   margin: 10px 0;
+}
+
+/* ================= THEME SWITCHER PILL ================= */
+.theme-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f4f4f5;
+  outline: none;
+}
+.theme-toggle-pill:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+.theme-toggle-pill svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ================= APPLE DESIGN SYSTEM THEME (getdesign.md/apple/design-md) ================= */
+[data-theme="apple"],
+[data-theme="apple"] body {
+  --bg-main: #e5e5ea; /* Background cinza mais escuro do canvas Apple */
+  --bg-card: #ffffff; /* Cards cinza claro / branco pérola refinado */
+  --bg-card-solid: #ffffff;
+  --bg-card-hover: #f7f7f9;
+  --bg-input: #f2f2f7;
+  --bg-input-focus: #ffffff;
+  --border-color: rgba(0, 0, 0, 0.09);
+  --border-color-hover: rgba(0, 0, 0, 0.18);
+  
+  --brand-green: #0066cc; /* Action Blue Apple */
+  --apple-green: #34c759;
+  --neon-green: #34c759;
+  --neon-green-dim: rgba(52, 199, 89, 0.8);
+  --neon-purple: #0066cc;
+  --neon-purple-bright: #0071e3;
+  --apple-red: #ff3b30;
+  --neon-red: #ff3b30;
+  --neon-red-dim: #dc3545;
+  
+  --foreground: #1d1d1f; /* Fontes em preto Apple Ink */
+  --pastel-text: #1d1d1f;
+  --text-muted: #6e6e73;
+  --text-dim: #86868b;
+  --pastel-purple: #0066cc;
+  --pastel-green: #34c759;
+  --pastel-red: #ff3b30;
+  
+  --color-positive: #34c759;
+  --color-negative: #ff3b30;
+  
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-glow-purple: 0 4px 16px rgba(0, 102, 204, 0.12);
+  --shadow-glow-green: 0 4px 16px rgba(52, 199, 89, 0.12);
+}
+
+[data-theme="apple"] body {
+  background-color: #e5e5ea !important;
+  background-image: none !important;
+  color: #1d1d1f !important;
+}
+
+/* Tipografia e Textos Apple (Preto Apple Ink & Cinza Muted) */
+[data-theme="apple"] h1,
+[data-theme="apple"] h2,
+[data-theme="apple"] h3,
+[data-theme="apple"] h4,
+[data-theme="apple"] p,
+[data-theme="apple"] label,
+[data-theme="apple"] strong,
+[data-theme="apple"] b,
+[data-theme="apple"] .card-title,
+[data-theme="apple"] .section-title,
+[data-theme="apple"] .forecast-container h2,
+[data-theme="apple"] .dashboard-header h2,
+[data-theme="apple"] .sidebar-info h3,
+[data-theme="apple"] .sidebar-info h4 {
+  color: #1d1d1f !important;
+}
+
+[data-theme="apple"] .subtitle,
+[data-theme="apple"] .text-muted,
+[data-theme="apple"] .text-dim,
+[data-theme="apple"] .text-pastel-purple,
+[data-theme="apple"] small,
+[data-theme="apple"] .forecast-intro {
+  color: #6e6e73 !important;
+}
+
+[data-theme="apple"] [style*="color: #fff"]:not(.btn-primary):not(.btn-primary *):not([class*="btn-primary"]),
+[data-theme="apple"] [style*="color:#fff"]:not(.btn-primary):not(.btn-primary *):not([class*="btn-primary"]) {
+  color: #1d1d1f !important;
+}
+
+[data-theme="apple"] .glass {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  color: #1d1d1f !important;
+}
+
+[data-theme="apple"] .glass:hover {
+  border-color: rgba(0, 0, 0, 0.16) !important;
+}
+
+[data-theme="apple"] .app-header {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+[data-theme="apple"] .logo {
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .logo-icon {
+  color: #0066cc !important;
+}
+[data-theme="apple"] .logo .green-neon {
+  color: #0066cc !important;
+}
+
+[data-theme="apple"] .nav-link,
+[data-theme="apple"] .nav-link span {
+  color: #515154 !important;
+}
+[data-theme="apple"] .nav-link i,
+[data-theme="apple"] .nav-link svg {
+  color: #515154 !important;
+}
+[data-theme="apple"] .nav-link:hover,
+[data-theme="apple"] .nav-link:hover span {
+  color: #1d1d1f !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+[data-theme="apple"] .nav-link:hover i,
+[data-theme="apple"] .nav-link:hover svg {
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .nav-link.active,
+[data-theme="apple"] .nav-link.active span {
+  color: #0066cc !important;
+  background: rgba(0, 102, 204, 0.08) !important;
+  border: 1px solid rgba(0, 102, 204, 0.25) !important;
+}
+[data-theme="apple"] .nav-link.active i,
+[data-theme="apple"] .nav-link.active svg {
+  color: #0066cc !important;
+}
+
+[data-theme="apple"] .user-badge {
+  background: rgba(0, 102, 204, 0.08) !important;
+  color: #0066cc !important;
+  border: 1px solid rgba(0, 102, 204, 0.2) !important;
+}
+
+[data-theme="apple"] .theme-toggle-pill {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  color: #1d1d1f !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+}
+[data-theme="apple"] .theme-toggle-pill:hover {
+  background: #f5f5f7 !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+[data-theme="apple"] .btn-primary {
+  background: #0066cc !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+[data-theme="apple"] .btn-primary:hover {
+  background: #0071e3 !important;
+}
+
+[data-theme="apple"] .btn-outline {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.14) !important;
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .btn-outline:hover {
+  background: #f5f5f7 !important;
+  border-color: rgba(0, 0, 0, 0.25) !important;
+}
+
+[data-theme="apple"] input,
+[data-theme="apple"] select,
+[data-theme="apple"] textarea {
+  background: #f2f2f7 !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] input:focus,
+[data-theme="apple"] select:focus,
+[data-theme="apple"] textarea:focus {
+  background: #ffffff !important;
+  border-color: #0066cc !important;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15) !important;
+}
+
+/* Sidebar Accounts & Cards */
+[data-theme="apple"] .account-item,
+[data-theme="apple"] .card-item {
+  background: #f5f5f7 !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="apple"] .account-item .name,
+[data-theme="apple"] .account-name,
+[data-theme="apple"] .card-name,
+[data-theme="apple"] .card-item-name {
+  color: #1d1d1f !important;
+  font-weight: 600 !important;
+}
+[data-theme="apple"] .card-details-row span {
+  color: #6e6e73 !important;
+}
+[data-theme="apple"] .accounts-total span:first-child {
+  color: #6e6e73 !important;
+}
+[data-theme="apple"] .accounts-total {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+  color: #1d1d1f !important;
+}
+
+/* Dashboard Columns & Forecast Cards */
+[data-theme="apple"] .month-col,
+[data-theme="apple"] .forecast-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+}
+[data-theme="apple"] .month-header h3,
+[data-theme="apple"] .forecast-month-label {
+  color: #1d1d1f !important;
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="apple"] .month-values,
+[data-theme="apple"] .forecast-values {
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .forecast-val-row span:first-child {
+  color: #6e6e73 !important;
+}
+[data-theme="apple"] .month-detail {
+  background: #f5f5f7 !important;
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .forecast-card-sobra {
+  border-top: 1px dashed rgba(0, 0, 0, 0.1) !important;
+}
+[data-theme="apple"] .sobra-label {
+  color: #6e6e73 !important;
+}
+[data-theme="apple"] .forecast-card-projected {
+  color: #6e6e73 !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="apple"] .month-col.is-current {
+  border-color: #0066cc !important;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.25) !important;
+}
+
+/* Especialista IA */
+[data-theme="apple"] .ai-kpi-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="apple"] .ai-kpi-title {
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .ai-score-number {
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .ai-memory-strip {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  border-left: 4px solid #34c759 !important;
+}
+[data-theme="apple"] .ai-chat-panel,
+[data-theme="apple"] .ai-analytics-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="apple"] .ai-chat-box {
+  background: #f5f5f7 !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="apple"] .ai-chat-msg.agent .ai-chat-bubble {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: #1d1d1f !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03) !important;
+}
+[data-theme="apple"] .ai-chat-msg.agent .ai-chat-bubble strong {
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .ai-chat-msg.user .ai-chat-bubble {
+  background: #0066cc !important;
+  color: #ffffff !important;
+}
+[data-theme="apple"] .ai-prompt-chips .ai-chip-btn {
+  background: #f2f2f7 !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .ai-prompt-chips .ai-chip-btn:hover {
+  background: #e5e5ea !important;
+  border-color: rgba(0, 0, 0, 0.16) !important;
+}
+[data-theme="apple"] .ai-card-item {
+  background: #f8f8fa !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .ai-card-item strong {
+  color: #1d1d1f !important;
+}
+
+/* Modais Apple */
+[data-theme="apple"] .modal-content,
+[data-theme="apple"] .ai-modal-box {
+  background: #ffffff !important;
+  color: #1d1d1f !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15) !important;
+}
+[data-theme="apple"] .modal-header,
+[data-theme="apple"] .ai-modal-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .modal-header h3,
+[data-theme="apple"] .ai-modal-header h3 {
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .ai-modal-backdrop {
+  background: rgba(0, 0, 0, 0.35) !important;
+  backdrop-filter: blur(12px) !important;
+}
+[data-theme="apple"] .ai-modal-body {
+  color: #1d1d1f !important;
+}
+
+/* Tables */
+[data-theme="apple"] table th {
+  background: #f5f5f7 !important;
+  color: #6e6e73 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="apple"] table td {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+  color: #1d1d1f !important;
+}
+
+/* ================= MODAL CENTRAL DE MEMÓRIA DA MORGAN ================= */
+.memory-tab-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.memory-tab-btn:hover {
+  color: var(--foreground);
+}
+.memory-tab-btn.active {
+  color: #0066cc !important;
+  border-bottom-color: #0066cc !important;
+}
+[data-theme="dark"] .memory-tab-btn.active {
+  color: #10b981 !important;
+  border-bottom-color: #10b981 !important;
+}
+
+.memory-fact-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+.memory-fact-item:hover {
+  border-color: var(--border-color-hover);
+}
+.memory-fact-delete-btn {
+  background: transparent;
+  border: none;
+  color: #ff3b30;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.memory-fact-delete-btn:hover {
+  background: rgba(255, 59, 48, 0.15);
 }

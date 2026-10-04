@@ -1,4 +1,9 @@
-// FAMILY MONEY - Lógica de Negócio do Cliente com Supabase (SPA) v6.8.3
+// FAMILY MONEY - Lógica de Negócio do Cliente com Supabase (SPA) v6.9.0
+try {
+  const savedTheme = localStorage.getItem('familymoney_theme') || 'apple';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+} catch (e) {}
+
 try {
   if (localStorage.getItem('fm_gemini_active_model') === 'gemini-3.8-flash' || !localStorage.getItem('fm_gemini_active_model')) {
     localStorage.setItem('fm_gemini_active_model', 'gemini-flash-latest');
@@ -711,7 +716,7 @@ function renderDashboard() {
     const subtotalsHtmlArr = [];
     if (amountUpTo10 > 0) {
       subtotalsHtmlArr.push(`
-        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.45); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
+        <div style="font-size: 0.7rem; color: var(--text-dim); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
           <span>• Até Dia 10:</span>
           <span>-${formatCurrency(amountUpTo10)}</span>
         </div>
@@ -719,7 +724,7 @@ function renderDashboard() {
     }
     if (amountAfter10 > 0) {
       subtotalsHtmlArr.push(`
-        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.45); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
+        <div style="font-size: 0.7rem; color: var(--text-dim); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
           <span>• Pós Dia 10:</span>
           <span>-${formatCurrency(amountAfter10)}</span>
         </div>
@@ -4695,10 +4700,10 @@ function loadFamilyMemory() {
   };
 }
 
-function saveFamilyMemory() {
-  const goalEl = document.getElementById('memory-family-goal');
-  const untouchableEl = document.getElementById('memory-family-untouchable');
-  const riskEl = document.getElementById('memory-family-risk');
+function saveFamilyMemory(fromModal = false) {
+  const goalEl = fromModal ? document.getElementById('modal-memory-goal') : document.getElementById('memory-family-goal');
+  const untouchableEl = fromModal ? document.getElementById('modal-memory-untouchable') : document.getElementById('memory-family-untouchable');
+  const riskEl = fromModal ? document.getElementById('modal-memory-risk') : document.getElementById('memory-family-risk');
 
   const memory = {
     metaPrincipal: goalEl ? goalEl.value.trim() : "Construir reserva de liquidez de R$ 50.000 até o final de 2026",
@@ -4707,6 +4712,15 @@ function saveFamilyMemory() {
   };
 
   localStorage.setItem('fm_family_memory', JSON.stringify(memory));
+
+  // Sincronizar ambos os conjuntos de campos
+  const otherGoal = fromModal ? document.getElementById('memory-family-goal') : document.getElementById('modal-memory-goal');
+  const otherUntouchable = fromModal ? document.getElementById('memory-family-untouchable') : document.getElementById('modal-memory-untouchable');
+  const otherRisk = fromModal ? document.getElementById('memory-family-risk') : document.getElementById('modal-memory-risk');
+  if (otherGoal) otherGoal.value = memory.metaPrincipal;
+  if (otherUntouchable) otherUntouchable.value = memory.despesasInegociaveis;
+  if (otherRisk) otherRisk.value = memory.perfilRisco;
+
   showToast('Memória estratégica gravada! Morgan assimilou as diretrizes da família.');
 }
 
@@ -4804,6 +4818,8 @@ async function handleAiChatSubmit(userQuery) {
       responseText = await callGeminiAgentApi(trimmedQuery, geminiKey);
     } else {
       responseText = runNativeMorganReasoning(trimmedQuery);
+      aiConversationHistory.push({ role: 'user', text: trimmedQuery });
+      aiConversationHistory.push({ role: 'model', text: responseText });
     }
 
     const typingEl = document.getElementById('ai-typing-indicator');
@@ -4816,6 +4832,8 @@ async function handleAiChatSubmit(userQuery) {
     if (typingEl) typingEl.remove();
 
     const fallbackText = runNativeMorganReasoning(trimmedQuery);
+    aiConversationHistory.push({ role: 'user', text: trimmedQuery });
+    aiConversationHistory.push({ role: 'model', text: fallbackText });
     appendAiChatMessage('agent', `⚠️ *(Aviso: a API do Google Gemini retornou uma falha temporária: "${escapeHtml(err.message)}". Apresentando análise pelo motor analítico local:)*\n\n${fallbackText}`);
   }
 }
@@ -5006,6 +5024,7 @@ async function callGeminiAgentApi(prompt, apiKey) {
   const cdiAnnual = 10.65;
   const monthlyLiquidCdi = (health.totalLiquid * (cdiAnnual / 100)) / 12;
   const familyMemory = loadFamilyMemory();
+  const morganFacts = loadMorganFacts();
 
   const richContext = {
     dataHoje: new Date().toLocaleDateString('pt-BR'),
@@ -5017,6 +5036,7 @@ async function callGeminiAgentApi(prompt, apiKey) {
     scoreSaudeFamiliar: `${health.score}/100 (${health.badge})`,
     coberturaReservaEmergencia: `${health.coverageMonths} meses`,
     memoriaEstrategicaFamilia: familyMemory,
+    fatosMemorizadosUsuario: morganFacts,
     cartoesCreditoFloat: cardAnalysis.map(c => ({
       cartao: c.name,
       diaFechamento: c.closingDay,
@@ -5046,7 +5066,9 @@ SUA MISSÃO E POSTURA:
    - Meta Principal: "${familyMemory.metaPrincipal}"
    - Gastos Intocáveis (Jamais sugira cortar ou comprometer): "${familyMemory.despesasInegociaveis}"
    - Perfil de Risco: "${familyMemory.perfilRisco}"
-   Sempre pondere se as decisões aproximam ou afastam a família dessa meta principal.
+   - Fatos, Lembretes & Regras Memorizadas pelo Usuário:
+${morganFacts.length > 0 ? morganFacts.map((f, i) => `     * ${f}`).join('\n') : '     (Nenhum fato extra cadastrado)'}
+   Sempre pondere se as decisões aproximam ou afastam a família dessa meta principal e obedeça aos fatos memorizados.
 4. Use SEMPRE os DADOS REAIS da família enviados abaixo (contas bancárias, saldos, cartões de crédito, faturas, gastos e projeção de fluxo de caixa).
 5. Combine os dados da família com inteligência de mercado e investimentos:
    - Taxa Selic (${selicRate}% a.a.) e CDI (${cdiAnnual}% a.a.) atuais no Brasil, rendimento da reserva de emergência em CDB 100% CDI com resgate diário / Tesouro Selic.
@@ -5416,8 +5438,306 @@ function initAiAgent() {
 
   const saveMemoryBtn = document.getElementById('save-family-memory-btn');
   if (saveMemoryBtn) {
-    saveMemoryBtn.addEventListener('click', saveFamilyMemory);
+    saveMemoryBtn.addEventListener('click', () => saveFamilyMemory(false));
   }
+
+  setupMorganMemoryModal();
+}
+
+// ================= SISTEMA DE TEMAS (APPLE DESIGN & MODO ESCURO) =================
+function initTheme() {
+  const saved = localStorage.getItem('familymoney_theme') || 'apple';
+  applyTheme(saved);
+
+  const toggleBtn = document.getElementById('theme-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'apple';
+      const next = current === 'apple' ? 'dark' : 'apple';
+      applyTheme(next);
+      showToast(next === 'apple' ? 'Modo Apple Design Ativado' : 'Modo Escuro Clássico Ativado');
+    });
+  }
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('familymoney_theme', theme);
+  const textEl = document.getElementById('theme-toggle-text');
+  if (textEl) {
+    textEl.textContent = theme === 'apple' ? 'Modo Apple' : 'Modo Escuro';
+  }
+}
+
+// ================= BASE & MEMÓRIA DO MORGAN (CENTRAL DE TRANSPARÊNCIA) =================
+function loadMorganFacts() {
+  const saved = localStorage.getItem('family_morgan_facts');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    } catch(e) {}
+  }
+  return [
+    "A família prioriza a quitação de qualquer dívida antes de novos investimentos de risco.",
+    "O plano de saúde e as mensalidades escolares são despesas intocáveis.",
+    "Em compras com cartão de crédito, preferir sempre o cartão com fatura recém-fechada para obter 35 a 40 dias de float."
+  ];
+}
+
+function saveMorganFacts(facts) {
+  localStorage.setItem('family_morgan_facts', JSON.stringify(facts));
+  updateMorganFactsUI();
+}
+
+function addMorganFact(factText) {
+  if (!factText || !factText.trim()) return;
+  const facts = loadMorganFacts();
+  facts.push(factText.trim());
+  saveMorganFacts(facts);
+  showToast('Nova diretriz memorizada por Morgan com sucesso!');
+}
+
+function deleteMorganFact(index) {
+  const facts = loadMorganFacts();
+  if (index >= 0 && index < facts.length) {
+    facts.splice(index, 1);
+    saveMorganFacts(facts);
+    showToast('Item removido da memória de Morgan.');
+  }
+}
+
+function updateMorganFactsUI() {
+  const facts = loadMorganFacts();
+  const countEl = document.getElementById('memory-facts-count');
+  if (countEl) countEl.textContent = facts.length;
+
+  const listContainer = document.getElementById('morgan-facts-list');
+  if (!listContainer) return;
+
+  if (facts.length === 0) {
+    listContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">Nenhum fato memorizado. Adicione diretrizes, lembretes ou preferências acima.</div>';
+    return;
+  }
+
+  listContainer.innerHTML = facts.map((fact, idx) => `
+    <div class="memory-fact-item" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; gap: 10px;">
+      <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1;">
+        <span style="color: #10b981; font-weight: bold; font-size: 0.85rem;">#${idx + 1}</span>
+        <span style="font-size: 0.88rem; color: var(--foreground);">${escapeHtml(fact)}</span>
+      </div>
+      <button type="button" class="btn btn-outline memory-fact-delete-btn" data-fact-idx="${idx}" title="Remover este item da memória" style="padding: 4px 8px; font-size: 0.75rem; border-color: rgba(239, 68, 68, 0.3); color: #ef4444; border-radius: 6px; cursor: pointer;">
+        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+      </button>
+    </div>
+  `).join('');
+
+  listContainer.querySelectorAll('.memory-fact-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(btn.getAttribute('data-fact-idx'), 10);
+      deleteMorganFact(idx);
+    });
+  });
+
+  lucide.createIcons();
+}
+
+function setupMorganMemoryModal() {
+  const modal = document.getElementById('ai-memory-modal');
+  const openBtn = document.getElementById('ai-memory-open-btn');
+  const closeBtn = document.getElementById('close-ai-memory-btn');
+
+  if (!modal) return;
+
+  if (openBtn) {
+    openBtn.addEventListener('click', () => {
+      renderMorganMemoryModal();
+      modal.classList.remove('hide');
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      modal.classList.add('hide');
+    });
+  }
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.classList.add('hide');
+  });
+
+  // Troca de abas da Central de Memória
+  const tabBtns = modal.querySelectorAll('.memory-tab-btn');
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const targetTab = btn.getAttribute('data-memory-tab');
+      modal.querySelectorAll('.memory-pane').forEach(p => p.classList.add('hide'));
+      const activePane = document.getElementById(`memory-tab-pane-${targetTab}`);
+      if (activePane) activePane.classList.remove('hide');
+
+      if (targetTab === 'snapshot') {
+        renderMorganSnapshotTab();
+      } else if (targetTab === 'history') {
+        renderMorganHistoryTab();
+      }
+    });
+  });
+
+  // Formulário para adicionar novos fatos/notas
+  const factForm = document.getElementById('add-morgan-fact-form');
+  const factInput = document.getElementById('new-morgan-fact-input');
+  if (factForm && factInput) {
+    factForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      addMorganFact(factInput.value);
+      factInput.value = '';
+    });
+  }
+
+  // Salvar diretrizes estratégicas no modal
+  const saveModalMemBtn = document.getElementById('save-modal-memory-btn');
+  if (saveModalMemBtn) {
+    saveModalMemBtn.addEventListener('click', () => {
+      saveFamilyMemory(true);
+    });
+  }
+
+  // Botão de copiar dados JSON da base
+  const copySnapshotBtn = document.getElementById('copy-morgan-snapshot-btn');
+  if (copySnapshotBtn) {
+    copySnapshotBtn.addEventListener('click', () => {
+      const pre = document.getElementById('morgan-raw-snapshot');
+      if (pre && navigator.clipboard) {
+        navigator.clipboard.writeText(pre.textContent).then(() => {
+          showToast('Snapshot da base do Morgan copiado para a área de transferência!');
+        }).catch(() => {
+          showToast('Não foi possível copiar automaticamente.');
+        });
+      }
+    });
+  }
+
+  // Botão limpar histórico de diálogos
+  const clearHistoryBtn = document.getElementById('clear-morgan-chat-history-btn');
+  if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener('click', () => {
+      aiConversationHistory = [];
+      const chatMessages = document.getElementById('ai-chat-messages');
+      if (chatMessages) chatMessages.innerHTML = '';
+      const health = calculateFinancialHealthScore();
+      const cardAnalysis = getCardsFloatAnalysis();
+      initChatWelcomeMessage(health, cardAnalysis);
+      renderMorganHistoryTab();
+      showToast('Histórico de diálogos reiniciado com sucesso.');
+    });
+  }
+}
+
+function renderMorganMemoryModal() {
+  const familyMem = loadFamilyMemory();
+  const goalEl = document.getElementById('modal-memory-goal');
+  const untouchableEl = document.getElementById('modal-memory-untouchable');
+  const riskEl = document.getElementById('modal-memory-risk');
+  if (goalEl) goalEl.value = familyMem.metaPrincipal || '';
+  if (untouchableEl) untouchableEl.value = familyMem.despesasInegociaveis || '';
+  if (riskEl) riskEl.value = familyMem.perfilRisco || 'Moderado (Reserva Segura + Float Inteligente no CDI)';
+
+  updateMorganFactsUI();
+  renderMorganSnapshotTab();
+  renderMorganHistoryTab();
+  lucide.createIcons();
+}
+
+function renderMorganSnapshotTab() {
+  const health = calculateFinancialHealthScore();
+  const cardAnalysis = getCardsFloatAnalysis();
+  const anomalyData = detectExpenseAnomalies();
+  const forecast = (state && state.forecast) || [];
+  const familyMem = loadFamilyMemory();
+  const facts = loadMorganFacts();
+
+  const currentMonthForecast = forecast[0] || { totalIncomes: 0, totalExpenses: 0, cardBills: [] };
+  const netSurplus = (currentMonthForecast.totalIncomes || 0) - (currentMonthForecast.totalExpenses || 0);
+
+  const cardsContainer = document.getElementById('morgan-live-snapshot-cards');
+  if (cardsContainer) {
+    cardsContainer.innerHTML = `
+      <div style="background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+        <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block;">Liquidez Bancária</span>
+        <strong style="font-size: 1.1rem; color: var(--foreground);">${formatCurrency(health.totalLiquid)}</strong>
+        <small style="display: block; font-size: 0.72rem; color: #10b981; margin-top: 2px;">${health.coverageMonths} meses de reserva</small>
+      </div>
+      <div style="background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+        <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block;">Superávit Previsto</span>
+        <strong style="font-size: 1.1rem; color: ${netSurplus >= 0 ? '#10b981' : '#ff453a'};">${formatCurrency(netSurplus)}</strong>
+        <small style="display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Receitas: ${formatCurrency(currentMonthForecast.totalIncomes || 0)}</small>
+      </div>
+      <div style="background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+        <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block;">Faturas de Cartão</span>
+        <strong style="font-size: 1.1rem; color: #f59e0b;">${formatCurrency(health.totalCardBills)}</strong>
+        <small style="display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Compromete ${health.cardDebtRatio}% da renda</small>
+      </div>
+      <div style="background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+        <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block;">Saúde Orçamentária</span>
+        <strong style="font-size: 1.1rem; color: ${health.badgeColor};">${health.score}/100</strong>
+        <small style="display: block; font-size: 0.72rem; color: ${health.badgeColor}; margin-top: 2px;">${health.badge}</small>
+      </div>
+    `;
+  }
+
+  const rawPre = document.getElementById('morgan-raw-snapshot');
+  if (rawPre) {
+    const snapshotData = {
+      timestamp: new Date().toISOString(),
+      saude: {
+        score: health.score,
+        classificacao: health.badge,
+        liquidezDisponivel: health.totalLiquid,
+        mesesReservaEmergencia: health.coverageMonths,
+        superavitPrevistoMes: netSurplus,
+        totalFaturasCartao: health.totalCardBills
+      },
+      diretrizesEstrategicas: familyMem,
+      fatosMemorizadosUsuario: facts,
+      cartoesMonitorados: cardAnalysis.map(c => ({
+        nome: c.name,
+        diaFechamento: c.closingDay,
+        diaVencimento: c.dueDay,
+        floatAtualDias: c.floatDays,
+        diasAteFechamento: c.daysUntilClosing,
+        status: c.statusTip
+      })),
+      despesasSuperfluasDetectadas: anomalyData.anomalies,
+      projecaoMeses: forecast.slice(0, 6).map(f => ({
+        mes: f.label,
+        receitas: f.totalIncomes,
+        despesas: f.totalExpenses,
+        saldoAcumulado: f.accumulatedBalance
+      }))
+    };
+    rawPre.textContent = JSON.stringify(snapshotData, null, 2);
+  }
+}
+
+function renderMorganHistoryTab() {
+  const container = document.getElementById('morgan-chat-history-log');
+  if (!container) return;
+
+  if (!aiConversationHistory || aiConversationHistory.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">Nenhum diálogo registrado nesta sessão ainda.</div>';
+    return;
+  }
+
+  container.innerHTML = aiConversationHistory.map(item => `
+    <div style="background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px;">
+      <span style="font-size: 0.72rem; font-weight: 700; color: ${item.role === 'user' ? '#0066cc' : '#10b981'}; text-transform: uppercase;">
+        ${item.role === 'user' ? 'Você' : 'Morgan (CFO)'}
+      </span>
+      <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--foreground); white-space: pre-wrap;">${escapeHtml(item.text)}</p>
+    </div>
+  `).join('');
 }
 
 // ================= INICIALIZAÇÃO =================
@@ -5436,6 +5756,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }, 1000);
 
+  initTheme();
   initApp();
   initAiAgent();
 });
