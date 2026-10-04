@@ -524,7 +524,7 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
   }
 
   // 1. Processar Receitas Recorrentes e Despesas Fixas por mês
-  forecastMonths.forEach(m => {
+  forecastMonths.forEach((m, monthIdx) => {
     fixedItems.forEach(item => {
       const cardIdNum = item.card_id || item.cardId;
       const amount = parseFloat(item.amount);
@@ -580,13 +580,31 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
             }
           }
         } else {
-          m.fixedExpenses.push(itemDetail);
+          // Despesa fixa em conta bancária
+          const recurrenceTag = `[R:${item.id}]`;
+          const matchingTx = transactions.find(t => {
+            const isAccount = t.payment_method === 'account' || t.paymentMethod === 'account';
+            if (!isAccount) return false;
+            if (!t.description || !t.description.includes(recurrenceTag)) return false;
+            const txDate = new Date(t.date + 'T12:00:00');
+            return txDate.getFullYear() === m.year && txDate.getMonth() === m.month;
+          });
+
+          const isEffective = matchingTx ? (matchingTx.is_effective === true || matchingTx.isEffective === true) : false;
+          const realAmount = matchingTx ? parseFloat(matchingTx.amount) : amount;
+
+          m.fixedExpenses.push({
+            ...itemDetail,
+            amount: realAmount,
+            isEffective: isEffective,
+            txId: matchingTx ? matchingTx.id : null,
+            // Se já foi efetivado no mês corrente (mês 0), o saldo da conta já sofreu o abatimento
+            alreadyDeductedFromBalance: (monthIdx === 0 && isEffective)
+          });
         }
       }
     });
   });
-
-
 
   // 2. Processar compras de Cartão de Crédito e suas Faturas
   transactions.forEach(tx => {
@@ -625,10 +643,10 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
     }
   });
 
-  // 3. Consolidar
+  // 3. Consolidar Projeção Financeira com Integridade de Caixa
   let runningBalance = currentTotalBalance;
   
-  forecastMonths.forEach(m => {
+  forecastMonths.forEach((m, idx) => {
     const totalInc = m.incomes.reduce((sum, item) => sum + item.amount, 0);
     const totalFixed = m.fixedExpenses.reduce((sum, item) => sum + item.amount, 0);
     const totalCards = m.cardBills.reduce((sum, item) => sum + item.amount, 0);
@@ -637,7 +655,18 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
     m.totalExpenses = totalFixed + totalCards;
     m.netSurplus = totalInc - m.totalExpenses;
     
-    runningBalance += m.netSurplus;
+    // Na projeção de caixa (runningBalance):
+    // No mês corrente (mês 0), as despesas fixas já efetivadas já foram descontadas do currentTotalBalance.
+    // Portanto, descontamos apenas as despesas fixas pendentes (não abatidas do saldo de partida).
+    const pendingFixedExpenses = m.fixedExpenses
+      .filter(item => !item.alreadyDeductedFromBalance)
+      .reduce((sum, item) => sum + item.amount, 0);
+
+    const cashImpact = (idx === 0)
+      ? (totalInc - (pendingFixedExpenses + totalCards))
+      : m.netSurplus;
+
+    runningBalance += cashImpact;
     m.projectedBalance = runningBalance;
   });
 
@@ -1197,9 +1226,26 @@ function renderMonthlyDetail(monthData) {
 
   document.getElementById('inline-month-title').textContent = `Detalhamento Projeção - ${monthData.label.toUpperCase()}`;
   
+  // Calcular despesas variáveis em conta do mês (ex: Pix pontual, débito avulso que não é recorrência [R:ID])
+  let variableAccountExpensesTotal = 0;
+  state.transactions.forEach(t => {
+    const isAccount = t.payment_method === 'account' || t.paymentMethod === 'account';
+    if (!isAccount) return;
+    if (t.description && t.description.includes('[R:')) return; // Recorrência fixa já processada no Bloco A
+    
+    const cat = state.lookupMaps.categories.get(t.category_id || t.categoryId);
+    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+    if (finalType !== 'expense') return;
+
+    const txDate = new Date(t.date + 'T12:00:00');
+    if (txDate.getFullYear() === monthData.year && txDate.getMonth() === monthData.month) {
+      variableAccountExpensesTotal += Math.abs(parseFloat(t.amount));
+    }
+  });
+
   const totalCards = monthData.cardBills.reduce((sum, c) => sum + c.amount, 0);
   const totalFixed = monthData.fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalExpenses = totalFixed + totalCards;
+  const totalExpenses = totalFixed + totalCards + variableAccountExpensesTotal;
   
   document.getElementById('inline-total-income').textContent = formatCurrency(monthData.totalIncomes);
   document.getElementById('inline-total-expense').textContent = `-${formatCurrency(totalExpenses)}`;
@@ -1216,18 +1262,29 @@ function renderMonthlyDetail(monthData) {
     categoryItemsMap[c.id] = [];
   });
 
-  // A) Despesas Fixas do mês (apenas tipo expense)
+  // A) Despesas Fixas do mês (apenas tipo expense) - UNICIDADE GARANTIDA
   monthData.fixedExpenses.forEach(e => {
     const dbFixed = state.fixedItems.find(f => f.id === e.id);
     if (dbFixed && (dbFixed.type === 'expense' || !dbFixed.type) && (dbFixed.category_id || dbFixed.categoryId)) {
       const catId = dbFixed.category_id || dbFixed.categoryId;
-      const amt = Math.abs(parseFloat(e.amount));
+      
+      // Localizar se existe transação física correspondente no mês
+      const matchingTx = state.transactions.find(t => {
+        if (!t.description || !t.description.includes(`[R:${e.id}]`)) return false;
+        const txDate = new Date(t.date + 'T12:00:00');
+        return txDate.getFullYear() === monthData.year && txDate.getMonth() === monthData.month;
+      });
+
+      const amt = matchingTx ? Math.abs(parseFloat(matchingTx.amount)) : Math.abs(parseFloat(e.amount));
+      const isPaid = matchingTx ? (matchingTx.is_effective === true || matchingTx.isEffective === true) : (e.isEffective === true);
+
       categorySums[catId] = (categorySums[catId] || 0) + amt;
       if (!categoryItemsMap[catId]) categoryItemsMap[catId] = [];
       categoryItemsMap[catId].push({
-        description: dbFixed.name || e.name || e.description || 'Despesa Fixa',
+        description: cleanDescription(dbFixed.name || e.name || e.description || 'Despesa Fixa'),
         amount: amt,
-        source: 'Fixa'
+        source: isPaid ? 'Fixa Paga' : 'Fixa Prevista',
+        isEffective: isPaid
       });
     }
   });
@@ -1242,18 +1299,21 @@ function renderMonthlyDetail(monthData) {
       categorySums[catId] = (categorySums[catId] || 0) + amt;
       if (!categoryItemsMap[catId]) categoryItemsMap[catId] = [];
       categoryItemsMap[catId].push({
-        description: tx.description || b.description || 'Fatura de Cartão',
+        description: cleanDescription(tx.description || b.description || 'Fatura de Cartão'),
         amount: amt,
         source: 'Cartão'
       });
     }
   });
 
-  // C) Transações em Conta do mês: APENAS DESPESAS (receitas e transferências estritamente excluídas)
+  // C) Transações em Conta do mês: APENAS DESPESAS VARIÁVEIS (despesas fixas recorrentes [R:ID] já contempladas no Bloco A)
   state.transactions.forEach(t => {
     const catIdNum = t.category_id || t.categoryId;
     const isAccount = t.payment_method === 'account' || t.paymentMethod === 'account';
     if (!isAccount || !catIdNum) return;
+
+    // Se for uma despesa recorrente [R:ID], IGNORAR para evitar duplicação contábil
+    if (t.description && t.description.includes('[R:')) return;
 
     const cat = state.lookupMaps.categories.get(catIdNum);
     const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
@@ -1267,7 +1327,7 @@ function renderMonthlyDetail(monthData) {
       categorySums[catIdNum] = (categorySums[catIdNum] || 0) + amt;
       if (!categoryItemsMap[catIdNum]) categoryItemsMap[catIdNum] = [];
       categoryItemsMap[catIdNum].push({
-        description: t.description || 'Lançamento em Conta',
+        description: cleanDescription(t.description || 'Lançamento em Conta'),
         amount: amt,
         source: 'Conta'
       });
@@ -1304,15 +1364,23 @@ function renderMonthlyDetail(monthData) {
         ? `${c.pctOfRevenue.toFixed(1)}% da receita`
         : `${c.pctOfExpenses.toFixed(1)}% das despesas`;
 
-      const itemsRows = c.items.map(it => `
+      const itemsRows = c.items.map(it => {
+        let badgeClass = 'badge-src-default';
+        if (it.source === 'Fixa Paga') badgeClass = 'badge-src-paid';
+        else if (it.source === 'Fixa Prevista') badgeClass = 'badge-src-pending';
+        else if (it.source === 'Cartão') badgeClass = 'badge-src-card';
+        else if (it.source === 'Conta') badgeClass = 'badge-src-account';
+
+        return `
         <div class="category-drawer-row">
           <div class="category-drawer-info">
-            <span class="category-drawer-source-badge">${escapeHtml(it.source)}</span>
+            <span class="category-drawer-source-badge ${badgeClass}">${escapeHtml(it.source)}</span>
             <span class="category-drawer-desc">${escapeHtml(it.description)}</span>
           </div>
           <span class="red-neon" style="font-weight: 600; font-size: 0.8rem; font-feature-settings: 'tnum';">-${formatCurrency(it.amount)}</span>
         </div>
-      `).join('');
+        `;
+      }).join('');
 
       return `
         <div class="category-progress-item">

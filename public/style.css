@@ -1270,7 +1270,7 @@ tr:hover td {
     display: none !important;
   }
   
-  /* Barra de Navegação Inferior Fixo e Estático */
+  /* Barra de Navegação Inferior Fixo e Estático em Linha Única (Sem Encavalamento) */
   .main-nav {
     order: unset !important;
     position: fixed !important;
@@ -1278,39 +1278,46 @@ tr:hover td {
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
-    height: 62px !important;
+    height: 56px !important;
     background: #191129 !important;
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
     border-top: 1px solid rgba(168, 85, 247, 0.15) !important;
-    display: grid !important;
-    grid-template-columns: repeat(5, 1fr) !important; /* 5 colunas estáticas e perfeitamente iguais */
-    justify-items: stretch !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-around !important;
     align-items: center !important;
-    padding: 0 !important;
+    padding: 0 4px !important;
     margin: 0 !important;
+    gap: 2px !important;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
     z-index: 9999 !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
   .nav-link {
     display: flex !important;
     flex-direction: column !important;
-    gap: 3px !important;
+    gap: 2px !important;
     align-items: center !important;
     justify-content: center !important;
     background: transparent !important;
     border: none !important;
-    padding: 4px 0 !important;
+    padding: 4px 1px !important;
     color: var(--text-muted) !important;
-    border-radius: 0 !important;
-    width: 100% !important; /* Ocupa exatamente a largura da sua célula do grid */
+    border-radius: 6px !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
     max-width: 100% !important;
     height: 100% !important;
-    font-size: 0.68rem !important;
+    font-size: 0.58rem !important;
     transition: var(--transition) !important;
     box-sizing: border-box !important;
+    text-transform: uppercase !important;
+    letter-spacing: -0.01em !important;
+    white-space: nowrap !important;
+    cursor: pointer !important;
   }
   
   .nav-link.active {
@@ -1320,10 +1327,11 @@ tr:hover td {
     text-shadow: 0 0 10px rgba(168, 85, 247, 0.3) !important;
   }
   
-  .nav-link i {
-    width: 20px !important;
-    height: 20px !important;
+  .nav-link i, .nav-link svg {
+    width: 17px !important;
+    height: 17px !important;
     margin: 0 !important;
+    flex-shrink: 0 !important;
   }
   
   .nav-text-desktop {
@@ -1332,13 +1340,42 @@ tr:hover td {
   
   .nav-text-mobile {
     display: block !important;
-    font-size: 0.65rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.02em !important;
+    font-size: 0.58rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
   }
   
   .nav-logout-btn {
     display: none !important;
+  }
+
+  [data-theme="apple"] .main-nav {
+    background: rgba(245, 245, 247, 0.95) !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.09) !important;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.05) !important;
+  }
+  [data-theme="apple"] .nav-link {
+    color: #86868b !important;
+  }
+  [data-theme="apple"] .nav-link:hover {
+    color: #1d1d1f !important;
+  }
+  [data-theme="apple"] .nav-link.active {
+    color: #000000 !important;
+    background: rgba(0, 0, 0, 0.04) !important;
+  }
+  [data-theme="apple"] .nav-link.active i,
+  [data-theme="apple"] .nav-link.active svg {
+    color: #000000 !important;
+  }
+  [data-theme="apple"] .nav-link.active .nav-text-mobile {
+    color: #000000 !important;
+    font-weight: 700 !important;
   }
 
   /* Cards de Previsão em Barra de Rolagem Horizontal (Swiper) no Celular */
@@ -3124,6 +3161,49 @@ tr:hover td {
   background: rgba(168, 85, 247, 0.12) !important;
   color: var(--neon-purple-bright) !important;
   border: 1px solid rgba(168, 85, 247, 0.25) !important;
+}
+
+/* Badges Específicos por Origem (Astryx Token System) */
+.badge-src-paid {
+  background: rgba(40, 205, 65, 0.12) !important;
+  color: #28cd41 !important;
+  border: 1px solid rgba(40, 205, 65, 0.25) !important;
+}
+.badge-src-pending {
+  background: rgba(255, 159, 10, 0.12) !important;
+  color: #ff9f0a !important;
+  border: 1px solid rgba(255, 159, 10, 0.25) !important;
+}
+.badge-src-card {
+  background: rgba(1, 113, 227, 0.12) !important;
+  color: #0171e3 !important;
+  border: 1px solid rgba(1, 113, 227, 0.25) !important;
+}
+.badge-src-account {
+  background: rgba(142, 142, 147, 0.14) !important;
+  color: #8e8e93 !important;
+  border: 1px solid rgba(142, 142, 147, 0.25) !important;
+}
+
+[data-theme="apple"] .badge-src-paid {
+  background: rgba(46, 125, 50, 0.08) !important;
+  color: #1e7e34 !important;
+  border: 1px solid rgba(46, 125, 50, 0.2) !important;
+}
+[data-theme="apple"] .badge-src-pending {
+  background: rgba(180, 83, 9, 0.08) !important;
+  color: #b45309 !important;
+  border: 1px solid rgba(180, 83, 9, 0.2) !important;
+}
+[data-theme="apple"] .badge-src-card {
+  background: rgba(1, 113, 227, 0.08) !important;
+  color: #0066cc !important;
+  border: 1px solid rgba(1, 113, 227, 0.2) !important;
+}
+[data-theme="apple"] .badge-src-account {
+  background: rgba(100, 116, 139, 0.08) !important;
+  color: #475569 !important;
+  border: 1px solid rgba(100, 116, 139, 0.2) !important;
 }
 .category-drawer-desc {
   font-size: 0.8rem;
