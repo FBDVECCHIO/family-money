@@ -820,52 +820,81 @@ function renderDashboard() {
   }
 }
 
-// 3. Gráfico de Tendência (Chart.js)
+// 3. Gráfico de Tendência (Chart.js - Estilo Fintech Minimalista de Alto Contraste)
 function renderChart() {
-  const ctx = document.getElementById('projected-trend-chart').getContext('2d');
+  const chartCanvas = document.getElementById('projected-trend-chart');
+  if (!chartCanvas) return;
+  const ctx = chartCanvas.getContext('2d');
   if (state.trendChart) {
     state.trendChart.destroy();
   }
 
+  const currentTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('familymoney_theme') || 'apple';
+  const isApple = currentTheme === 'apple';
+
   const labels = state.forecast.map(m => m.label.toUpperCase());
   const dataPoints = state.forecast.map(m => m.projectedBalance);
 
-  const gradient = ctx.createLinearGradient(0, 0, 0, 250);
-  gradient.addColorStop(0, 'rgba(57, 255, 20, 0.4)');
-  gradient.addColorStop(0.5, 'rgba(139, 92, 246, 0.2)');
-  gradient.addColorStop(1, 'rgba(6, 2, 13, 0.1)');
+  // Paleta de Cores e Alto Contraste (Inspirada no modelo Fintech / Apple Stocks)
+  const strokeColor = isApple ? '#0071e3' : '#3b82f6';
+  const tickColor = isApple ? '#1d1d1f' : '#e5e7eb';
+  const gridColor = isApple ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.08)';
+
+  // Gradiente vertical suave sob a linha
+  const chartHeight = chartCanvas.clientHeight || 260;
+  const gradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
+  if (isApple) {
+    gradient.addColorStop(0, 'rgba(0, 113, 227, 0.24)');
+    gradient.addColorStop(0.7, 'rgba(0, 113, 227, 0.04)');
+    gradient.addColorStop(1, 'rgba(0, 113, 227, 0.0)');
+  } else {
+    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.40)');
+    gradient.addColorStop(0.7, 'rgba(59, 130, 246, 0.08)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+  }
 
   state.trendChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
       datasets: [{
-        label: 'Saldo Acumulado Projetado',
+        label: 'Saldo Projetado',
         data: dataPoints,
-        borderColor: '#39ff14',
-        borderWidth: 3,
-        pointBackgroundColor: '#ff3b30',
-        pointBorderColor: '#fff',
-        pointRadius: 6,
-        pointHoverRadius: 8,
+        borderColor: strokeColor,
+        borderWidth: 2.5,
         backgroundColor: gradient,
         fill: true,
-        tension: 0.3
+        tension: 0.38,
+        pointRadius: 0, // Linha contínua e limpa como a referência
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: strokeColor,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBorderWidth: 2
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#0d071c',
-          titleColor: '#fff',
-          bodyColor: '#39ff14',
-          borderColor: 'rgba(168, 85, 247, 0.4)',
+          backgroundColor: isApple ? 'rgba(255, 255, 255, 0.96)' : 'rgba(20, 18, 30, 0.96)',
+          titleColor: isApple ? '#1d1d1f' : '#ffffff',
+          bodyColor: strokeColor,
+          borderColor: isApple ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.15)',
           borderWidth: 1,
+          padding: 10,
+          boxPadding: 4,
+          usePointStyle: true,
           displayColors: false,
           callbacks: {
+            title: function(items) {
+              return items[0].label;
+            },
             label: function(context) {
               return 'Saldo: ' + formatCurrency(context.parsed.y);
             }
@@ -874,15 +903,40 @@ function renderChart() {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(255, 255, 255, 0.05)' },
-          ticks: { color: '#e9d5ff' }
+          grid: {
+            display: false,
+            drawBorder: false
+          },
+          ticks: {
+            color: tickColor,
+            font: {
+              family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
+              size: 11,
+              weight: '600'
+            },
+            padding: 8
+          }
         },
         y: {
-          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          grid: {
+            color: gridColor,
+            drawBorder: false,
+            borderDash: [4, 4]
+          },
           ticks: {
-            color: '#e9d5ff',
+            color: tickColor,
+            font: {
+              family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
+              size: 11,
+              weight: '600'
+            },
+            padding: 8,
             callback: function(value) {
-              return 'R$ ' + value;
+              return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+                maximumFractionDigits: 0
+              }).format(value);
             }
           }
         }
@@ -5589,6 +5643,10 @@ function applyTheme(theme) {
   const textEl = document.getElementById('theme-toggle-text');
   if (textEl) {
     textEl.textContent = theme === 'apple' ? 'Modo Apple' : 'Modo Escuro';
+  }
+  // Re-renderizar dinamicamente o gráfico com os contrastes e gradientes do tema ativo
+  if (state.trendChart && typeof renderChart === 'function') {
+    renderChart();
   }
 }
 

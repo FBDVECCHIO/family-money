@@ -735,6 +735,15 @@ button, input, select {
   width: 100%;
 }
 
+.chart-title-icon {
+  color: #0071e3 !important;
+  width: 20px;
+  height: 20px;
+}
+[data-theme="dark"] .chart-title-icon {
+  color: #3b82f6 !important;
+}
+
 .details-summary-card {
   padding: 24px;
   display: flex;
