@@ -1178,6 +1178,19 @@ function renderNewTxFormFields() {
 }
 
 // 7. Detalhamento Inline Mensal
+window.toggleCategoryDrawer = function(catId, btn) {
+  const drawer = document.getElementById(`category-drawer-${catId}`);
+  if (!drawer) return;
+  const isHidden = drawer.classList.contains('hide');
+  drawer.classList.toggle('hide');
+  if (btn) {
+    const icon = btn.querySelector('svg') || btn.querySelector('i');
+    if (icon) {
+      icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+  }
+};
+
 function renderMonthlyDetail(monthData) {
   const detailContainer = document.getElementById('inline-month-detail');
   if (!detailContainer) return;
@@ -1197,8 +1210,10 @@ function renderMonthlyDetail(monthData) {
 
   // 1. Resumo do Mapa de Despesas por Categoria (EXCLUSIVO para despesas - NUNCA incluir receitas)
   const categorySums = {};
+  const categoryItemsMap = {};
   state.categories.forEach(c => {
     categorySums[c.id] = 0;
+    categoryItemsMap[c.id] = [];
   });
 
   // A) Despesas Fixas do mês (apenas tipo expense)
@@ -1206,7 +1221,14 @@ function renderMonthlyDetail(monthData) {
     const dbFixed = state.fixedItems.find(f => f.id === e.id);
     if (dbFixed && (dbFixed.type === 'expense' || !dbFixed.type) && (dbFixed.category_id || dbFixed.categoryId)) {
       const catId = dbFixed.category_id || dbFixed.categoryId;
-      categorySums[catId] = (categorySums[catId] || 0) + Math.abs(parseFloat(e.amount));
+      const amt = Math.abs(parseFloat(e.amount));
+      categorySums[catId] = (categorySums[catId] || 0) + amt;
+      if (!categoryItemsMap[catId]) categoryItemsMap[catId] = [];
+      categoryItemsMap[catId].push({
+        description: dbFixed.name || e.name || e.description || 'Despesa Fixa',
+        amount: amt,
+        source: 'Fixa'
+      });
     }
   });
 
@@ -1216,7 +1238,14 @@ function renderMonthlyDetail(monthData) {
     if (tx && tx.type === 'income') return; // Exclusão estrita de receitas
     if (tx && (tx.category_id || tx.categoryId)) {
       const catId = tx.category_id || tx.categoryId;
-      categorySums[catId] = (categorySums[catId] || 0) + Math.abs(parseFloat(b.amount));
+      const amt = Math.abs(parseFloat(b.amount));
+      categorySums[catId] = (categorySums[catId] || 0) + amt;
+      if (!categoryItemsMap[catId]) categoryItemsMap[catId] = [];
+      categoryItemsMap[catId].push({
+        description: tx.description || b.description || 'Fatura de Cartão',
+        amount: amt,
+        source: 'Cartão'
+      });
     }
   });
 
@@ -1234,18 +1263,28 @@ function renderMonthlyDetail(monthData) {
 
     const txDate = new Date(t.date + 'T12:00:00');
     if (txDate.getFullYear() === monthData.year && txDate.getMonth() === monthData.month) {
-      categorySums[catIdNum] = (categorySums[catIdNum] || 0) + Math.abs(parseFloat(t.amount));
+      const amt = Math.abs(parseFloat(t.amount));
+      categorySums[catIdNum] = (categorySums[catIdNum] || 0) + amt;
+      if (!categoryItemsMap[catIdNum]) categoryItemsMap[catIdNum] = [];
+      categoryItemsMap[catIdNum].push({
+        description: t.description || 'Lançamento em Conta',
+        amount: amt,
+        source: 'Conta'
+      });
     }
   });
 
   const totalRevenue = monthData.totalIncomes || 0;
   const spentCategories = state.categories.map(c => {
     const spent = categorySums[c.id] || 0;
+    const items = categoryItemsMap[c.id] || [];
+    items.sort((a, b) => b.amount - a.amount);
     const pctOfRevenue = totalRevenue > 0 ? (spent / totalRevenue) * 100 : 0;
     const pctOfExpenses = totalExpenses > 0 ? (spent / totalExpenses) * 100 : 0;
     return {
       ...c,
       spent,
+      items,
       pctOfRevenue,
       pctOfExpenses
     };
@@ -1265,12 +1304,25 @@ function renderMonthlyDetail(monthData) {
         ? `${c.pctOfRevenue.toFixed(1)}% da receita`
         : `${c.pctOfExpenses.toFixed(1)}% das despesas`;
 
+      const itemsRows = c.items.map(it => `
+        <div class="category-drawer-row">
+          <div class="category-drawer-info">
+            <span class="category-drawer-source-badge">${escapeHtml(it.source)}</span>
+            <span class="category-drawer-desc">${escapeHtml(it.description)}</span>
+          </div>
+          <span class="red-neon" style="font-weight: 600; font-size: 0.8rem; font-feature-settings: 'tnum';">-${formatCurrency(it.amount)}</span>
+        </div>
+      `).join('');
+
       return `
         <div class="category-progress-item">
           <div class="category-progress-labels">
             <span style="font-weight: 500; display: flex; align-items: center; gap: 8px;">
               <i data-lucide="${escapeHtml(c.icon || 'tag')}" style="width: 15px; height: 15px; color: ${escapeHtml(c.color || '#a855f7')}"></i>
               <span>${escapeHtml(c.name)}</span>
+              <button type="button" class="category-expand-btn" onclick="window.toggleCategoryDrawer('${c.id}', this)" title="Ver despesas deste indicador">
+                <i data-lucide="chevron-down" style="width: 13px; height: 13px; transition: transform 0.2s ease;"></i>
+              </button>
             </span>
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="apple-revenue-badge" title="Representação sobre o total da receita mensal">${revenueBadgeText}</span>
@@ -1279,6 +1331,9 @@ function renderMonthlyDetail(monthData) {
           </div>
           <div class="category-progress-bar-bg">
             <div class="category-progress-bar-fill" style="width: ${barWidth}%; background-color: ${escapeHtml(c.color || 'var(--neon-purple)')};"></div>
+          </div>
+          <div id="category-drawer-${c.id}" class="category-drawer hide">
+            ${itemsRows || '<div style="padding: 6px; font-size: 0.8rem; color: var(--text-muted);">Sem itens listados.</div>'}
           </div>
         </div>
       `;

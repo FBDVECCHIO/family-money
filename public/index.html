@@ -58,7 +58,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=6.0">
+  <link rel="stylesheet" href="style.css?v=7.0">
 </head>
 <body>
 
@@ -68,7 +68,7 @@
       <div class="login-header">
         <div class="logo">
           <i data-lucide="database" class="logo-icon green-neon"></i>
-          <span>FAMILY <span class="green-neon">MONEY</span></span>
+          <span><span class="logo-text-family">FAMILY</span> <span class="green-neon">MONEY</span></span>
         </div>
         <p>Configuração de Conexão com o Supabase</p>
       </div>
@@ -99,7 +99,7 @@
       <div class="login-header">
         <div class="logo">
           <i data-lucide="trending-up" class="logo-icon green-neon"></i>
-          <span>FAMILY <span class="green-neon">MONEY</span></span>
+          <span><span class="logo-text-family">FAMILY</span> <span class="green-neon">MONEY</span></span>
         </div>
         <p>Controle Financeiro e Previsibilidade Familiar</p>
       </div>
@@ -136,7 +136,7 @@
     <header class="app-header">
       <div class="logo">
         <i data-lucide="trending-up" class="logo-icon green-neon"></i>
-        <span class="hide-mobile">FAMILY <span class="green-neon">MONEY</span></span>
+        <span class="hide-mobile"><span class="logo-text-family">FAMILY</span> <span class="green-neon">MONEY</span></span>
       </div>
       
       <nav class="main-nav">
@@ -151,12 +151,12 @@
           <span class="nav-text-mobile">IA 24h</span>
           <span class="ai-nav-pulse-dot" title="Monitoramento Ativo 24h"></span>
         </button>
-        <button class="nav-link" data-tab="reports">
+        <button class="nav-link" data-tab="reports" id="reports-nav-btn">
           <i data-lucide="bar-chart-2"></i>
           <span class="nav-text-desktop">Relatórios</span>
           <span class="nav-text-mobile">Rel</span>
         </button>
-        <button class="nav-link" data-tab="new-tx">
+        <button class="nav-link" data-tab="new-tx" id="new-tx-nav-btn">
           <i data-lucide="plus-circle"></i>
           <span class="nav-text-desktop">Novo Lançamento</span>
           <span class="nav-text-mobile">Novo</span>
@@ -1416,28 +1416,28 @@
           <!-- Cabeçalho Especialista IA -->
           <div class="view-header">
             <div>
-              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px; flex-wrap: wrap;">
-                <h2 style="font-size: 1.6rem; margin: 0;">Morgan — Especialista IA em Finanças Familiares</h2>
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap;">
+                <h2 style="font-size: 1.5rem; margin: 0;">Morgan — Especialista IA em Finanças Familiares</h2>
+                <div class="ai-header-actions" style="display: inline-flex; align-items: center; gap: 6px;">
+                  <button id="ai-memory-open-btn" class="ai-header-icon-btn" title="Base & Memória do Morgan" aria-label="Base & Memória do Morgan">
+                    <i data-lucide="brain"></i>
+                  </button>
+                  <button id="ai-refresh-audit-btn" class="ai-header-icon-btn" title="Recalcular Auditoria" aria-label="Recalcular Auditoria">
+                    <i data-lucide="refresh-cw"></i>
+                  </button>
+                  <button id="ai-guide-open-btn" class="ai-header-icon-btn" title="Como Criar Agente Grátis" aria-label="Como Criar Agente Grátis">
+                    <i data-lucide="book-open"></i>
+                  </button>
+                  <button id="ai-settings-open-btn" class="ai-header-icon-btn" title="Configurar IA" aria-label="Configurar IA">
+                    <i data-lucide="key"></i>
+                  </button>
+                </div>
                 <span class="ai-status-pill">
                   <span class="ai-pulse-dot"></span>
                   Monitoramento 24h Ativo
                 </span>
               </div>
               <p class="subtitle text-pastel-purple">Auditoria contínua de liquidez, inteligência preditiva de faturas e corte de supérfluos</p>
-            </div>
-            <div class="actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <button id="ai-memory-open-btn" class="btn btn-outline" style="border-radius: 10px; font-size: 0.85rem; padding: 8px 14px; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.25); color: #10b981;">
-                <i data-lucide="brain"></i> Base & Memória do Morgan
-              </button>
-              <button id="ai-refresh-audit-btn" class="btn btn-outline" style="border-radius: 10px; font-size: 0.85rem; padding: 8px 14px;">
-                <i data-lucide="refresh-cw"></i> Recalcular Auditoria
-              </button>
-              <button id="ai-guide-open-btn" class="btn btn-outline" style="border-radius: 10px; font-size: 0.85rem; padding: 8px 14px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #60a5fa;">
-                <i data-lucide="book-open"></i> Como Criar Agente Grátis
-              </button>
-              <button id="ai-settings-open-btn" class="btn btn-outline" style="border-radius: 10px; font-size: 0.85rem; padding: 8px 14px;">
-                <i data-lucide="key"></i> Configurar IA
-              </button>
             </div>
           </div>
 
@@ -1998,6 +1998,6 @@ Dados: ${JSON.stringify(familyData)}`;
     </div>
   </div>
 
-  <script src="app.js?v=6.9.0&t=1791080000"></script>
+  <script src="app.js?v=7.0&t=1791140000"></script>
 </body>
 </html>

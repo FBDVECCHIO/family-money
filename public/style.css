@@ -1687,37 +1687,68 @@ tr:hover td {
 
 /* ================= TEMA ESCURO ROXO E VERDE NEON (RESTAURAÇÃO DO VISUAL GLOWING) ================= */
 
-/* Forçar cor do texto clara para todo o corpo, cabeçalhos, formulários, tabelas, inputs e botões */
-body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th, code, .nav-link {
+/* Forçar cor do texto clara para todo o corpo, cabeçalhos, formulários, tabelas, inputs e botões no Modo Escuro */
+[data-theme="dark"] body, 
+[data-theme="dark"] h1, 
+[data-theme="dark"] h2, 
+[data-theme="dark"] h3, 
+[data-theme="dark"] h4, 
+[data-theme="dark"] p, 
+[data-theme="dark"] span, 
+[data-theme="dark"] a, 
+[data-theme="dark"] label, 
+[data-theme="dark"] input, 
+[data-theme="dark"] select, 
+[data-theme="dark"] textarea, 
+[data-theme="dark"] button, 
+[data-theme="dark"] td, 
+[data-theme="dark"] th, 
+[data-theme="dark"] code, 
+[data-theme="dark"] .nav-link {
   color: #f4f4f5;
 }
 
-/* Forçar inputs com fundo escuro e texto branco */
-.form-group input, .form-group select {
+/* Forçar inputs com fundo escuro e texto branco no Modo Escuro */
+[data-theme="dark"] .form-group input, 
+[data-theme="dark"] .form-group select {
   background: var(--bg-input) !important;
   color: #ffffff !important;
   border: 1px solid rgba(168, 85, 247, 0.25) !important;
 }
 
-.form-group select option {
+[data-theme="dark"] .form-group select option {
   background-color: var(--bg-card) !important;
   color: #ffffff !important;
 }
 
-/* Modals */
-.modal-content, .modal-content h1, .modal-content h2, .modal-content h3, .modal-content h4, .modal-content p, .modal-content span, .modal-content td, .modal-content th, .modal-content label {
+/* Modals no Modo Escuro */
+[data-theme="dark"] .modal-content, 
+[data-theme="dark"] .modal-content h1, 
+[data-theme="dark"] .modal-content h2, 
+[data-theme="dark"] .modal-content h3, 
+[data-theme="dark"] .modal-content h4, 
+[data-theme="dark"] .modal-content p, 
+[data-theme="dark"] .modal-content span, 
+[data-theme="dark"] .modal-content td, 
+[data-theme="dark"] .modal-content th, 
+[data-theme="dark"] .modal-content label {
   background: var(--bg-card);
   color: #ffffff;
   border-color: var(--border-color);
 }
 
-/* Bordas Apple Design System (Neutras, sem tintas) */
-.glass, .app-header, .main-nav, .detail-list-box h4, .section-header, .account-item, .card-item {
+/* Bordas Apple Design System no Modo Escuro */
+[data-theme="dark"] .glass, 
+[data-theme="dark"] .app-header, 
+[data-theme="dark"] .main-nav, 
+[data-theme="dark"] .detail-list-box h4, 
+[data-theme="dark"] .section-header, 
+[data-theme="dark"] .account-item, 
+[data-theme="dark"] .card-item {
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Customizações dos botões e navegação (Apple Style) */
-.btn-primary {
+[data-theme="dark"] .btn-primary {
   background: #ffffff !important;
   color: #09090b !important;
   font-weight: 600 !important;
@@ -1725,42 +1756,40 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   border-radius: var(--radius) !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
 }
-.btn-primary:hover {
+[data-theme="dark"] .btn-primary:hover {
   background: #f4f4f5 !important;
   color: #09090b !important;
   box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15) !important;
 }
 
-.btn-outline {
+[data-theme="dark"] .btn-outline {
   background: rgba(255, 255, 255, 0.04) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   color: #f4f4f5 !important;
   border-radius: var(--radius) !important;
 }
-.btn-outline:hover {
+[data-theme="dark"] .btn-outline:hover {
   background: rgba(255, 255, 255, 0.08) !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
 }
 
-/* Menu Lateral e Cabeçalho Apple Frosted Glass */
-.app-header {
+[data-theme="dark"] .app-header {
   background: rgba(18, 18, 22, 0.8) !important;
   backdrop-filter: saturate(180%) blur(20px) !important;
   -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Nav links Apple Style */
-.nav-link {
+[data-theme="dark"] .nav-link {
   color: #a1a1aa !important;
   border-radius: 8px !important;
   transition: all 0.15s ease !important;
 }
-.nav-link:hover {
+[data-theme="dark"] .nav-link:hover {
   color: #ffffff !important;
   background: rgba(255, 255, 255, 0.06) !important;
 }
-.nav-link.active {
+[data-theme="dark"] .nav-link.active {
   color: #ffffff !important;
   background: rgba(255, 255, 255, 0.12) !important;
   font-weight: 600 !important;
@@ -2695,14 +2724,14 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
 /* ================= APPLE DESIGN SYSTEM THEME (getdesign.md/apple/design-md) ================= */
 [data-theme="apple"],
 [data-theme="apple"] body {
-  --bg-main: #e5e5ea; /* Background cinza mais escuro do canvas Apple */
+  --bg-main: #d2d2d7; /* Canvas Apple System Gray 4 - mais escuro para destaque dos cards */
   --bg-card: #ffffff; /* Cards cinza claro / branco pérola refinado */
   --bg-card-solid: #ffffff;
   --bg-card-hover: #f7f7f9;
   --bg-input: #f2f2f7;
   --bg-input-focus: #ffffff;
-  --border-color: rgba(0, 0, 0, 0.09);
-  --border-color-hover: rgba(0, 0, 0, 0.18);
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-color-hover: rgba(0, 0, 0, 0.2);
   
   --brand-green: #0066cc; /* Action Blue Apple */
   --apple-green: #34c759;
@@ -2725,18 +2754,187 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   --color-positive: #34c759;
   --color-negative: #ff3b30;
   
-  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-card: 0 4px 18px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
   --shadow-glow-purple: 0 4px 16px rgba(0, 102, 204, 0.12);
   --shadow-glow-green: 0 4px 16px rgba(52, 199, 89, 0.12);
 }
 
 [data-theme="apple"] body {
-  background-color: #e5e5ea !important;
+  background-color: #d2d2d7 !important;
   background-image: none !important;
   color: #1d1d1f !important;
 }
 
-/* Tipografia e Textos Apple (Preto Apple Ink & Cinza Muted) */
+/* ================= LOGO DO APP (ALTO CONTRASTE) ================= */
+[data-theme="apple"] .logo,
+[data-theme="apple"] .logo span,
+[data-theme="apple"] .logo-text-family {
+  color: #1d1d1f !important;
+  font-weight: 700 !important;
+}
+[data-theme="apple"] .logo-icon {
+  color: #0066cc !important;
+}
+[data-theme="apple"] .logo .green-neon {
+  color: #0066cc !important;
+}
+[data-theme="dark"] .logo-text-family {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+/* ================= MENU EM CARDS ESTILO APPLE & FONTE COMPACTA MAIÚSCULA ================= */
+.main-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 12px;
+  padding: 3px 4px;
+  flex-wrap: nowrap;
+}
+[data-theme="apple"] .main-nav {
+  background: #e1e1e6 !important;
+  border: 1px solid rgba(0, 0, 0, 0.09) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+[data-theme="dark"] .main-nav {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+}
+
+.nav-link {
+  text-transform: uppercase !important;
+  font-size: 0.74rem !important;
+  letter-spacing: 0.04em !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  padding: 6px 11px !important;
+  gap: 6px !important;
+  border-radius: 9px !important;
+  border: 1px solid transparent !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0;
+}
+[data-theme="apple"] .nav-link,
+[data-theme="apple"] .nav-link span {
+  color: #515154 !important;
+}
+[data-theme="apple"] .nav-link i,
+[data-theme="apple"] .nav-link svg {
+  color: #515154 !important;
+}
+[data-theme="apple"] .nav-link:hover,
+[data-theme="apple"] .nav-link:hover span {
+  color: #1d1d1f !important;
+  background: rgba(255, 255, 255, 0.65) !important;
+}
+[data-theme="apple"] .nav-link:hover i,
+[data-theme="apple"] .nav-link:hover svg {
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] .nav-link.active,
+[data-theme="apple"] .nav-link.active span {
+  color: #0066cc !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+  font-weight: 700 !important;
+}
+[data-theme="apple"] .nav-link.active i,
+[data-theme="apple"] .nav-link.active svg {
+  color: #0066cc !important;
+}
+
+[data-theme="dark"] .nav-link {
+  color: #a1a1aa !important;
+  text-transform: uppercase !important;
+  font-size: 0.74rem !important;
+  white-space: nowrap !important;
+  font-weight: 700 !important;
+}
+[data-theme="dark"] .nav-link:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+[data-theme="dark"] .nav-link.active {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+  font-weight: 700 !important;
+}
+
+/* ================= CABEÇALHO DA MORGAN: ÍCONES DE AÇÃO AO LADO DO TÍTULO ================= */
+.ai-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-header-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0;
+}
+.ai-header-icon-btn svg, .ai-header-icon-btn i {
+  width: 16px;
+  height: 16px;
+}
+.ai-header-icon-btn:hover {
+  transform: translateY(-1px);
+}
+[data-theme="apple"] .ai-header-icon-btn {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  color: #1d1d1f !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+[data-theme="apple"] .ai-header-icon-btn:hover {
+  background: #f5f5f7 !important;
+  border-color: rgba(0, 0, 0, 0.22) !important;
+  color: #0066cc !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="dark"] .ai-header-icon-btn {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f4f4f5 !important;
+}
+[data-theme="dark"] .ai-header-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+}
+
+/* ================= CARDS E FONTES DENTRO DOS CARDS NO MODO APPLE ================= */
+[data-theme="apple"] .glass,
+[data-theme="apple"] .info-section,
+[data-theme="apple"] .summary-box,
+[data-theme="apple"] .detail-list-box,
+[data-theme="apple"] .month-col,
+[data-theme="apple"] .forecast-card,
+[data-theme="apple"] .ai-kpi-card,
+[data-theme="apple"] .ai-chat-panel,
+[data-theme="apple"] .ai-analytics-card,
+[data-theme="apple"] .card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.09) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  color: #1d1d1f !important;
+}
+
+[data-theme="apple"] .glass:hover,
+[data-theme="apple"] .forecast-card:hover {
+  border-color: rgba(0, 0, 0, 0.18) !important;
+}
+
+/* Títulos e Textos Gerais no Modo Apple */
 [data-theme="apple"] h1,
 [data-theme="apple"] h2,
 [data-theme="apple"] h3,
@@ -2763,65 +2961,189 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
   color: #6e6e73 !important;
 }
 
-[data-theme="apple"] [style*="color: #fff"]:not(.btn-primary):not(.btn-primary *):not([class*="btn-primary"]),
-[data-theme="apple"] [style*="color:#fff"]:not(.btn-primary):not(.btn-primary *):not([class*="btn-primary"]) {
+/* Forçar texto preto dentro de cards no Modo Apple, preservando positivo e negativo */
+[data-theme="apple"] .glass h1,
+[data-theme="apple"] .glass h2,
+[data-theme="apple"] .glass h3,
+[data-theme="apple"] .glass h4,
+[data-theme="apple"] .glass p,
+[data-theme="apple"] .glass span:not(.green-neon):not(.red-neon):not(.positive):not(.negative):not(.apple-revenue-badge):not(.ai-pulse-dot):not([class*="badge"]),
+[data-theme="apple"] .glass label,
+[data-theme="apple"] .glass strong,
+[data-theme="apple"] .glass td:not(.green-neon):not(.red-neon),
+[data-theme="apple"] .glass th,
+[data-theme="apple"] .section-header h3,
+[data-theme="apple"] .account-item .name,
+[data-theme="apple"] .card-item .name,
+[data-theme="apple"] .category-progress-labels span:not(.green-neon):not(.red-neon):not(.apple-revenue-badge) {
   color: #1d1d1f !important;
 }
 
-[data-theme="apple"] .glass {
-  background: #ffffff !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+/* ================= RESUMO MENSAL GERAL (CORREÇÃO DA FONTE BRANCA) ================= */
+[data-theme="apple"] .summary-box h4 {
+  color: #1d1d1f !important;
+  font-weight: 700 !important;
+}
+[data-theme="apple"] .summary-bar-row span:not(.green-neon):not(.red-neon) {
+  color: #1d1d1f !important;
+  font-weight: 500 !important;
+}
+[data-theme="apple"] .summary-bar-row {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ================= FORMULÁRIOS, SELECTS E CHECKBOXES (EFETIVAR LANÇAMENTO) ================= */
+[data-theme="apple"] #tx-effective-group label,
+[data-theme="apple"] #tx-effective-group label span,
+[data-theme="apple"] .form-group label,
+[data-theme="apple"] .floating-field label {
+  color: #1d1d1f !important;
+  font-weight: 600 !important;
+}
+
+[data-theme="apple"] input,
+[data-theme="apple"] select,
+[data-theme="apple"] textarea {
+  background-color: #f2f2f7 !important;
+  color: #1d1d1f !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  font-weight: 500 !important;
+}
+[data-theme="apple"] select option {
+  background-color: #ffffff !important;
+  color: #1d1d1f !important;
+}
+[data-theme="apple"] input:focus,
+[data-theme="apple"] select:focus,
+[data-theme="apple"] textarea:focus {
+  background-color: #ffffff !important;
+  border-color: #0066cc !important;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15) !important;
   color: #1d1d1f !important;
 }
 
-[data-theme="apple"] .glass:hover {
-  border-color: rgba(0, 0, 0, 0.16) !important;
+/* ================= SINALIZAÇÕES POSITIVAS E NEGATIVAS ================= */
+[data-theme="apple"] .green-neon,
+[data-theme="apple"] .positive,
+[data-theme="apple"] .amount.positive,
+[data-theme="apple"] .text-emerald {
+  color: #34c759 !important;
+  text-shadow: none !important;
+}
+[data-theme="apple"] .red-neon,
+[data-theme="apple"] .negative,
+[data-theme="apple"] .amount.negative {
+  color: #ff3b30 !important;
+  text-shadow: none !important;
 }
 
+/* ================= MAPA DE DESPESAS: EXPANDIR / ENCOLHER DISCRETO ================= */
+.category-expand-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  vertical-align: middle;
+}
+.category-expand-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="apple"] .category-expand-btn {
+  color: #6e6e73 !important;
+}
+[data-theme="apple"] .category-expand-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1d1d1f !important;
+}
+.category-drawer {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  animation: fadeIn 0.2s ease;
+}
+[data-theme="apple"] .category-drawer {
+  background: #f5f5f7 !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="dark"] .category-drawer {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+.category-drawer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+[data-theme="apple"] .category-drawer-row {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+[data-theme="apple"] .category-drawer-row:last-child {
+  border-bottom: none;
+}
+[data-theme="dark"] .category-drawer-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+[data-theme="dark"] .category-drawer-row:last-child {
+  border-bottom: none;
+}
+.category-drawer-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category-drawer-source-badge {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+[data-theme="apple"] .category-drawer-source-badge {
+  background: rgba(0, 102, 204, 0.08) !important;
+  color: #0066cc !important;
+  border: 1px solid rgba(0, 102, 204, 0.15) !important;
+}
+[data-theme="dark"] .category-drawer-source-badge {
+  background: rgba(168, 85, 247, 0.12) !important;
+  color: var(--neon-purple-bright) !important;
+  border: 1px solid rgba(168, 85, 247, 0.25) !important;
+}
+.category-drawer-desc {
+  font-size: 0.8rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-theme="apple"] .category-drawer-desc {
+  color: #1d1d1f !important;
+}
+[data-theme="dark"] .category-drawer-desc {
+  color: #e4e4e7 !important;
+}
+
+/* ================= DEMAIS ELEMENTOS APPLE (HEADER, BOTÕES, TABELAS) ================= */
 [data-theme="apple"] .app-header {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: rgba(245, 245, 247, 0.88) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
-}
-
-[data-theme="apple"] .logo {
-  color: #1d1d1f !important;
-}
-[data-theme="apple"] .logo-icon {
-  color: #0066cc !important;
-}
-[data-theme="apple"] .logo .green-neon {
-  color: #0066cc !important;
-}
-
-[data-theme="apple"] .nav-link,
-[data-theme="apple"] .nav-link span {
-  color: #515154 !important;
-}
-[data-theme="apple"] .nav-link i,
-[data-theme="apple"] .nav-link svg {
-  color: #515154 !important;
-}
-[data-theme="apple"] .nav-link:hover,
-[data-theme="apple"] .nav-link:hover span {
-  color: #1d1d1f !important;
-  background: rgba(0, 0, 0, 0.05) !important;
-}
-[data-theme="apple"] .nav-link:hover i,
-[data-theme="apple"] .nav-link:hover svg {
-  color: #1d1d1f !important;
-}
-[data-theme="apple"] .nav-link.active,
-[data-theme="apple"] .nav-link.active span {
-  color: #0066cc !important;
-  background: rgba(0, 102, 204, 0.08) !important;
-  border: 1px solid rgba(0, 102, 204, 0.25) !important;
-}
-[data-theme="apple"] .nav-link.active i,
-[data-theme="apple"] .nav-link.active svg {
-  color: #0066cc !important;
 }
 
 [data-theme="apple"] .user-badge {
@@ -2858,21 +3180,6 @@ body, h1, h2, h3, h4, p, span, a, label, input, select, textarea, button, td, th
 [data-theme="apple"] .btn-outline:hover {
   background: #f5f5f7 !important;
   border-color: rgba(0, 0, 0, 0.25) !important;
-}
-
-[data-theme="apple"] input,
-[data-theme="apple"] select,
-[data-theme="apple"] textarea {
-  background: #f2f2f7 !important;
-  border: 1px solid rgba(0, 0, 0, 0.1) !important;
-  color: #1d1d1f !important;
-}
-[data-theme="apple"] input:focus,
-[data-theme="apple"] select:focus,
-[data-theme="apple"] textarea:focus {
-  background: #ffffff !important;
-  border-color: #0066cc !important;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15) !important;
 }
 
 /* Sidebar Accounts & Cards */
