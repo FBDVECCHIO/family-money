@@ -133,11 +133,11 @@ DADOS DA FAMÍLIA:
 ${JSON.stringify(context, null, 2)}`;
 
   const models = [
-    'gemini-flash-latest',
-    'gemini-3.5-flash',
-    'gemini-3.8-flash',
-    'gemini-3.7-flash',
-    'gemini-2.5-flash-lite'
+    'gemini-2.5-flash',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-pro'
   ];
   let lastErr = null;
 
@@ -163,7 +163,64 @@ ${JSON.stringify(context, null, 2)}`;
   throw lastErr || new Error("Falha ao comunicar com os modelos Gemini.");
 }
 
-// 3. Disparo via Telegram (opcional)
+// 3. Motor Analítico Nativo (Fallback Robusto de CFO Heurístico)
+function generateNativeAutonomousAudit(context) {
+  const day = context.diaDoMesHoje;
+  
+  // Calcular o melhor cartão para uso hoje (maior prazo de float sem juros)
+  let bestCard = null;
+  let maxFloatDays = -1;
+  const warningClosingCards = [];
+
+  context.cartoes.forEach(c => {
+    let daysToClose = c.fechamento - day;
+    if (daysToClose < 0) daysToClose += 30;
+
+    // Se fecha nos próximos 3 dias, alertar para evitar uso
+    if (daysToClose >= 0 && daysToClose <= 3) {
+      warningClosingCards.push(c.nome);
+    }
+
+    if (daysToClose > maxFloatDays) {
+      maxFloatDays = daysToClose;
+      bestCard = c;
+    }
+  });
+
+  const cardsWarningText = warningClosingCards.length > 0 
+    ? `⚠️ *Atenção:* Evite compras hoje nos cartões **${warningClosingCards.join(', ')}** (fatura fechando nos próximos 3 dias).`
+    : `✅ Nenhum cartão com fechamento crítico nas próximas 72 horas.`;
+
+  const text = `🌅 *BRIEFING MATINAL DO MORGAN (CFO FAMILIAR)*
+📅 *Data:* ${new Date().toLocaleDateString('pt-BR')} | *Horário:* 08:00h
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 *SAÚDE FINANCEIRA & PATRIMÔNIO*
+• *Patrimônio Líquido:* R$ ${context.patrimonioLiquidoAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+• *Score de Saúde:* ${context.scoreSaudeAtual}
+• *Reserva de Segurança:* ${context.coberturaReserva}
+• *Rentabilidade Potencial:* O saldo em reserva rende cerca de *${context.benchmarksMercado.rendimentoMensalSaldoNoCdi}* a 100% do CDI (${context.benchmarksMercado.cdi}).
+
+💳 *ESTRATÉGIA DE CARTÕES PARA HOJE (DIA ${day})*
+• 🎯 *Melhor Cartão para Uso Hoje:* **${bestCard ? bestCard.nome : 'Cartão Principal'}**
+  _Motivo:_ Maior float financeiro sem juros (~${maxFloatDays + 10} dias até o vencimento da fatura).
+• ${cardsWarningText}
+
+🎯 *DIRETRIZ ESTRATÉGICA ATIVA*
+• *Meta 2026:* ${context.memoriaEstrategicaFamilia.metaPrincipal}.
+• *Despesas Intocáveis:* ${context.memoriaEstrategicaFamilia.despesasInegociaveis}.
+• *Perfil de Risco:* ${context.memoriaEstrategicaFamilia.perfilRisco}.
+
+💡 *Insight do Morgan:*
+_"O segredo da tranquilidade financeira não reside em privações desmedidas, mas em maximizar o float do capital no CDI enquanto as despesas inegociáveis permanecem estritamente blindadas."_`;
+
+  return {
+    text,
+    model: 'Motor Analítico Nativo (CFO Heurístico)'
+  };
+}
+
+// 4. Disparo via Telegram (opcional)
 async function sendTelegramAlert(token, chatId, message) {
   if (!token || !chatId) {
     console.log('[Telegram] Tokens não configurados. Pulando envio de push.');
@@ -181,26 +238,36 @@ async function sendTelegramAlert(token, chatId, message) {
   console.log('[Telegram] Notificação enviada com sucesso ao chat:', chatId);
 }
 
-// 4. Execução Principal
+// 5. Execução Principal
 async function main() {
   console.log('====================================================');
   console.log('🤖 INICIANDO AGENTE AUTÔNOMO INDEPENDENTE - MORGAN 24/7');
   console.log('====================================================');
 
   const apiKey = GEMINI_API_KEY || process.argv[2];
-  if (!apiKey) {
-    console.error('❌ Chave GEMINI_API_KEY não encontrada.');
-    console.log('Uso: node scripts/autonomous_agent.js <SUA_GEMINI_API_KEY>');
-    process.exit(1);
-  }
 
   console.log('1. Coletando dados financeiros consolidados da família...');
   const context = buildAutonomousFinancialContext();
   console.log(`   Patrimônio líquido: R$ ${context.patrimonioLiquidoAtual} | Score: ${context.scoreSaudeAtual}`);
 
-  console.log('2. Consultando inteligência estratégica de mercado com Morgan...');
-  const auditResult = await runMorganAutonomousAudit(apiKey, context);
-  console.log(`   ✅ Parecer gerado com sucesso via motor: ${auditResult.model}\n`);
+  let auditResult = null;
+
+  if (apiKey) {
+    console.log('2. Consultando inteligência generativa com Google Gemini...');
+    try {
+      auditResult = await runMorganAutonomousAudit(apiKey, context);
+      console.log(`   ✅ Parecer gerado com sucesso via motor: ${auditResult.model}\n`);
+    } catch (geminiErr) {
+      console.warn(`   ⚠️ Falha na API Gemini (${geminiErr.message}). Alternando para o Motor Analítico Nativo...`);
+      auditResult = generateNativeAutonomousAudit(context);
+    }
+  } else {
+    console.log('⚠️ Variável GEMINI_API_KEY não configurada no ambiente ou GitHub Secrets.');
+    console.log('ℹ️ Para ativar o raciocínio generativo via Gemini, adicione a secret GEMINI_API_KEY nas configurações do GitHub (Settings > Secrets and variables > Actions).');
+    console.log('2. Executando auditoria via Motor Analítico Nativo do Morgan (CFO Heurístico)...');
+    auditResult = generateNativeAutonomousAudit(context);
+    console.log(`   ✅ Parecer gerado com sucesso via: ${auditResult.model}\n`);
+  }
 
   console.log('------------------ BRIEFING MATINAL DO MORGAN ------------------');
   console.log(auditResult.text);
