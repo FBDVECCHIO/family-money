@@ -237,6 +237,10 @@ function createLocalDbClient() {
       };
 
       const builder = {
+        single: function() {
+          stateQuery.isSingle = true;
+          return builder;
+        },
         select: function(fields = '*') {
           stateQuery.fields = fields;
           return builder;
@@ -256,6 +260,26 @@ function createLocalDbClient() {
         },
         neq: function(col, val) {
           stateQuery.filters.push(`${encodeURIComponent(col)}=neq.${encodeURIComponent(val)}`);
+          return builder;
+        },
+        gte: function(col, val) {
+          stateQuery.filters.push(`${encodeURIComponent(col)}=gte.${encodeURIComponent(val)}`);
+          return builder;
+        },
+        lte: function(col, val) {
+          stateQuery.filters.push(`${encodeURIComponent(col)}=lte.${encodeURIComponent(val)}`);
+          return builder;
+        },
+        gt: function(col, val) {
+          stateQuery.filters.push(`${encodeURIComponent(col)}=gt.${encodeURIComponent(val)}`);
+          return builder;
+        },
+        lt: function(col, val) {
+          stateQuery.filters.push(`${encodeURIComponent(col)}=lt.${encodeURIComponent(val)}`);
+          return builder;
+        },
+        is: function(col, val) {
+          stateQuery.filters.push(`${encodeURIComponent(col)}=eq.${encodeURIComponent(val === null ? 'null' : val)}`);
           return builder;
         },
         in: function(col, arr) {
@@ -290,9 +314,6 @@ function createLocalDbClient() {
           if (stateQuery.fields && stateQuery.fields !== '*') {
             params.push(`select=${encodeURIComponent(stateQuery.fields)}`);
           }
-          if (params.length > 0) {
-            url += '?' + params.join('&');
-          }
 
           let method = 'GET';
           let body = undefined;
@@ -306,9 +327,23 @@ function createLocalDbClient() {
             method = 'DELETE';
           }
 
+          if (method === 'GET') {
+            // Prevenir cache agressivo de navegadores móveis (Safari iOS / Android)
+            params.push(`_t=${Date.now()}`);
+          }
+
+          if (params.length > 0) {
+            url += '?' + params.join('&');
+          }
+
           fetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            cache: 'no-store',
             body
           })
             .then(async res => {
@@ -316,7 +351,10 @@ function createLocalDbClient() {
                 const text = await res.text();
                 return { data: null, error: new Error(`HTTP ${res.status}: ${text}`) };
               }
-              const data = await res.json();
+              let data = await res.json();
+              if (stateQuery.isSingle) {
+                data = Array.isArray(data) ? (data[0] || null) : data;
+              }
               return { data, error: null };
             })
             .then(result => resolve(result))
@@ -411,11 +449,17 @@ async function initApp() {
   // Carregar os usuários antes de prosseguir para podermos ler as permissões
   await loadUsersOnly();
 
-  // Verificar sessão ativa localmente
-  const activeUserEmail = sessionStorage.getItem('familymoney_user_email');
-  const activeUserName = sessionStorage.getItem('familymoney_user_name');
+  // Verificar sessão ativa localmente (sessionStorage + localStorage com fallback)
+  const activeUserEmail = sessionStorage.getItem('familymoney_user_email') || localStorage.getItem('familymoney_user_email');
+  const activeUserName = sessionStorage.getItem('familymoney_user_name') || localStorage.getItem('familymoney_user_name');
 
   if (activeUserEmail && activeUserName) {
+    // Sincronizar ambos para garantir persistência contínua no mobile
+    sessionStorage.setItem('familymoney_user_email', activeUserEmail);
+    sessionStorage.setItem('familymoney_user_name', activeUserName);
+    localStorage.setItem('familymoney_user_email', activeUserEmail);
+    localStorage.setItem('familymoney_user_name', activeUserName);
+
     // Enriquecer dados da sessão com as permissões do banco
     const dbUser = state.users.find(u => u.email === activeUserEmail) || {
       id: 9999, name: activeUserName, email: activeUserEmail, is_admin: true, only_self_data: false
@@ -464,6 +508,8 @@ async function initApp() {
 async function logout() {
   sessionStorage.removeItem('familymoney_user_email');
   sessionStorage.removeItem('familymoney_user_name');
+  localStorage.removeItem('familymoney_user_email');
+  localStorage.removeItem('familymoney_user_name');
   state.session = null;
   state.user = null;
   if (state.trendChart) {
@@ -3206,6 +3252,8 @@ async function processarPin(pin) {
     if (user) {
       sessionStorage.setItem('familymoney_user_email', user.email);
       sessionStorage.setItem('familymoney_user_name', user.name);
+      localStorage.setItem('familymoney_user_email', user.email);
+      localStorage.setItem('familymoney_user_name', user.name);
       state.user = user;
       limparPin();
       initApp();
@@ -6184,6 +6232,125 @@ function renderMorganHistoryTab() {
   `).join('');
 }
 
+// ================= SISTEMA DE ATUALIZAÇÃO / REFRESH MÓVEL & DESKTOP =================
+async function triggerManualRefresh(quiet = false) {
+  const icon = document.getElementById('refresh-btn-icon');
+  const btn = document.getElementById('refresh-data-btn');
+  const ptrIcon = document.getElementById('ptr-icon');
+  const ptrText = document.getElementById('ptr-text');
+  const ptrIndicator = document.getElementById('pull-to-refresh-indicator');
+
+  if (icon) icon.classList.add('spinning');
+  if (btn) btn.classList.add('refreshing');
+  if (ptrIcon) ptrIcon.classList.add('spinning');
+  if (ptrText) ptrText.textContent = 'Atualizando dados...';
+
+  if (!quiet) {
+    showBgJobToast('Sincronizando com o servidor...');
+  }
+
+  try {
+    // 1. Recarregar lista de usuários e permissões
+    await loadUsersOnly();
+    // 2. Recarregar todas as entidades do banco
+    await loadAllData();
+
+    if (!quiet) {
+      showBgJobToast('Dados atualizados com sucesso!', 2500, true);
+    }
+  } catch (err) {
+    console.error('Erro na atualização manual de dados:', err);
+    if (!quiet) {
+      showBgJobToast('Falha na sincronização: ' + (err.message || 'Erro de rede'), 3000, false);
+    }
+  } finally {
+    if (icon) icon.classList.remove('spinning');
+    if (btn) btn.classList.remove('refreshing');
+    if (ptrIcon) ptrIcon.classList.remove('spinning');
+    if (ptrText) ptrText.textContent = 'Puxe para atualizar';
+
+    if (ptrIndicator) {
+      ptrIndicator.style.transform = 'translateX(-50%) translateY(-100%)';
+      ptrIndicator.classList.remove('visible');
+    }
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+// Gesto Pull-to-Refresh tátil nativo para Smartphones e Tablets
+function initPullToRefresh() {
+  const indicator = document.getElementById('pull-to-refresh-indicator');
+  const ptrIcon = document.getElementById('ptr-icon');
+  const ptrText = document.getElementById('ptr-text');
+  if (!indicator) return;
+
+  let startY = 0;
+  let currentY = 0;
+  let isPulling = false;
+  const threshold = 65;
+
+  window.addEventListener('touchstart', (e) => {
+    if ((window.scrollY || document.documentElement.scrollTop) <= 5 && e.touches.length === 1) {
+      startY = e.touches[0].clientY;
+      isPulling = true;
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!isPulling) return;
+    currentY = e.touches[0].clientY;
+    const diff = currentY - startY;
+
+    if (diff > 0 && (window.scrollY || document.documentElement.scrollTop) <= 5) {
+      const pullDist = Math.min(diff * 0.42, 85);
+      indicator.style.transform = `translateX(-50%) translateY(${pullDist - 60}px)`;
+      indicator.classList.add('visible');
+
+      if (pullDist >= threshold) {
+        if (ptrText) ptrText.textContent = 'Solte para atualizar';
+        if (ptrIcon) ptrIcon.style.transform = 'rotate(180deg)';
+      } else {
+        if (ptrText) ptrText.textContent = 'Puxe para atualizar';
+        if (ptrIcon) ptrIcon.style.transform = 'rotate(0deg)';
+      }
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchend', async () => {
+    if (!isPulling) return;
+    const diff = currentY - startY;
+    isPulling = false;
+
+    const pullDist = Math.min(diff * 0.42, 85);
+    if (diff > 0 && pullDist >= threshold && (window.scrollY || document.documentElement.scrollTop) <= 5) {
+      indicator.style.transform = 'translateX(-50%) translateY(14px)';
+      await triggerManualRefresh();
+    } else {
+      indicator.style.transform = 'translateX(-50%) translateY(-100%)';
+      indicator.classList.remove('visible');
+    }
+    startY = 0;
+    currentY = 0;
+  });
+}
+
+// Auto-Refresh ao retornar à aba/aplicativo no celular/tablet
+let lastVisibilityCheck = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.user) {
+    const elapsed = Date.now() - lastVisibilityCheck;
+    if (elapsed > 45000) { // Mais de 45 segundos em segundo plano
+      lastVisibilityCheck = Date.now();
+      triggerManualRefresh(true);
+    }
+  }
+});
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted && state.user) {
+    triggerManualRefresh(true);
+  }
+});
+
 // ================= INICIALIZAÇÃO =================
 window.addEventListener('DOMContentLoaded', () => {
   const today = new Date().toISOString().split('T')[0];
@@ -6203,4 +6370,5 @@ window.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initApp();
   initAiAgent();
+  initPullToRefresh();
 });

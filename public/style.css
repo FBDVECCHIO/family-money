@@ -1527,7 +1527,17 @@ tr:hover td {
     order: 3 !important;
     display: flex !important;
     align-items: center !important;
+    gap: 6px !important;
     margin: 0 !important;
+  }
+
+  .refresh-pill-btn {
+    padding: 6px 10px !important;
+    font-size: 0.75rem !important;
+  }
+  .refresh-pill-btn svg {
+    width: 15px !important;
+    height: 15px !important;
   }
   
   .user-badge {
@@ -3037,6 +3047,96 @@ tr:hover td {
 .theme-toggle-pill svg {
   width: 15px;
   height: 15px;
+}
+
+/* ================= REFRESH PILL BUTTON & PULL-TO-REFRESH ================= */
+.refresh-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+  outline: none;
+}
+.refresh-pill-btn:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+  transform: translateY(-1px);
+}
+.refresh-pill-btn svg {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.3s ease;
+}
+.refresh-pill-btn.refreshing {
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+@keyframes spinRefreshIcon {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spinning {
+  animation: spinRefreshIcon 0.8s linear infinite !important;
+}
+
+/* Indicador Pull-to-Refresh Tátil */
+.pull-refresh-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 30px;
+  background: rgba(24, 18, 38, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: #a855f7;
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 15px rgba(168, 85, 247, 0.2);
+  pointer-events: none;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+  opacity: 0;
+}
+.pull-refresh-indicator.visible {
+  opacity: 1;
+}
+.pull-refresh-indicator svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+}
+
+[data-theme="apple"] .refresh-pill-btn {
+  background: rgba(0, 113, 227, 0.1);
+  border-color: rgba(0, 113, 227, 0.3);
+  color: #0071e3;
+}
+[data-theme="apple"] .refresh-pill-btn:hover {
+  background: rgba(0, 113, 227, 0.18);
+  border-color: rgba(0, 113, 227, 0.5);
+  box-shadow: 0 0 10px rgba(0, 113, 227, 0.2);
+}
+[data-theme="apple"] .pull-refresh-indicator {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(0, 113, 227, 0.3);
+  color: #0071e3;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 /* ================= APPLE DESIGN SYSTEM THEME (getdesign.md/apple/design-md) ================= */

@@ -359,8 +359,19 @@ async function selectRows(table, query = {}) {
   if (!MANAGED_TABLES.includes(table)) throw new Error(`Tabela não permitida: ${table}`);
   const { filters, order, limit } = parseFilters(query);
 
+  let selectedCols = '*';
+  let selectFields = null;
+  if (query.select && typeof query.select === 'string' && query.select.trim() !== '*') {
+    const rawFields = query.select.split(',').map(s => s.trim()).filter(Boolean);
+    const validFields = rawFields.filter(f => /^[a-zA-Z0-9_]+$/.test(f));
+    if (validFields.length > 0) {
+      selectedCols = validFields.map(f => `"${f}"`).join(', ');
+      selectFields = validFields;
+    }
+  }
+
   if (isPostgres && pool) {
-    let sql = `SELECT * FROM ${table}`;
+    let sql = `SELECT ${selectedCols} FROM ${table}`;
     const params = [];
     if (filters.length > 0) {
       const whereClauses = filters.map((f, i) => {
@@ -414,6 +425,16 @@ async function selectRows(table, query = {}) {
 
   if (limit) {
     rows = rows.slice(0, limit);
+  }
+
+  if (selectFields && selectFields.length > 0) {
+    rows = rows.map(r => {
+      const proj = {};
+      for (const f of selectFields) {
+        if (f in r) proj[f] = r[f];
+      }
+      return proj;
+    });
   }
 
   return rows;

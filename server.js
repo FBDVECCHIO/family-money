@@ -100,8 +100,16 @@ app.delete('/api/db/:table', async (req, res) => {
   }
 });
 
-// Servir arquivos estáticos do frontend
-app.use(express.static(path.join(__dirname, 'public')));
+// Servir arquivos estáticos do frontend com controle de cache para dispositivos móveis
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // Fallback para SPA em todas as outras rotas não-API
 app.get('*', (req, res) => {

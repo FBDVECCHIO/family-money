@@ -58,9 +58,15 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=7.3">
+  <link rel="stylesheet" href="style.css?v=7.4">
 </head>
 <body>
+
+  <!-- ================= INDICADOR PULL-TO-REFRESH (TOUCH / MOBILE & TABLET) ================= -->
+  <div id="pull-to-refresh-indicator" class="pull-refresh-indicator liquid-glass">
+    <i data-lucide="arrow-down" id="ptr-icon"></i>
+    <span id="ptr-text">Puxe para atualizar</span>
+  </div>
 
   <!-- ================= TELA DE SETUP SUPABASE ================= -->
   <div id="supabase-setup-container" class="fade-in hide">
@@ -197,7 +203,11 @@
         </button>
       </nav>
       
-      <div class="header-profile" style="display: flex; align-items: center; gap: 10px;">
+      <div class="header-profile" style="display: flex; align-items: center; gap: 8px;">
+        <button id="refresh-data-btn" class="refresh-pill-btn liquid-glass" type="button" onclick="triggerManualRefresh()" title="Sincronizar e Atualizar Dados Agora">
+          <i data-lucide="rotate-cw" id="refresh-btn-icon"></i>
+          <span class="refresh-btn-text hide-mobile">Atualizar</span>
+        </button>
         <button id="theme-toggle-btn" class="theme-toggle-pill" type="button" title="Alternar entre Modo Apple e Modo Escuro">
           <i data-lucide="sun-moon"></i>
           <span id="theme-toggle-text">Modo Apple</span>
@@ -2019,6 +2029,6 @@ Dados: ${JSON.stringify(familyData)}`;
     </div>
   </div>
 
-  <script src="app.js?v=7.3&t=1791160000"></script>
+  <script src="app.js?v=7.4&t=1791180000"></script>
 </body>
 </html>
