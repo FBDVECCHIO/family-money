@@ -391,16 +391,6 @@ async function loadUsersOnly() {
     }
     if (data && data.length > 0) {
       state.users = data;
-    } else {
-      console.log('Tabela de usuários vazia no banco. Semeando usuários padrão em lote...');
-      const usersToInsert = defaultFallbackUsers.map(u => ({
-        name: u.name,
-        email: u.email,
-        password: u.password,
-        is_admin: u.is_admin,
-        only_self_data: u.only_self_data
-      }));
-      await state.supabase.from('app_users').insert(usersToInsert);
     }
   } catch (err) {
     console.warn('Erro ao carregar usuários (usando fallback local):', err);
@@ -619,16 +609,30 @@ async function loadAllData() {
       state.supabase.from('app_backups').select('id, created_at').order('created_at', { ascending: false })
     ]);
 
-    // Extração segura e tolerante a falhas dos dados
-    state.accounts = (accRes.status === 'fulfilled' && !accRes.value.error) ? (accRes.value.data || []) : [];
-    state.cards = (cardRes.status === 'fulfilled' && !cardRes.value.error) ? (cardRes.value.data || []) : [];
-    state.categories = (catRes.status === 'fulfilled' && !catRes.value.error) ? (catRes.value.data || []) : [];
-    state.tags = (tagRes.status === 'fulfilled' && !tagRes.value.error) ? (tagRes.value.data || []) : [];
-    state.fixedItems = (fixedRes.status === 'fulfilled' && !fixedRes.value.error) ? (fixedRes.value.data || []) : [];
-    state.transactions = (txRes.status === 'fulfilled' && !txRes.value.error) ? (txRes.value.data || []) : [];
-    state.paidCardBills = (paidRes.status === 'fulfilled' && !paidRes.value.error) ? (paidRes.value.data || []) : [];
+    // Extração segura e tolerante a falhas dos dados (preserva estado anterior se houver falha de rede)
+    if (accRes.status === 'fulfilled' && !accRes.value.error && Array.isArray(accRes.value.data)) {
+      state.accounts = accRes.value.data;
+    }
+    if (cardRes.status === 'fulfilled' && !cardRes.value.error && Array.isArray(cardRes.value.data)) {
+      state.cards = cardRes.value.data;
+    }
+    if (catRes.status === 'fulfilled' && !catRes.value.error && Array.isArray(catRes.value.data)) {
+      state.categories = catRes.value.data;
+    }
+    if (tagRes.status === 'fulfilled' && !tagRes.value.error && Array.isArray(tagRes.value.data)) {
+      state.tags = tagRes.value.data;
+    }
+    if (fixedRes.status === 'fulfilled' && !fixedRes.value.error && Array.isArray(fixedRes.value.data)) {
+      state.fixedItems = fixedRes.value.data;
+    }
+    if (txRes.status === 'fulfilled' && !txRes.value.error && Array.isArray(txRes.value.data)) {
+      state.transactions = txRes.value.data;
+    }
+    if (paidRes.status === 'fulfilled' && !paidRes.value.error && Array.isArray(paidRes.value.data)) {
+      state.paidCardBills = paidRes.value.data;
+    }
     
-    if (userRes.status === 'fulfilled' && !userRes.value.error && userRes.value.data && userRes.value.data.length > 0) {
+    if (userRes.status === 'fulfilled' && !userRes.value.error && Array.isArray(userRes.value.data) && userRes.value.data.length > 0) {
       state.users = userRes.value.data;
     } else if (!state.users || state.users.length === 0) {
       state.users = [
@@ -638,7 +642,9 @@ async function loadAllData() {
       ];
     }
     
-    state.backups = (backupRes.status === 'fulfilled' && !backupRes.value.error) ? (backupRes.value.data || []) : [];
+    if (backupRes.status === 'fulfilled' && !backupRes.value.error && Array.isArray(backupRes.value.data)) {
+      state.backups = backupRes.value.data;
+    }
 
     // Atualizar índices O(1) imediatos
     updateLookupMaps();
@@ -6249,11 +6255,26 @@ async function triggerManualRefresh(quiet = false) {
     showBgJobToast('Sincronizando com o servidor...');
   }
 
+  // Safety timer para garantir que a interface desloque os spinners mesmo em erros imprevistos
+  const safetyTimer = setTimeout(() => {
+    if (icon) icon.classList.remove('spinning');
+    if (btn) btn.classList.remove('refreshing');
+    if (ptrIcon) ptrIcon.classList.remove('spinning');
+  }, 8000);
+
   try {
-    // 1. Recarregar lista de usuários e permissões
-    await loadUsersOnly();
-    // 2. Recarregar todas as entidades do banco
-    await loadAllData();
+    const refreshTask = (async () => {
+      // 1. Recarregar lista de usuários e permissões
+      await loadUsersOnly();
+      // 2. Recarregar todas as entidades do banco
+      await loadAllData();
+    })();
+
+    const timeoutTask = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Tempo limite de rede atingido (8s)')), 8000);
+    });
+
+    await Promise.race([refreshTask, timeoutTask]);
 
     if (!quiet) {
       showBgJobToast('Dados atualizados com sucesso!', 2500, true);
@@ -6264,6 +6285,7 @@ async function triggerManualRefresh(quiet = false) {
       showBgJobToast('Falha na sincronização: ' + (err.message || 'Erro de rede'), 3000, false);
     }
   } finally {
+    clearTimeout(safetyTimer);
     if (icon) icon.classList.remove('spinning');
     if (btn) btn.classList.remove('refreshing');
     if (ptrIcon) ptrIcon.classList.remove('spinning');

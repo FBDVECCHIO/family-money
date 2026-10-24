@@ -41,6 +41,32 @@ function loadLocalDatabase() {
     try {
       const content = fs.readFileSync(LOCAL_DB_FILE, 'utf-8');
       localDb = JSON.parse(content);
+      
+      let dirty = false;
+      // Podar backups históricos para manter tamanho < 3MB
+      if (localDb.app_backups && localDb.app_backups.length > 5) {
+        localDb.app_backups.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        localDb.app_backups = localDb.app_backups.slice(0, 5);
+        dirty = true;
+      }
+      // Deduplicar app_users por email
+      if (localDb.app_users && localDb.app_users.length > 3) {
+        const uniqueUsers = [];
+        const seen = new Set();
+        for (const u of localDb.app_users) {
+          const email = (u.email || '').toLowerCase().trim();
+          if (!seen.has(email)) {
+            seen.add(email);
+            uniqueUsers.push(u);
+          }
+        }
+        localDb.app_users = uniqueUsers;
+        dirty = true;
+      }
+
+      if (dirty) {
+        saveLocalDatabase();
+      }
       return;
     } catch (e) {
       console.warn('Erro ao ler local_db.json, regerando do seed:', e.message);
@@ -52,7 +78,11 @@ function loadLocalDatabase() {
     const seed = JSON.parse(fs.readFileSync(SEED_FILE, 'utf-8'));
     localDb = {};
     for (const tbl of MANAGED_TABLES) {
-      localDb[tbl] = seed.tables[tbl]?.records || [];
+      let records = seed.tables[tbl]?.records || [];
+      if (tbl === 'app_backups' && records.length > 5) {
+        records = records.slice(0, 5);
+      }
+      localDb[tbl] = records;
     }
     saveLocalDatabase();
   } else {
@@ -315,7 +345,8 @@ function parseFilters(query) {
   let limit = null;
 
   for (const [key, rawVal] of Object.entries(query)) {
-    if (key === 'select') continue;
+    // Ignorar parâmetros de seleção de campos e de controle de cache/timestamp (_t, _cache, etc.)
+    if (key === 'select' || key.startsWith('_')) continue;
     if (key === 'order') {
       const parts = rawVal.split('.');
       order = { col: parts[0], dir: (parts[1] || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC' };
@@ -465,7 +496,18 @@ async function insertRows(table, data) {
   // Motor Local JSON
   if (!localDb) loadLocalDatabase();
   const inserted = [];
+
   for (const rec of records) {
+    // Prevenção de duplicação de usuários por e-mail
+    if (table === 'app_users' && rec.email) {
+      const email = String(rec.email).toLowerCase().trim();
+      const existing = localDb.app_users.find(u => (u.email || '').toLowerCase().trim() === email);
+      if (existing) {
+        inserted.push(existing);
+        continue;
+      }
+    }
+
     const newId = rec.id || (localDb[table].reduce((max, r) => Math.max(max, Number(r.id || 0)), 0) + 1);
     const newRecord = {
       ...rec,
@@ -475,6 +517,12 @@ async function insertRows(table, data) {
     localDb[table].push(newRecord);
     inserted.push(newRecord);
   }
+
+  // Manter app_backups controlado no máximo em 5 registros
+  if (table === 'app_backups' && localDb.app_backups.length > 5) {
+    localDb.app_backups = localDb.app_backups.slice(-5);
+  }
+
   saveLocalDatabase();
   return inserted;
 }
