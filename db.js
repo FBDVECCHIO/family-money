@@ -392,10 +392,11 @@ async function selectRows(table, query = {}) {
       const fieldVal = r[f.col];
       if (f.op === '=') return String(fieldVal) === String(f.val);
       if (f.op === '!=') return String(fieldVal) !== String(f.val);
-      if (f.op === '>') return Number(fieldVal) > Number(f.val);
-      if (f.op === '>=') return Number(fieldVal) >= Number(f.val);
-      if (f.op === '<') return Number(fieldVal) < Number(f.val);
-      if (f.op === '<=') return Number(fieldVal) <= Number(f.val);
+      const isNum = fieldVal !== null && fieldVal !== undefined && fieldVal !== '' && !isNaN(Number(fieldVal)) && !isNaN(Number(f.val));
+      if (f.op === '>') return isNum ? Number(fieldVal) > Number(f.val) : String(fieldVal) > String(f.val);
+      if (f.op === '>=') return isNum ? Number(fieldVal) >= Number(f.val) : String(fieldVal) >= String(f.val);
+      if (f.op === '<') return isNum ? Number(fieldVal) < Number(f.val) : String(fieldVal) < String(f.val);
+      if (f.op === '<=') return isNum ? Number(fieldVal) <= Number(f.val) : String(fieldVal) <= String(f.val);
       if (f.op === 'IN') return Array.isArray(f.val) && f.val.map(String).includes(String(fieldVal));
       return true;
     });
@@ -498,6 +499,12 @@ async function updateRows(table, updates, query = {}) {
     for (const f of filters) {
       const val = row[f.col];
       if (f.op === '=' && String(val) !== String(f.val)) match = false;
+      if (f.op === '!=' && String(val) === String(f.val)) match = false;
+      const isNum = val !== null && val !== undefined && val !== '' && !isNaN(Number(val)) && !isNaN(Number(f.val));
+      if (f.op === '>' && !(isNum ? Number(val) > Number(f.val) : String(val) > String(f.val))) match = false;
+      if (f.op === '>=' && !(isNum ? Number(val) >= Number(f.val) : String(val) >= String(f.val))) match = false;
+      if (f.op === '<' && !(isNum ? Number(val) < Number(f.val) : String(val) < String(f.val))) match = false;
+      if (f.op === '<=' && !(isNum ? Number(val) <= Number(f.val) : String(val) <= String(f.val))) match = false;
       if (f.op === 'IN' && (!Array.isArray(f.val) || !f.val.map(String).includes(String(val)))) match = false;
     }
     if (match) {
@@ -545,6 +552,12 @@ async function deleteRows(table, query = {}) {
     for (const f of filters) {
       const val = row[f.col];
       if (f.op === '=' && String(val) !== String(f.val)) match = false;
+      if (f.op === '!=' && String(val) === String(f.val)) match = false;
+      const isNum = val !== null && val !== undefined && val !== '' && !isNaN(Number(val)) && !isNaN(Number(f.val));
+      if (f.op === '>' && !(isNum ? Number(val) > Number(f.val) : String(val) > String(f.val))) match = false;
+      if (f.op === '>=' && !(isNum ? Number(val) >= Number(f.val) : String(val) >= String(f.val))) match = false;
+      if (f.op === '<' && !(isNum ? Number(val) < Number(f.val) : String(val) < String(f.val))) match = false;
+      if (f.op === '<=' && !(isNum ? Number(val) <= Number(f.val) : String(val) <= String(f.val))) match = false;
       if (f.op === 'IN' && (!Array.isArray(f.val) || !f.val.map(String).includes(String(val)))) match = false;
     }
     return !match;
