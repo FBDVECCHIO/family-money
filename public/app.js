@@ -6257,9 +6257,11 @@ async function triggerManualRefresh(quiet = false) {
 
   // Safety timer para garantir que a interface desloque os spinners mesmo em erros imprevistos
   const safetyTimer = setTimeout(() => {
-    if (icon) icon.classList.remove('spinning');
-    if (btn) btn.classList.remove('refreshing');
-    if (ptrIcon) ptrIcon.classList.remove('spinning');
+    const activeBtn = document.getElementById('refresh-data-btn');
+    if (activeBtn) activeBtn.classList.remove('refreshing');
+    document.querySelectorAll('#refresh-btn-icon, #ptr-icon, .refresh-pill-btn svg, .refresh-pill-btn i').forEach(el => {
+      el.classList.remove('spinning');
+    });
   }, 8000);
 
   try {
@@ -6286,16 +6288,22 @@ async function triggerManualRefresh(quiet = false) {
     }
   } finally {
     clearTimeout(safetyTimer);
-    if (icon) icon.classList.remove('spinning');
-    if (btn) btn.classList.remove('refreshing');
-    if (ptrIcon) ptrIcon.classList.remove('spinning');
-    if (ptrText) ptrText.textContent = 'Puxe para atualizar';
+    const activeBtn = document.getElementById('refresh-data-btn');
+    if (activeBtn) activeBtn.classList.remove('refreshing');
 
-    if (ptrIndicator) {
-      ptrIndicator.style.transform = 'translateX(-50%) translateY(-100%)';
-      ptrIndicator.classList.remove('visible');
+    // Remover a classe 'spinning' de todos os ícones de refresh no DOM (inclusive pós-recriação do Lucide)
+    document.querySelectorAll('#refresh-btn-icon, #ptr-icon, .refresh-pill-btn svg, .refresh-pill-btn i, .spinning').forEach(el => {
+      el.classList.remove('spinning');
+    });
+
+    const activePtrText = document.getElementById('ptr-text');
+    if (activePtrText) activePtrText.textContent = 'Puxe para atualizar';
+
+    const activePtrIndicator = document.getElementById('pull-to-refresh-indicator');
+    if (activePtrIndicator) {
+      activePtrIndicator.style.transform = 'translateX(-50%) translateY(-100%)';
+      activePtrIndicator.classList.remove('visible');
     }
-    if (window.lucide) lucide.createIcons();
   }
 }
 
