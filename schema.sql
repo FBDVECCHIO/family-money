@@ -68,6 +68,7 @@ CREATE TABLE app_users (
   name text NOT NULL,
   email text UNIQUE NOT NULL,
   password text NOT NULL,
+  pin text,
   is_admin boolean NOT NULL DEFAULT true,
   only_self_data boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL

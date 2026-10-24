@@ -3,3 +3,6 @@ node_modules/
 .DS_Store
 *.log
 .superpowers/
+data/local_db.json
+*.png
+supabase_full_backup_pre_migration.json

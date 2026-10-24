@@ -93,39 +93,60 @@
     </div>
   </div>
 
-  <!-- ================= TELA DE LOGIN ================= -->
+  <!-- ================= TELA DE LOGIN POR PIN ================= -->
   <div id="login-container" class="fade-in">
-    <div class="login-card glass">
-      <div class="login-header">
-        <div class="logo">
-          <i data-lucide="trending-up" class="logo-icon green-neon"></i>
-          <span><span class="logo-text-family">FAMILY</span> <span class="green-neon">MONEY</span></span>
-        </div>
-        <p>Controle Financeiro e Previsibilidade Familiar</p>
+    <div class="pin-terminal-card liquid-glass" id="terminal-card">
+      <div class="brand-badge">FM</div>
+      <div class="system-title">FAMILY MONEY</div>
+      <div class="prompt-subtitle">Digite seu PIN de Acesso (4 Dígitos)</div>
+
+      <!-- 4 SLOTS DE PIN ILUMINADOS DIAMANTE -->
+      <div class="pin-slots-wrapper" id="slots-container">
+        <div class="pin-slot" id="slot-0"></div>
+        <div class="pin-slot" id="slot-1"></div>
+        <div class="pin-slot" id="slot-2"></div>
+        <div class="pin-slot" id="slot-3"></div>
       </div>
-      
-      <form id="login-form">
-        <div class="floating-field">
-          <input type="email" id="username" placeholder=" " required>
-          <label for="username">E-mail de Acesso</label>
-        </div>
-        
-        <div class="floating-field">
-          <div class="toggle-password-wrapper">
-            <input type="password" id="password" placeholder=" " required>
-            <label for="password">Senha de Acesso</label>
-            <button type="button" id="toggle-password-btn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; z-index: 10;">
-              <i data-lucide="eye" style="width: 18px; height: 18px;"></i>
-            </button>
+
+      <!-- TECLADO NUMÉRICO DIAMANTE -->
+      <div class="keypad-grid">
+        <button type="button" class="key-btn" onclick="digitarPin('1')">1</button>
+        <button type="button" class="key-btn" onclick="digitarPin('2')">2</button>
+        <button type="button" class="key-btn" onclick="digitarPin('3')">3</button>
+
+        <button type="button" class="key-btn" onclick="digitarPin('4')">4</button>
+        <button type="button" class="key-btn" onclick="digitarPin('5')">5</button>
+        <button type="button" class="key-btn" onclick="digitarPin('6')">6</button>
+
+        <button type="button" class="key-btn" onclick="digitarPin('7')">7</button>
+        <button type="button" class="key-btn" onclick="digitarPin('8')">8</button>
+        <button type="button" class="key-btn" onclick="digitarPin('9')">9</button>
+
+        <button type="button" class="key-btn action-btn" onclick="limparPin()" title="Limpar">Limpar</button>
+        <button type="button" class="key-btn" onclick="digitarPin('0')">0</button>
+        <button type="button" class="key-btn action-btn" onclick="apagarDigitoPin()" title="Apagar">⌫</button>
+      </div>
+
+      <!-- ATALHOS DE USUÁRIOS CADASTRADOS -->
+      <div class="demo-users-pills">
+        <div class="demo-pill-title">💡 Perfis Autorizados</div>
+        <div class="pills-row">
+          <div class="user-shortcut" onclick="preencherPin('1202')">
+            <div class="user-shortcut-name">Fábio (Pai) 👑</div>
+            <div class="user-shortcut-pin">PIN: 1202</div>
+          </div>
+          <div class="user-shortcut" onclick="preencherPin('1234')">
+            <div class="user-shortcut-name">Joyce (Mãe) 👑</div>
+            <div class="user-shortcut-pin">PIN: 1234</div>
+          </div>
+          <div class="user-shortcut" onclick="preencherPin('4321')">
+            <div class="user-shortcut-name">Beatriz 👧</div>
+            <div class="user-shortcut-pin">PIN: 4321</div>
           </div>
         </div>
-        
-        <div id="login-error" class="error-msg hide" style="margin-top: -10px; margin-bottom: 15px;">Senha de acesso incorreta.</div>
-        
-        <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block">
-          Entrar no Painel <i data-lucide="arrow-right"></i>
-        </button>
-      </form>
+      </div>
+
+      <div id="login-error" class="error-msg hide" style="margin-top: 14px; font-size: 0.85rem;">PIN incorreto. Acesso não autorizado.</div>
     </div>
   </div>
 

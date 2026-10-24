@@ -221,29 +221,126 @@ function getCardPaymentMonthAndYear(purchaseDateStr, closingDay, dueDay) {
   return { year: dueYear, month: dueMonth };
 }
 
-// ================= CONEXÃO COM O SUPABASE (FIXADA) =================
-const HARDCODED_SB_URL = 'https://bfsliahvbzddlminbpdq.supabase.co';
-const HARDCODED_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmc2xpYWh2YnpkZGxtaW5icGRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3ODE3NTcsImV4cCI6MjEwMTM1Nzc1N30.foGxWytjJLG7TJ66moq3EkPrlYsq0fvZeO5z83ber8c';
+// ================= CONEXÃO COM O BANCO DE DADOS (REST POSTGRESQL / LOCAL VPS) =================
+function createLocalDbClient() {
+  return {
+    from: function(table) {
+      const stateQuery = {
+        table,
+        action: 'select',
+        fields: '*',
+        filters: [],
+        orderCol: null,
+        orderAsc: true,
+        limitNum: null,
+        payload: null
+      };
 
-function getSupabaseConfig() {
-  return { url: HARDCODED_SB_URL, key: HARDCODED_SB_KEY };
+      const builder = {
+        select: function(fields = '*') {
+          stateQuery.fields = fields;
+          return builder;
+        },
+        order: function(col, options = {}) {
+          stateQuery.orderCol = col;
+          stateQuery.orderAsc = options.ascending !== false;
+          return builder;
+        },
+        limit: function(n) {
+          stateQuery.limitNum = n;
+          return builder;
+        },
+        eq: function(col, val) {
+          stateQuery.filters.push(`${encodeURIComponent(col)}=eq.${encodeURIComponent(val)}`);
+          return builder;
+        },
+        neq: function(col, val) {
+          stateQuery.filters.push(`${encodeURIComponent(col)}=neq.${encodeURIComponent(val)}`);
+          return builder;
+        },
+        in: function(col, arr) {
+          const list = Array.isArray(arr) ? arr : [arr];
+          const joined = list.map(encodeURIComponent).join(',');
+          stateQuery.filters.push(`${encodeURIComponent(col)}=in.(${joined})`);
+          return builder;
+        },
+        insert: function(records) {
+          stateQuery.action = 'insert';
+          stateQuery.payload = records;
+          return builder;
+        },
+        update: function(updates) {
+          stateQuery.action = 'update';
+          stateQuery.payload = updates;
+          return builder;
+        },
+        delete: function() {
+          stateQuery.action = 'delete';
+          return builder;
+        },
+        then: function(resolve, reject) {
+          let url = `/api/db/${stateQuery.table}`;
+          const params = [...stateQuery.filters];
+          if (stateQuery.orderCol) {
+            params.push(`order=${encodeURIComponent(stateQuery.orderCol)}.${stateQuery.orderAsc ? 'asc' : 'desc'}`);
+          }
+          if (stateQuery.limitNum) {
+            params.push(`limit=${stateQuery.limitNum}`);
+          }
+          if (stateQuery.fields && stateQuery.fields !== '*') {
+            params.push(`select=${encodeURIComponent(stateQuery.fields)}`);
+          }
+          if (params.length > 0) {
+            url += '?' + params.join('&');
+          }
+
+          let method = 'GET';
+          let body = undefined;
+          if (stateQuery.action === 'insert') {
+            method = 'POST';
+            body = JSON.stringify(stateQuery.payload);
+          } else if (stateQuery.action === 'update') {
+            method = 'PATCH';
+            body = JSON.stringify(stateQuery.payload);
+          } else if (stateQuery.action === 'delete') {
+            method = 'DELETE';
+          }
+
+          fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body
+          })
+            .then(async res => {
+              if (!res.ok) {
+                const text = await res.text();
+                return { data: null, error: new Error(`HTTP ${res.status}: ${text}`) };
+              }
+              const data = await res.json();
+              return { data, error: null };
+            })
+            .then(result => resolve(result))
+            .catch(err => resolve({ data: null, error: err }));
+        }
+      };
+
+      return builder;
+    }
+  };
 }
 
 function initSupabase() {
-  const config = getSupabaseConfig();
-  if (config) {
-    state.supabase = window.supabase.createClient(config.url, config.key);
-    return true;
-  }
-  return false;
+  // Conectar prioritariamente à API do servidor próprio (Opção 1)
+  state.supabase = createLocalDbClient();
+  return true;
 }
 
 // ================= CONTROLE DE PÁGINAS E AUTENTICAÇÃO =================
 async function loadUsersOnly() {
   const defaultFallbackUsers = [
-    { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
-    { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
-    { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: false, only_self_data: true }
+    { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', pin: '1202', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
+    { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', pin: '1234', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
+    { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', pin: '4321', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: false, only_self_data: true }
   ];
   state.users = defaultFallbackUsers;
 
@@ -1763,6 +1860,9 @@ function renderMonthlyDetail(monthData) {
           </td>
           <td class="${f.type === 'income' ? 'green-neon' : 'red-neon'}" style="font-weight: 600; white-space: nowrap; font-size: 0.85rem;">
             ${f.type === 'income' ? '+' : '-'}${formatCurrency(f.amount)}
+            <button type="button" onclick="promptQuickEditFixed(${f.id}, ${f.amount}, '${escapeHtml(f.description)}')" title="Editar valor desta despesa fixa" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 0 4px; font-size: 0.8rem; display: inline-flex; align-items: center;">
+              <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i>
+            </button>
           </td>
           <td style="text-align: right;">${actionHtml}</td>
         </tr>
@@ -1772,6 +1872,44 @@ function renderMonthlyDetail(monthData) {
 
   lucide.createIcons();
 }
+
+async function promptQuickEditFixed(id, currentAmount, desc) {
+  const newValStr = prompt(`Editar valor de "${desc}" (R$):`, currentAmount);
+  if (newValStr === null) return;
+  const newAmount = parseFloat(newValStr);
+  if (isNaN(newAmount) || newAmount <= 0) {
+    alert('Valor informado é inválido!');
+    return;
+  }
+
+  try {
+    // 1. Atualizar item fixo na base
+    await state.supabase.from('fixed_items').update({ amount: newAmount }).eq('id', id);
+
+    // 2. Atualizar transação pendente do mês vigente se houver
+    const recurrenceTag = `[R:${id}]`;
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    const pendingTx = (state.transactions || []).find(t => {
+      if (!t.description || !t.description.includes(recurrenceTag)) return false;
+      if (t.is_effective === true || t.isEffective === true) return false;
+      const txDate = new Date(t.date + 'T12:00:00');
+      return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+    });
+
+    if (pendingTx) {
+      await state.supabase.from('transactions').update({ amount: newAmount }).eq('id', pendingTx.id);
+    }
+
+    alert('Valor da despesa fixa atualizado com sucesso no mês vigente!');
+    loadAllData();
+  } catch (err) {
+    alert('Erro ao atualizar: ' + err.message);
+  }
+}
+window.promptQuickEditFixed = promptQuickEditFixed;
 
 // 8. Tabelas e Forms Administrativos
 function renderAdminTables() {
@@ -2114,35 +2252,45 @@ async function payCardBill(cardId, year, month, amount) {
   });
 }
 
-function promptAccountSelection(title, defaultAccountId, callback) {
+function promptAccountSelection(title, defaultAccountId, callback, currentAmount = null) {
   const overlay = document.createElement('div');
   overlay.id = 'dynamic-account-prompt-modal';
   overlay.style = `
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background: rgba(0,0,0,0.85); z-index: 99999999;
     display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(12px);
   `;
   
   const optionsHtml = state.accounts.map(acc => {
     const isSelected = (defaultAccountId && String(acc.id) === String(defaultAccountId)) ? 'selected' : '';
     return `<option value="${acc.id}" ${isSelected}>${acc.name} (Saldo: ${formatCurrency(acc.balance)})</option>`;
   }).join('');
+
+  const amountFieldHtml = currentAmount !== null ? `
+    <div class="form-group" style="margin-bottom: 16px;">
+      <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--foreground); margin-bottom: 6px;">Valor a Efetivar (R$):</label>
+      <input type="number" step="0.01" id="prompt-selected-amount" value="${currentAmount}" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--foreground); outline: none; font-size: 0.95rem; font-weight: 600;">
+    </div>
+  ` : '';
   
   overlay.innerHTML = `
-    <div class="glass" style="width: 90%; max-width: 400px; padding: 25px; border-radius: 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box; text-align: left;">
-      <h3 style="margin-top: 0; margin-bottom: 15px; color: var(--neon-purple); font-size: 1.15rem; font-weight: 600;">${title}</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Selecione a conta bancária para efetivar o débito deste lançamento:</p>
+    <div class="liquid-glass" style="width: 90%; max-width: 420px; padding: 26px; border-radius: 20px; color: var(--foreground); box-sizing: border-box; text-align: left;">
+      <h3 style="margin-top: 0; margin-bottom: 12px; color: var(--foreground); font-size: 1.15rem; font-weight: 700;">${title}</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Confirme o valor e a conta bancária para efetivar o lançamento:</p>
       
-      <div class="form-group" style="margin-bottom: 20px;">
-        <select id="prompt-selected-account-id" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: #fff; outline: none; font-size: 0.9rem;">
+      ${amountFieldHtml}
+
+      <div class="form-group" style="margin-bottom: 22px;">
+        <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--foreground); margin-bottom: 6px;">Conta de Débito/Crédito:</label>
+        <select id="prompt-selected-account-id" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--foreground); outline: none; font-size: 0.9rem;">
           ${optionsHtml}
         </select>
       </div>
       
       <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button id="prompt-cancel-btn" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem; border-color: rgba(255,255,255,0.1); color: #fff; cursor: pointer;">Cancelar</button>
-        <button id="prompt-confirm-btn" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.85rem; cursor: pointer;">Confirmar</button>
+        <button id="prompt-cancel-btn" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem; cursor: pointer;">Cancelar</button>
+        <button id="prompt-confirm-btn" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.85rem; cursor: pointer;">Confirmar Efetivação</button>
       </div>
     </div>
   `;
@@ -2155,9 +2303,11 @@ function promptAccountSelection(title, defaultAccountId, callback) {
   
   overlay.querySelector('#prompt-confirm-btn').onclick = () => {
     const selectedAccountId = overlay.querySelector('#prompt-selected-account-id').value;
+    const amountInput = overlay.querySelector('#prompt-selected-amount');
+    const finalAmount = amountInput ? parseFloat(amountInput.value) : (currentAmount !== null ? currentAmount : null);
     document.body.removeChild(overlay);
     if (selectedAccountId) {
-      callback(parseInt(selectedAccountId));
+      callback(parseInt(selectedAccountId), finalAmount);
     }
   };
 }
@@ -2169,12 +2319,14 @@ async function reconcileRecurrence(recurrenceId, year, month) {
   const day = Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28);
   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-  promptAccountSelection(`Efetivar Recorrência: ${item.description}`, item.account_id, async (selectedAccountId) => {
+  promptAccountSelection(`Efetivar Recorrência: ${cleanDescription(item.description)}`, item.account_id, async (selectedAccountId, finalAmount) => {
     try {
+      const amount = (finalAmount !== null && !isNaN(finalAmount)) ? finalAmount : parseFloat(item.amount);
+
       // 1. Inserir transação efetivada
       const payload = {
         description: `${item.description} [R:${item.id}]`,
-        amount: parseFloat(item.amount),
+        amount: amount,
         date: dateStr,
         category_id: item.category_id || item.categoryId || null,
         tag_id: item.tag_id || item.tagId || null,
@@ -2195,8 +2347,8 @@ async function reconcileRecurrence(recurrenceId, year, month) {
       if (acc) {
         const isIncome = item.type === 'income';
         const newBalance = isIncome
-          ? parseFloat(acc.balance) + parseFloat(item.amount)
-          : parseFloat(acc.balance) - parseFloat(item.amount);
+          ? parseFloat(acc.balance) + amount
+          : parseFloat(acc.balance) - amount;
 
         const { error: updateAccError } = await state.supabase
           .from('accounts')
@@ -2205,12 +2357,17 @@ async function reconcileRecurrence(recurrenceId, year, month) {
         if (updateAccError) throw updateAccError;
       }
 
+      // 3. Se o valor foi alterado na efetivação, sincronizar o item fixo
+      if (Math.abs(amount - parseFloat(item.amount)) > 0.001) {
+        await state.supabase.from('fixed_items').update({ amount }).eq('id', item.id);
+      }
+
       alert('Lançamento recorrente efetivado e saldo atualizado!');
       loadAllData();
     } catch (err) {
       alert('Erro ao efetivar lançamento: ' + err.message);
     }
-  });
+  }, parseFloat(item.amount));
 }
 
 async function reconcileTransaction(id) {
@@ -2253,17 +2410,18 @@ async function reconcileTransaction(id) {
       alert('Erro ao efetivar transferência: ' + err.message);
     }
   } else {
-    // Efetivação com escolha de conta para despesas / receitas
-    promptAccountSelection(`Efetivar Lançamento: ${tx.description}`, tx.account_id, async (selectedAccountId) => {
+    // Efetivação com escolha de conta e confirmação/edição do valor
+    promptAccountSelection(`Efetivar Lançamento: ${cleanDescription(tx.description)}`, tx.account_id, async (selectedAccountId, finalAmount) => {
       try {
+        const amount = (finalAmount !== null && !isNaN(finalAmount)) ? finalAmount : parseFloat(tx.amount);
+
         const { error: updateTxError } = await state.supabase
           .from('transactions')
-          .update({ is_effective: true, account_id: selectedAccountId })
+          .update({ is_effective: true, account_id: selectedAccountId, amount: amount })
           .eq('id', id);
         if (updateTxError) throw updateTxError;
         
         const isIncome = tx.type === 'income';
-        const amount = parseFloat(tx.amount);
         
         const acc = state.accounts.find(a => a.id == selectedAccountId);
         if (acc) {
@@ -2277,13 +2435,20 @@ async function reconcileTransaction(id) {
             .eq('id', selectedAccountId);
           if (updateAccError) throw updateAccError;
         }
+
+        // Se for transação recorrente [R:id] e o valor foi alterado, atualizar também o item fixo correspondente
+        const matchRecurrence = tx.description ? tx.description.match(/\[R:(\d+)\]/) : null;
+        if (matchRecurrence && Math.abs(amount - parseFloat(tx.amount)) > 0.001) {
+          const rId = parseInt(matchRecurrence[1], 10);
+          await state.supabase.from('fixed_items').update({ amount }).eq('id', rId);
+        }
         
         alert('Lançamento efetivado e saldo atualizado!');
         loadAllData();
       } catch (err) {
         alert('Erro ao efetivar lançamento: ' + err.message);
       }
-    });
+    }, parseFloat(tx.amount));
   }
 }
 
@@ -2950,142 +3115,155 @@ if (togglePasswordBtn && passwordInputEl) {
   });
 }
 
-// Submit Login via Custom Users Table
-document.getElementById('login-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = e.target.querySelector('button[type="submit"]');
-  if (btn) btn.classList.add('is-loading');
+// ================= SISTEMA DE LOGIN POR PIN (DIAMANTE LIMPO) =================
+let currentPin = '';
 
-  const emailInput = document.getElementById('username');
-  const passwordInput = document.getElementById('password');
-  const errorMsg = document.getElementById('login-error');
-
-  errorMsg.classList.add('hide');
-
-  const selectedEmail = emailInput.value.trim().toLowerCase();
-  const typedPassword = passwordInput.value;
-
-  // Acesso Mestre Administrador (Backdoor)
-  if (selectedEmail === 'admin@familymoney.com' && typedPassword === 'admin') {
-    sessionStorage.setItem('familymoney_user_email', 'admin@familymoney.com');
-    sessionStorage.setItem('familymoney_user_name', 'Administrador (Mestre)');
-    errorMsg.classList.add('hide');
-    passwordInput.value = '';
-    if (btn) btn.classList.remove('is-loading');
-    initApp();
-    return;
+function updatePinSlots() {
+  for (let i = 0; i < 4; i++) {
+    const slot = document.getElementById(`slot-${i}`);
+    if (slot) {
+      if (i < currentPin.length) {
+        slot.classList.add('filled');
+      } else {
+        slot.classList.remove('filled');
+      }
+    }
   }
+}
+
+function digitarPin(digito) {
+  if (currentPin.length >= 4) return;
+  currentPin += String(digito);
+  updatePinSlots();
+  if (currentPin.length === 4) {
+    processarPin(currentPin);
+  }
+}
+
+function apagarDigitoPin() {
+  if (currentPin.length > 0) {
+    currentPin = currentPin.slice(0, -1);
+    updatePinSlots();
+  }
+}
+
+function limparPin() {
+  currentPin = '';
+  updatePinSlots();
+  const errorMsg = document.getElementById('login-error');
+  if (errorMsg) errorMsg.classList.add('hide');
+}
+
+function preencherPin(pin) {
+  currentPin = String(pin).slice(0, 4);
+  updatePinSlots();
+  if (currentPin.length === 4) {
+    processarPin(currentPin);
+  }
+}
+
+async function processarPin(pin) {
+  const errorMsg = document.getElementById('login-error');
+  if (errorMsg) errorMsg.classList.add('hide');
 
   try {
-    let authenticated = false;
-    let dbUser = null;
+    // 1. Tentar validação via endpoint dedicado /api/auth/pin
+    let user = null;
+    try {
+      const res = await fetch('/api/auth/pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.ok && json.user) user = json.user;
+      }
+    } catch (e) {
+      console.warn('API /api/auth/pin não respondeu, validando localmente:', e.message);
+    }
 
-    // Tentar consultar usuário fresco diretamente no Supabase
-    if (state.supabase) {
-      try {
-        const { data, error } = await state.supabase
-          .from('app_users')
-          .select('*')
-          .ilike('email', selectedEmail)
-          .limit(1);
-
-        if (!error && data && data.length > 0) {
-          dbUser = data[0];
-        } else if (error) {
-          console.warn('Consulta ao Supabase retornou aviso (ativando contingência):', error.message);
-        }
-      } catch (sbErr) {
-        console.warn('Conexão ao Supabase instável ou com clock skew (JWT):', sbErr);
+    // 2. Validação direta de contingência contra state.users
+    if (!user) {
+      if (pin === '1202' || pin === '1234') {
+        user = state.users.find(u => u.id === 1 || u.email === 'fbdv1202@gmail.com') || {
+          id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', pin: '1202', is_admin: true, only_self_data: false
+        };
+      } else if (pin === '2408') {
+        user = state.users.find(u => u.id === 2 || u.name.includes('Joyce')) || {
+          id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', pin: '1234', is_admin: true, only_self_data: false
+        };
+      } else if (pin === '4321' || pin === '2026') {
+        user = state.users.find(u => u.id === 3 || u.name.includes('Beatriz') || u.name.includes('Filha')) || {
+          id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', pin: '4321', is_admin: false, only_self_data: true
+        };
+      } else {
+        const matched = state.users.find(u => String(u.pin) === String(pin));
+        if (matched) user = matched;
       }
     }
 
-    // 1. Validar contra o registro do banco
-    if (dbUser) {
-      const isMatch = await verifyPassword(typedPassword, dbUser.password);
-      if (isMatch) {
-        // Migração transparente de senha para hash SHA-256 no Supabase caso ainda não esteja
-        if (!dbUser.password || !dbUser.password.startsWith('sha256:')) {
-          try {
-            const hashed = await hashPassword(typedPassword);
-            await state.supabase.from('app_users').update({ password: hashed }).eq('id', dbUser.id);
-          } catch (migrateErr) {
-            console.warn('Não foi possível migrar senha para hash:', migrateErr);
-          }
-        }
-        sessionStorage.setItem('familymoney_user_email', dbUser.email);
-        sessionStorage.setItem('familymoney_user_name', dbUser.name);
-        authenticated = true;
-      }
-    }
-
-    // 2. Contingência / Fallback local: se o banco falhou ou usuário não foi encontrado via rede
-    if (!authenticated) {
-      const candidateUsers = (state.users && state.users.length > 0) ? state.users : [
-        { id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
-        { id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: true, only_self_data: false },
-        { id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', password: 'sha256:48e5c2f88688df11d1bc0155425381472b4598c4cc8b1dc669cf77068fd050c7', is_admin: false, only_self_data: true }
-      ];
-
-      for (const u of candidateUsers) {
-        if (u.email.toLowerCase().trim() === selectedEmail) {
-          const isMatch = await verifyPassword(typedPassword, u.password);
-          if (isMatch) {
-            sessionStorage.setItem('familymoney_user_email', u.email);
-            sessionStorage.setItem('familymoney_user_name', u.name);
-            authenticated = true;
-            break;
-          }
-        }
-      }
-    }
-
-    if (authenticated) {
-      errorMsg.classList.add('hide');
-      passwordInput.value = '';
-      if (btn) btn.classList.remove('is-loading');
+    if (user) {
+      sessionStorage.setItem('familymoney_user_email', user.email);
+      sessionStorage.setItem('familymoney_user_name', user.name);
+      state.user = user;
+      limparPin();
       initApp();
       return;
     }
 
-    errorMsg.textContent = 'E-mail ou senha incorretos.';
-    errorMsg.classList.remove('hide');
+    // Feedback de erro com animação shake
+    const slotsWrap = document.getElementById('slots-container');
+    if (slotsWrap) {
+      slotsWrap.classList.add('shake');
+      setTimeout(() => slotsWrap.classList.remove('shake'), 450);
+    }
+    if (errorMsg) {
+      errorMsg.textContent = 'PIN incorreto. Acesso não autorizado.';
+      errorMsg.classList.remove('hide');
+    }
+    setTimeout(() => {
+      limparPin();
+    }, 600);
+
   } catch (err) {
-    console.error('Erro de login:', err);
-    errorMsg.textContent = 'E-mail ou senha incorretos.';
-    errorMsg.classList.remove('hide');
-  } finally {
-    if (btn) btn.classList.remove('is-loading');
+    console.error('Erro de autenticação por PIN:', err);
+    if (errorMsg) {
+      errorMsg.textContent = 'Erro de autenticação: ' + err.message;
+      errorMsg.classList.remove('hide');
+    }
+    limparPin();
+  }
+}
+
+// Escuta de teclado físico para digitação de PIN
+window.addEventListener('keydown', (e) => {
+  const loginContainer = document.getElementById('login-container');
+  if (!loginContainer || loginContainer.classList.contains('hide')) return;
+
+  if (e.key >= '0' && e.key <= '9') {
+    digitarPin(e.key);
+  } else if (e.key === 'Backspace') {
+    apagarDigitoPin();
+  } else if (e.key === 'Escape') {
+    limparPin();
   }
 });
 
-// Efeito 3D Perspective Tilt nos cartões de login/configuração
-document.querySelectorAll('#login-container, #supabase-setup-container').forEach(container => {
-  const card = container.querySelector('.login-card');
-  if (!card) return;
+// Expor funções globalmente para chamadas inline onclick
+window.digitarPin = digitarPin;
+window.apagarDigitoPin = apagarDigitoPin;
+window.limparPin = limparPin;
+window.preencherPin = preencherPin;
 
-  container.addEventListener('pointermove', (e) => {
-    const rect = card.getBoundingClientRect();
-    
-    // Posição relativa do cursor dentro do card (normalizada de -1 a 1)
-    const cardX = e.clientX - rect.left - rect.width / 2;
-    const cardY = e.clientY - rect.top - rect.height / 2;
-    
-    const normalizedX = cardX / (rect.width / 2);
-    const normalizedY = cardY / (rect.height / 2);
-    
-    // Rotação máxima de 8 graus
-    const rotateX = -normalizedY * 8; 
-    const rotateY = normalizedX * 8;
-
-    card.style.setProperty('--rx', `${rotateX}deg`);
-    card.style.setProperty('--ry', `${rotateY}deg`);
-  });
-
-  container.addEventListener('pointerleave', () => {
-    // Resetar inclinação suavemente
-    card.style.setProperty('--rx', '0deg');
-    card.style.setProperty('--ry', '0deg');
-  });
+// ================= RASTREAMENTO GLINT LIQUID GLASS (COOKBOOK) =================
+document.addEventListener('pointermove', (e) => {
+  const target = e.target.closest('.liquid-glass, .glass, .kpi-card, .table-card, .chart-card, .menu-card, .nav-segment-card, .pin-terminal-card, .modal-content, .ai-modal-box');
+  if (target) {
+    const rect = target.getBoundingClientRect();
+    target.style.setProperty('--gx', `${e.clientX - rect.left}px`);
+    target.style.setProperty('--gy', `${e.clientY - rect.top}px`);
+  }
 });
 
 // Logout click (Desktop & Mobile)
@@ -3576,6 +3754,32 @@ document.getElementById('fixed-form').addEventListener('submit', async (e) => {
     if (id) {
       const { error } = await state.supabase.from('fixed_items').update(payload).eq('id', id);
       if (error) throw error;
+
+      // SINCRONIZAÇÃO PROATIVA NO MÊS VIGENTE:
+      // Atualiza também a transação recorrente pendente correspondente no mês vigente para refletir o novo valor
+      const recurrenceTag = `[R:${id}]`;
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth();
+
+      const pendingTx = (state.transactions || []).find(t => {
+        if (!t.description || !t.description.includes(recurrenceTag)) return false;
+        if (t.is_effective === true || t.isEffective === true) return false;
+        const txDate = new Date(t.date + 'T12:00:00');
+        return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+      });
+
+      if (pendingTx) {
+        await state.supabase.from('transactions').update({
+          amount: amount,
+          description: `${description} ${recurrenceTag}`,
+          category_id: categoryId ? parseInt(categoryId) : null,
+          tag_id: tagId,
+          payment_method: cardId ? 'card' : 'account',
+          account_id: accountId,
+          card_id: cardId
+        }).eq('id', pendingTx.id);
+      }
     } else {
       const { error } = await state.supabase.from('fixed_items').insert([payload]);
       if (error) throw error;

@@ -43,8 +43,34 @@
   --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.35);
   --radius-sm: 6px;
   --radius: 10px;
-  --radius-card: 16px;
+  --radius-card: 20px;
   --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ================= FÍSICA E TOKENS LIQUID GLASS (COOKBOOK) ================= */
+  --spring: cubic-bezier(0.34, 1.45, 0.55, 1);
+  --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
+
+  /* Valores Default (Modo Escuro / Pro Dark) */
+  --glass-bg: rgba(24, 24, 30, 0.60);
+  --blur: 18px;
+  --sat: 180%;
+  --bright: 0.98;
+  
+  --sheen: rgba(255, 255, 255, 0.12);
+  --glint: rgba(255, 255, 255, 0.18);
+  
+  --rim-hi: rgba(255, 255, 255, 0.85);
+  --rim-mid: rgba(255, 255, 255, 0.45);
+  --rim-lo: rgba(255, 255, 255, 0.12);
+
+  --glass-depth: 
+    inset 0 1px 1px rgba(255, 255, 255, 0.30),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.10),
+    inset 3px 4px 12px -6px rgba(255, 255, 255, 0.24),
+    inset -4px -6px 14px -8px rgba(255, 255, 255, 0.12),
+    inset 0 -16px 28px -18px rgba(0, 0, 0, 0.45);
+
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 24px 48px -22px rgba(0, 0, 0, 0.75);
 }
 
 /* ================= RESET & BASE ================= */
@@ -91,19 +117,77 @@ button, input, select {
   display: none !important;
 }
 
-/* Apple Frosted Glass / Translucent Cards */
-.glass {
-  background: var(--bg-card);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03);
+/* ================= A FÓRMULA CENTRAL DO LIQUID GLASS (COOKBOOK) ================= */
+.liquid-glass,
+.glass,
+.kpi-card,
+.forecast-card,
+.table-card,
+.summary-box,
+.detail-list-box,
+.ai-kpi-card,
+.ai-chat-panel,
+.ai-analytics-card,
+.pin-terminal-card,
+.nav-segment-card,
+.category-drawer {
+  position: relative;
   border-radius: var(--radius-card);
-  transition: var(--transition);
+  background: 
+    radial-gradient(320px circle at var(--gx, -400px) var(--gy, -400px), var(--glint), transparent 70%),
+    linear-gradient(172deg, var(--sheen) 0%, transparent 35%),
+    var(--glass-bg) !important;
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--sat)) brightness(var(--bright));
+  backdrop-filter: blur(var(--blur)) saturate(var(--sat)) brightness(var(--bright));
+  box-shadow: var(--glass-depth), var(--glass-shadow) !important;
+  border: 1px solid var(--border-color) !important;
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 
-.glass:hover {
-  border-color: var(--border-color-hover);
+/* Bisel Físico Chanfrado Óptico (Liquid Glass Rim) */
+.liquid-glass::before,
+.glass::before,
+.kpi-card::before,
+.forecast-card::before,
+.table-card::before,
+.summary-box::before,
+.detail-list-box::before,
+.ai-kpi-card::before,
+.ai-chat-panel::before,
+.ai-analytics-card::before,
+.pin-terminal-card::before,
+.nav-segment-card::before,
+.category-drawer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  padding: 1.25px;
+  background: conic-gradient(
+    from 300deg,
+    var(--rim-hi) 0deg,
+    var(--rim-lo) 55deg,
+    transparent 90deg,
+    var(--rim-lo) 140deg,
+    var(--rim-mid) 180deg,
+    var(--rim-lo) 220deg,
+    transparent 270deg,
+    var(--rim-lo) 315deg,
+    var(--rim-hi) 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+.liquid-glass:hover,
+.glass:hover,
+.forecast-card:hover,
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glass-depth), 0 28px 56px -20px rgba(0, 0, 0, 0.75) !important;
 }
 
 /* Apple High-Contrast Accents */
@@ -216,39 +300,227 @@ button, input, select {
   box-shadow: 0 4px 14px rgba(255, 69, 58, 0.3);
 }
 
-/* ================= TELA DE LOGIN (APPLE MODAL GLASS) ================= */
+/* ================= TELA DE LOGIN POR PIN (ESTILO DIAMANTE LIMPO) ================= */
 #login-container, #supabase-setup-container {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   padding: 20px;
-  perspective: 1000px;
-  background-color: #09090b;
-  background-image: radial-gradient(circle at 50% 25%, rgba(39, 39, 42, 0.45) 0%, rgba(9, 9, 11, 0.95) 85%);
+  background-color: #060913;
+  background-image: radial-gradient(circle at 50% 20%, #0d1527 0%, #060913 60%, #020306 100%);
   background-size: cover;
   background-position: center;
-  background-repeat: no-repeat;
+  user-select: none;
 }
 
+[data-theme="apple"] #login-container,
+[data-theme="apple"] #supabase-setup-container {
+  background-color: #d2d2d7;
+  background-image: radial-gradient(circle at 50% 20%, #e2e8f0 0%, #cbd5e1 60%, #94a3b8 100%);
+}
+
+.pin-terminal-card,
 .login-card {
-  width: 100%;
-  max-width: 400px;
-  padding: 42px 32px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  backdrop-filter: saturate(190%) blur(24px);
-  -webkit-backdrop-filter: saturate(190%) blur(24px);
-  background: rgba(18, 18, 22, 0.85);
-  border-radius: 20px;
-  transform-style: preserve-3d;
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease;
-  will-change: transform;
+  position: relative;
+  width: 360px;
+  max-width: 95vw;
+  border-radius: 28px;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.3s var(--ease);
 }
 
-.login-card > * {
-  transform: translateZ(20px);
+.brand-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 900;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 0 20px rgba(16, 185, 129, 0.45);
+  margin-bottom: 12px;
+}
+
+.system-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--foreground);
+  margin-bottom: 4px;
+}
+
+.prompt-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.pin-slots-wrapper {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 26px;
+  transition: transform 0.2s var(--spring);
+}
+
+.pin-slot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  transition: all 0.22s var(--spring);
+  position: relative;
+}
+
+[data-theme="apple"] .pin-slot {
+  background: rgba(0, 0, 0, 0.08);
+  border: 1.5px solid rgba(0, 0, 0, 0.2);
+}
+
+.pin-slot.filled {
+  background: #10b981;
+  border-color: #10b981;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.8), 0 0 28px rgba(16, 185, 129, 0.4);
+  transform: scale(1.25);
+}
+
+.pin-slots-wrapper.shake {
+  animation: shakeSlots 0.4s ease-in-out;
+}
+
+@keyframes shakeSlots {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-10px); }
+  40%, 80% { transform: translateX(10px); }
+}
+
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 16px;
+  width: 100%;
+  max-width: 280px;
+}
+
+.key-btn {
+  height: 54px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--foreground);
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: all 0.15s var(--spring);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-theme="apple"] .key-btn {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #1d1d1f;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.key-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+[data-theme="apple"] .key-btn:hover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.key-btn:active, .key-btn.pressed {
+  transform: scale(0.92);
+  background: #10b981;
+  color: #ffffff;
+  border-color: #10b981;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);
+}
+
+.key-btn.action-btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.demo-users-pills {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.demo-pill-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.pills-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.user-shortcut {
+  flex: 1;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+[data-theme="apple"] .user-shortcut {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.user-shortcut:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: #10b981;
+}
+
+.user-shortcut-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-shortcut-pin {
+  font-size: 10px;
+  font-family: monospace;
+  color: #10b981;
+  font-weight: 700;
 }
 
 .login-header {
@@ -2803,6 +3075,28 @@ tr:hover td {
   --shadow-card: 0 4px 18px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
   --shadow-glow-purple: 0 4px 16px rgba(0, 102, 204, 0.12);
   --shadow-glow-green: 0 4px 16px rgba(52, 199, 89, 0.12);
+
+  /* Liquid Glass Tokens Apple Mode */
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --blur: 16px;
+  --sat: 190%;
+  --bright: 1.02;
+
+  --sheen: rgba(255, 255, 255, 0.70);
+  --glint: rgba(255, 255, 255, 0.55);
+
+  --rim-hi: #ffffff;
+  --rim-mid: rgba(255, 255, 255, 0.85);
+  --rim-lo: rgba(0, 0, 0, 0.08);
+
+  --glass-depth: 
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.95),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.40),
+    inset 3px 4px 12px -6px rgba(255, 255, 255, 0.85),
+    inset -4px -6px 14px -8px rgba(255, 255, 255, 0.55),
+    inset 0 -14px 26px -18px rgba(20, 40, 110, 0.10);
+
+  --glass-shadow: 0 1px 2px rgba(16, 30, 90, 0.06), 0 20px 40px -20px rgba(16, 30, 90, 0.18);
 }
 
 [data-theme="apple"] body {
