@@ -1,10 +1,13 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const APP_VERSION = '8.5';
+const BUILD_TIME = Date.now();
 
 // Habilitar CORS e Parse de JSON
 app.use(cors());
@@ -100,11 +103,56 @@ app.delete('/api/db/:table', async (req, res) => {
   }
 });
 
+// Endpoint de telemetria para diagnóstico em tempo real de dispositivos móveis
+app.post('/api/telemetry', (req, res) => {
+  try {
+    const { type, message, source, lineno, colno, stack, screen, user, ua, details } = req.body || {};
+    const timestamp = new Date().toISOString();
+    console.log(`[CLIENT-TELEMETRY] [${timestamp}] [${type || 'LOG'}] ${message || 'Evento'}`);
+    if (user) console.log(`  Usuário: ${user}`);
+    if (screen) console.log(`  Resolução: ${screen}`);
+    if (source || lineno) console.log(`  Origem: ${source}:${lineno}:${colno}`);
+    if (stack) console.log(`  Stack: ${stack}`);
+    if (details) console.log(`  Detalhes:`, details);
+    if (ua) console.log(`  UA: ${ua}`);
+  } catch (err) {
+    console.warn('[TELEMETRY] Erro ao processar payload:', err.message);
+  }
+  res.json({ ok: true });
+});
+
+// Função auxiliar para servir index.html com injeção dinâmica anti-cache
+function sendDynamicIndex(req, res) {
+  try {
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    let html = fs.readFileSync(indexPath, 'utf8');
+
+    // Injeção de versionamento dinâmico estrito anti-cache
+    const cacheBuster = `v=${APP_VERSION}&_b=${BUILD_TIME}`;
+    html = html.replace(/href="style\.css(\?[^"]*)?"/g, `href="style.css?${cacheBuster}"`);
+    html = html.replace(/src="app\.js(\?[^"]*)?"/g, `src="app.js?${cacheBuster}"`);
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    return res.send(html);
+  } catch (err) {
+    console.error('Erro ao renderizar index.html dinâmico:', err);
+    return res.status(500).send('Erro ao carregar aplicação');
+  }
+}
+
+// Rotas prioritárias para servir a página principal dinamicamente
+app.get('/', sendDynamicIndex);
+app.get('/index.html', sendDynamicIndex);
+
 // Servir arquivos estáticos do frontend com controle de cache para dispositivos móveis
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     }
@@ -116,7 +164,18 @@ app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'Endpoint não encontrado' });
   }
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  return sendDynamicIndex(req, res);
+});
+
+// Middleware global de tratamento de erros Express (captura URIError de bots e requisições malformadas)
+app.use((err, req, res, next) => {
+  if (err instanceof URIError) {
+    return res.status(400).send('Bad Request');
+  }
+  console.error('[EXPRESS ERROR]', err);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
 });
 
 // Inicialização com auto-detecção de banco

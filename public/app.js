@@ -1,4 +1,30 @@
-// FAMILY MONEY - Lógica de Negócio do Cliente com Supabase (SPA) v6.9.0
+// FAMILY MONEY - Lógica de Negócio do Cliente v8.5 (PostgreSQL / Local VPS Engine)
+function safeCreateIcons() {
+  try {
+    if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') {
+      lucide.createIcons();
+    } else if (typeof window !== 'undefined' && window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  } catch (e) {
+    console.warn('[ICONS] Advertência ao renderizar ícones:', e);
+  }
+}
+
+// Proteger preventivamente lucide.createIcons se já estiver presente
+try {
+  if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') {
+    const origCreateIcons = lucide.createIcons;
+    lucide.createIcons = function(...args) {
+      try {
+        return origCreateIcons.apply(this, args);
+      } catch (err) {
+        console.warn('[ICONS] Falha suprimida em lucide.createIcons:', err);
+      }
+    };
+  }
+} catch (e) {}
+
 try {
   const savedTheme = localStorage.getItem('familymoney_theme') || 'apple';
   document.documentElement.setAttribute('data-theme', savedTheme);
@@ -488,11 +514,14 @@ async function initApp() {
     restoreSavedTxFilters();
     loadAllData();
     updateSidebarVisibility();
+    if (typeof sendTelemetry === 'function') {
+      sendTelemetry({ type: 'SESSION_RESTORED', user: activeUserEmail });
+    }
   } else {
     document.getElementById('login-container').classList.remove('hide');
     document.getElementById('app-container').classList.add('hide');
   }
-  lucide.createIcons();
+  safeCreateIcons();
 }
 
 async function logout() {
@@ -665,22 +694,22 @@ async function loadAllData() {
       console.error('Erro ao calcular motor de previsão (calculateForecast):', calcErr);
     }
 
-    // Renderizações
-    renderSidebar(forecastResult.currentBalance || 0);
-    renderDashboard();
-    renderNewTxFormFields();
-    renderAdminTables();
-    renderReportsFields();
-    renderReportsTable();
-    updateDiagnostics();
-    renderAiAgentTab();
+    // Renderizações com proteção individual para isolamento de falhas
+    try { renderSidebar(forecastResult.currentBalance || 0); } catch (e) { console.warn('renderSidebar falhou:', e); }
+    try { renderDashboard(); } catch (e) { console.warn('renderDashboard falhou:', e); }
+    try { renderNewTxFormFields(); } catch (e) { console.warn('renderNewTxFormFields falhou:', e); }
+    try { renderAdminTables(); } catch (e) { console.warn('renderAdminTables falhou:', e); }
+    try { renderReportsFields(); } catch (e) { console.warn('renderReportsFields falhou:', e); }
+    try { renderReportsTable(); } catch (e) { console.warn('renderReportsTable falhou:', e); }
+    try { updateDiagnostics(); } catch (e) { console.warn('updateDiagnostics falhou:', e); }
+    try { renderAiAgentTab(); } catch (e) { console.warn('renderAiAgentTab falhou:', e); }
     
     // Background Job: Verificação de backup automático diário assíncrono (desacoplado da inicialização)
     scheduleDailyBackupJob();
     
-    lucide.createIcons();
+    safeCreateIcons();
   } catch (err) {
-    console.error('Erro ao carregar dados do Supabase:', err.message);
+    console.error('Erro ao carregar dados do banco:', err.message);
     updateDiagnostics(err.message);
   }
 }
@@ -1016,26 +1045,33 @@ function renderDashboard() {
     });
   });
 
-  // Renderizar Gráfico e Diagnóstico
-  renderChart();
-  renderDiagnostic();
-  renderTransactionsTable();
+  // Renderizar Gráfico, Diagnóstico e Tabela com isolamento estrito
+  try { renderChart(); } catch (e) { console.warn('renderChart falhou:', e); }
+  try { renderDiagnostic(); } catch (e) { console.warn('renderDiagnostic falhou:', e); }
+  try { renderTransactionsTable(); } catch (e) { console.warn('renderTransactionsTable falhou:', e); }
 
   // Selecionar o primeiro mês por padrão e renderizar detalhes inline
   if (cards.length > 0) {
     cards[0].style.borderColor = 'var(--neon-green)';
-    renderMonthlyDetail(state.forecast[0]);
+    try { renderMonthlyDetail(state.forecast[0]); } catch (e) { console.warn('renderMonthlyDetail falhou:', e); }
   }
 }
 
 // 3. Gráfico de Tendência (Chart.js - Estilo Fintech Minimalista de Alto Contraste)
 function renderChart() {
-  const chartCanvas = document.getElementById('projected-trend-chart');
-  if (!chartCanvas) return;
-  const ctx = chartCanvas.getContext('2d');
-  if (state.trendChart) {
-    state.trendChart.destroy();
-  }
+  try {
+    const chartCanvas = document.getElementById('projected-trend-chart');
+    if (!chartCanvas) return;
+    if (typeof Chart === 'undefined') {
+      console.warn('[CHART] Chart.js ainda não disponível.');
+      return;
+    }
+    const ctx = chartCanvas.getContext('2d');
+    if (!ctx) return;
+    if (state.trendChart) {
+      state.trendChart.destroy();
+      state.trendChart = null;
+    }
 
   const currentTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('familymoney_theme') || 'apple';
   const isApple = currentTheme === 'apple';
@@ -1151,6 +1187,9 @@ function renderChart() {
       }
     }
   });
+  } catch (chartErr) {
+    console.warn('[CHART] Erro seguro ao renderizar gráfico:', chartErr);
+  }
 }
 
 // 4. Diagnóstico de Previsibilidade
@@ -3237,16 +3276,16 @@ async function processarPin(pin) {
 
     // 2. Validação direta de contingência contra state.users
     if (!user) {
-      if (pin === '1202' || pin === '1234') {
+      if (pin === '1202') {
         user = state.users.find(u => u.id === 1 || u.email === 'fbdv1202@gmail.com') || {
           id: 1, name: 'Fábio (Pai)', email: 'fbdv1202@gmail.com', pin: '1202', is_admin: true, only_self_data: false
         };
-      } else if (pin === '2408') {
-        user = state.users.find(u => u.id === 2 || u.name.includes('Joyce')) || {
+      } else if (pin === '1234' || pin === '2408') {
+        user = state.users.find(u => u.id === 2 || (u.name && u.name.includes('Joyce'))) || {
           id: 2, name: 'Joyce (Mãe)', email: 'joycesiqueirafs@gmail.com', pin: '1234', is_admin: true, only_self_data: false
         };
       } else if (pin === '4321' || pin === '2026') {
-        user = state.users.find(u => u.id === 3 || u.name.includes('Beatriz') || u.name.includes('Filha')) || {
+        user = state.users.find(u => u.id === 3 || (u.name && (u.name.includes('Beatriz') || u.name.includes('Filha')))) || {
           id: 3, name: 'Filha (Beatriz)', email: 'filha@familia.com', pin: '4321', is_admin: false, only_self_data: true
         };
       } else {
@@ -3262,6 +3301,9 @@ async function processarPin(pin) {
       localStorage.setItem('familymoney_user_name', user.name);
       state.user = user;
       limparPin();
+      if (typeof sendTelemetry === 'function') {
+        sendTelemetry({ type: 'LOGIN_SUCCESS', user: user.email, name: user.name });
+      }
       initApp();
       return;
     }
@@ -6240,6 +6282,9 @@ function renderMorganHistoryTab() {
 
 // ================= SISTEMA DE ATUALIZAÇÃO / REFRESH MÓVEL & DESKTOP =================
 async function triggerManualRefresh(quiet = false) {
+  if (typeof sendTelemetry === 'function') {
+    sendTelemetry({ type: 'MANUAL_REFRESH', quiet: quiet });
+  }
   const icon = document.getElementById('refresh-btn-icon');
   const btn = document.getElementById('refresh-data-btn');
   const ptrIcon = document.getElementById('ptr-icon');
@@ -6383,6 +6428,9 @@ window.addEventListener('pageshow', (event) => {
 
 // ================= INICIALIZAÇÃO =================
 window.addEventListener('DOMContentLoaded', () => {
+  if (typeof sendTelemetry === 'function') {
+    sendTelemetry({ type: 'DOM_READY' });
+  }
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('tx-date').value = today;
   

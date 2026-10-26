@@ -2,34 +2,71 @@
 <html lang="pt-BR">
 <head>
   <script>
-    window.onerror = function(message, source, lineno, colno, error) {
-      const errText = 'Erro de Execução: ' + message + '\nOrigem: ' + source + ':' + lineno + ':' + colno;
-      console.error(errText);
+    // Sistema de Telemetria de Dispositivos Móveis e Desktop
+    function sendTelemetry(payload) {
       try {
-        alert(errText);
-      } catch(e) {}
-      
-      const errDiv = document.createElement('div');
-      errDiv.style.position = 'fixed';
-      errDiv.style.top = '0';
-      errDiv.style.left = '0';
-      errDiv.style.width = '100vw';
-      errDiv.style.background = '#ff3b30';
-      errDiv.style.color = '#fff';
-      errDiv.style.padding = '15px';
-      errDiv.style.zIndex = '999999';
-      errDiv.style.fontFamily = 'monospace';
-      errDiv.style.fontSize = '12px';
-      errDiv.style.whiteSpace = 'pre-wrap';
-      errDiv.style.boxSizing = 'border-box';
-      errDiv.innerHTML = '<strong>Erro de Execução Detectado:</strong><br>' + message + '<br>Origem: ' + source + ':' + lineno + ':' + colno;
-      if (document.body) {
-        document.body.appendChild(errDiv);
-      } else {
-        document.documentElement.appendChild(errDiv);
-      }
+        const body = JSON.stringify({
+          ...payload,
+          ua: navigator.userAgent,
+          screen: window.innerWidth + 'x' + window.innerHeight,
+          url: window.location.href,
+          user: (sessionStorage.getItem('familymoney_user_email') || localStorage.getItem('familymoney_user_email') || 'anônimo'),
+          time: new Date().toISOString()
+        });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/telemetry', body);
+        } else {
+          fetch('/api/telemetry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: body,
+            keepalive: true
+          }).catch(function() {});
+        }
+      } catch (e) {}
+    }
+
+    // Limpeza forçada de Service Workers legados e Cache Storage em smartphones/tablets
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var i = 0; i < registrations.length; i++) {
+          registrations[i].unregister();
+        }
+      }).catch(function() {});
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        for (var i = 0; i < names.length; i++) {
+          caches.delete(names[i]);
+        }
+      }).catch(function() {});
+    }
+
+    // Captura global de erros de execução com envio de telemetria
+    window.onerror = function(message, source, lineno, colno, error) {
+      var errText = 'Erro de Execução: ' + message + '\nOrigem: ' + source + ':' + lineno + ':' + colno;
+      console.error(errText);
+      sendTelemetry({
+        type: 'ERROR',
+        message: String(message),
+        source: source,
+        lineno: lineno,
+        colno: colno,
+        stack: error && error.stack ? error.stack : null
+      });
       return false;
     };
+
+    // Captura global de rejeições de Promises assíncronas
+    window.addEventListener('unhandledrejection', function(event) {
+      var reason = event.reason ? (event.reason.message || String(event.reason)) : 'Promise rejeitada';
+      console.warn('Unhandled Rejection:', reason);
+      sendTelemetry({
+        type: 'UNHANDLED_REJECTION',
+        message: reason,
+        stack: event.reason && event.reason.stack ? event.reason.stack : null
+      });
+    });
   </script>
   <meta charset="UTF-8">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -58,7 +95,7 @@
   <!-- Supabase Client SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=7.4">
+  <link rel="stylesheet" href="style.css?v=8.5">
 </head>
 <body>
 
@@ -2029,6 +2066,6 @@ Dados: ${JSON.stringify(familyData)}`;
     </div>
   </div>
 
-  <script src="app.js?v=7.4&t=1791180000"></script>
+  <script src="app.js?v=8.5"></script>
 </body>
 </html>
