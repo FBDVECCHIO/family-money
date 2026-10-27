@@ -514,6 +514,7 @@ async function initApp() {
     restoreSavedTxFilters();
     loadAllData();
     updateSidebarVisibility();
+    adaptNavForMobile();
     if (typeof sendTelemetry === 'function') {
       sendTelemetry({ type: 'SESSION_RESTORED', user: activeUserEmail });
     }
@@ -523,6 +524,32 @@ async function initApp() {
   }
   safeCreateIcons();
 }
+
+function adaptNavForMobile() {
+  try {
+    const nav = document.querySelector('.main-nav');
+    const header = document.querySelector('.app-header');
+    const container = document.getElementById('app-container');
+    if (!nav || !header || !container) return;
+    if (window.innerWidth <= 768) {
+      if (nav.parentElement !== container) {
+        container.appendChild(nav);
+      }
+    } else {
+      if (nav.parentElement !== header) {
+        const profile = header.querySelector('.header-profile');
+        if (profile) {
+          header.insertBefore(nav, profile);
+        } else {
+          header.appendChild(nav);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Erro ao adaptar navegação móvel:', e);
+  }
+}
+window.addEventListener('resize', adaptNavForMobile);
 
 async function logout() {
   sessionStorage.removeItem('familymoney_user_email');
@@ -6447,6 +6474,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   initTheme();
   initApp();
+  adaptNavForMobile();
   initAiAgent();
   initPullToRefresh();
 });
