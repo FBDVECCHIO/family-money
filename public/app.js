@@ -71,6 +71,7 @@ let state = {
     users: new Map()
   }
 };
+window.state = state;
 
 // ================= SEGURANÇA E CRIPTOGRAFIA DE SENHAS =================
 const FM_CRYPTO_SALT = 'FM_FAMILY_SALT_2026_SECURE';
