@@ -19,6 +19,22 @@ const LOCAL_DB_FILE = path.join(__dirname, 'data', 'local_db.json');
 let pool = null;
 let isPostgres = false;
 let localDb = null;
+let dbVersion = Date.now();
+
+/**
+ * Retorna a versão atômica atual da base de dados
+ */
+function getDbVersion() {
+  return dbVersion;
+}
+
+/**
+ * Incrementa a versão atômica do banco notificando mutações
+ */
+function bumpDbVersion() {
+  dbVersion = Date.now();
+  return dbVersion;
+}
 
 // Tabelas gerenciadas pelo sistema
 const MANAGED_TABLES = [
@@ -490,6 +506,7 @@ async function insertRows(table, data) {
       const res = await pool.query(sql, vals);
       inserted.push(res.rows[0]);
     }
+    bumpDbVersion();
     return inserted;
   }
 
@@ -524,6 +541,7 @@ async function insertRows(table, data) {
   }
 
   saveLocalDatabase();
+  bumpDbVersion();
   return inserted;
 }
 
@@ -557,6 +575,7 @@ async function updateRows(table, updates, query = {}) {
 
     const sql = `UPDATE ${table} SET ${setClauses}${whereClause} RETURNING *`;
     const res = await pool.query(sql, params);
+    bumpDbVersion();
     return res.rows;
   }
 
@@ -584,6 +603,7 @@ async function updateRows(table, updates, query = {}) {
     return row;
   });
   saveLocalDatabase();
+  bumpDbVersion();
   return updated;
 }
 
@@ -610,6 +630,7 @@ async function deleteRows(table, query = {}) {
     }
     sql += ' RETURNING *';
     const res = await pool.query(sql, params);
+    bumpDbVersion();
     return res.rows;
   }
 
@@ -632,6 +653,7 @@ async function deleteRows(table, query = {}) {
     return !match;
   });
   saveLocalDatabase();
+  bumpDbVersion();
   return { deleted: initialLen - localDb[table].length };
 }
 
@@ -700,5 +722,7 @@ module.exports = {
   deleteRows,
   authenticatePin,
   getStatus,
+  getDbVersion,
+  bumpDbVersion,
   MANAGED_TABLES
 };

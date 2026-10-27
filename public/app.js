@@ -162,6 +162,237 @@ function updateLookupMaps() {
   state.lookupMaps.users = new Map((state.users || []).map(u => [u.id, u]));
 }
 
+// ================= SWR CACHE SNAPSHOT & OFFLINE ENGINE =================
+const FM_CACHE_KEY = 'fm_cache_snapshot_v1';
+const FM_OUTBOX_KEY = 'fm_offline_outbox_v1';
+
+function saveLocalSnapshot() {
+  try {
+    if (!state.user) return;
+    const snapshot = {
+      timestamp: Date.now(),
+      userEmail: state.user.email,
+      accounts: state.accounts || [],
+      cards: state.cards || [],
+      categories: state.categories || [],
+      tags: state.tags || [],
+      fixedItems: state.fixedItems || [],
+      transactions: (state.transactions || []).slice(0, 300),
+      paidCardBills: state.paidCardBills || [],
+      users: state.users || []
+    };
+    localStorage.setItem(FM_CACHE_KEY, JSON.stringify(snapshot));
+  } catch (e) {
+    console.warn('[CACHE] Falha ao persistir snapshot local:', e);
+  }
+}
+
+function loadLocalSnapshot() {
+  try {
+    const raw = localStorage.getItem(FM_CACHE_KEY);
+    if (!raw) return false;
+    const snapshot = JSON.parse(raw);
+    if (!snapshot || !Array.isArray(snapshot.accounts)) return false;
+
+    // Restaurar no estado imediatamente (0ms)
+    state.accounts = snapshot.accounts || [];
+    state.cards = snapshot.cards || [];
+    state.categories = snapshot.categories || [];
+    state.tags = snapshot.tags || [];
+    state.fixedItems = snapshot.fixedItems || [];
+    state.transactions = snapshot.transactions || [];
+    state.paidCardBills = snapshot.paidCardBills || [];
+    if (Array.isArray(snapshot.users) && snapshot.users.length > 0) {
+      state.users = snapshot.users;
+    }
+
+    updateLookupMaps();
+
+    // Renderizar imediatamente a interface com os dados do snapshot
+    try {
+      if (typeof calculateForecast === 'function') {
+        const forecastResult = calculateForecast(state.accounts, state.cards, state.fixedItems, state.transactions);
+        state.forecast = forecastResult.forecast || [];
+        if (typeof renderSidebar === 'function') renderSidebar(forecastResult.currentBalance || 0);
+      }
+      if (typeof renderDashboard === 'function') renderDashboard();
+      if (typeof renderNewTxFormFields === 'function') renderNewTxFormFields();
+      if (typeof renderReportsFields === 'function') renderReportsFields();
+      if (typeof renderReportsTable === 'function') renderReportsTable();
+      safeCreateIcons();
+    } catch (renderErr) {
+      console.warn('[CACHE] Falha ao renderizar snapshot local inicial:', renderErr);
+    }
+    return true;
+  } catch (e) {
+    console.warn('[CACHE] Falha ao carregar snapshot local:', e);
+    return false;
+  }
+}
+
+function enqueueOfflineAction(action) {
+  try {
+    const existing = JSON.parse(localStorage.getItem(FM_OUTBOX_KEY) || '[]');
+    existing.push({ ...action, queuedAt: Date.now(), id: 'outbox_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6) });
+    localStorage.setItem(FM_OUTBOX_KEY, JSON.stringify(existing));
+    console.log('[OUTBOX] Ação enfileirada para envio posterior:', action.type);
+  } catch (e) {
+    console.warn('[OUTBOX] Erro ao enfileirar ação offline:', e);
+  }
+}
+
+let isProcessingOutbox = false;
+async function processOfflineOutbox() {
+  if (isProcessingOutbox || !state.supabase) return;
+  const raw = localStorage.getItem(FM_OUTBOX_KEY);
+  if (!raw) return;
+
+  let queue = [];
+  try {
+    queue = JSON.parse(raw);
+  } catch (e) {
+    return;
+  }
+  if (!queue || queue.length === 0) return;
+
+  isProcessingOutbox = true;
+  const remaining = [];
+  let processedCount = 0;
+
+  for (const item of queue) {
+    try {
+      if (item.type === 'create_transaction') {
+        const { newTx, isRecurring, description, amount, date, categoryId, tagId, cardId, paymentMethod, accountId, destinationAccountId, isEffective, finalType } = item;
+        let finalDescription = newTx.description || description;
+
+        if (isRecurring) {
+          const dayOfMonth = new Date(date + 'T12:00:00').getDate();
+          const { data: fixedData, error: fixedErr } = await state.supabase.from('fixed_items').insert([{
+            description, amount, day_of_month: dayOfMonth, type: 'expense',
+            card_id: parseInt(cardId), category_id: categoryId, tag_id: tagId
+          }]).select();
+          if (!fixedErr && fixedData && fixedData.length > 0) {
+            finalDescription = `${description} [R:${fixedData[0].id}]`;
+            newTx.description = finalDescription;
+          }
+        }
+
+        const { error: insErr } = await state.supabase.from('transactions').insert([newTx]);
+        if (insErr) throw insErr;
+
+        if (paymentMethod === 'account' && accountId && isEffective) {
+          const accIdNum = parseInt(accountId);
+          const acc = state.accounts.find(a => a.id == accIdNum);
+          if (acc) {
+            const newBal = finalType === 'income' ? parseFloat(acc.balance) + amount : parseFloat(acc.balance) - amount;
+            await state.supabase.from('accounts').update({ balance: newBal }).eq('id', accIdNum);
+          }
+        } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
+          const oId = parseInt(accountId);
+          const dId = parseInt(destinationAccountId);
+          const oAcc = state.accounts.find(a => a.id == oId);
+          const dAcc = state.accounts.find(a => a.id == dId);
+          if (oAcc && dAcc) {
+            await state.supabase.from('accounts').update({ balance: parseFloat(oAcc.balance) - amount }).eq('id', oId);
+            await state.supabase.from('accounts').update({ balance: parseFloat(dAcc.balance) + amount }).eq('id', dId);
+          }
+        }
+        processedCount++;
+      }
+    } catch (err) {
+      console.warn('[OUTBOX] Falha ao reenviar item offline, mantendo na fila:', err);
+      remaining.push(item);
+    }
+  }
+
+  localStorage.setItem(FM_OUTBOX_KEY, JSON.stringify(remaining));
+  isProcessingOutbox = false;
+
+  if (processedCount > 0) {
+    showBgJobToast(`${processedCount} lançamento(s) offline sincronizado(s)!`, 3000, true);
+    checkAndSyncIfChanged(true);
+  }
+}
+
+// ================= REALTIME ENGINE VIA SERVER-SENT EVENTS (SSE) =================
+let sseConnection = null;
+let lastServerDbVersion = 0;
+let silentSyncDebounceTimer = null;
+
+function scheduleSilentSync(delayMs = 300) {
+  clearTimeout(silentSyncDebounceTimer);
+  silentSyncDebounceTimer = setTimeout(async () => {
+    try {
+      await loadAllData();
+      saveLocalSnapshot();
+      console.log('[REALTIME] Dados sincronizados e snapshot local atualizado.');
+    } catch (e) {
+      console.warn('[REALTIME] Falha na sincronização silenciosa:', e);
+    }
+  }, delayMs);
+}
+
+function initRealtimeSync() {
+  if (typeof window === 'undefined' || !window.EventSource) return;
+  if (sseConnection) {
+    try { sseConnection.close(); } catch(e) {}
+    sseConnection = null;
+  }
+
+  try {
+    sseConnection = new EventSource('/api/events');
+
+    sseConnection.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'DB_MUTATION' || payload.type === 'db_change') {
+          console.log('[REALTIME SSE] Alteração detectada no banco:', payload.table, payload.action);
+          if (payload.version) {
+            lastServerDbVersion = payload.version;
+          }
+          scheduleSilentSync(150);
+        } else if (payload.type === 'HEARTBEAT' || payload.type === 'ping' || payload.type === 'CONNECTED') {
+          if (payload.version) {
+            if (lastServerDbVersion && payload.version > lastServerDbVersion) {
+              console.log('[REALTIME SSE] Nova versão detectada via heartbeat:', payload.version);
+              lastServerDbVersion = payload.version;
+              scheduleSilentSync(150);
+            } else {
+              lastServerDbVersion = payload.version;
+            }
+          }
+        }
+      } catch (err) {}
+    };
+
+    sseConnection.onerror = () => {
+      console.warn('[REALTIME SSE] Conexão SSE instável, fallback reativo ativo.');
+    };
+  } catch (err) {
+    console.warn('[REALTIME SSE] Falha ao conectar SSE:', err);
+  }
+}
+
+async function checkAndSyncIfChanged(force = false) {
+  if (!state.user) return;
+  try {
+    const res = await fetch(`/api/db/version?_t=${Date.now()}`, {
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const serverVer = data.version;
+
+    if (force || !lastServerDbVersion || serverVer > lastServerDbVersion) {
+      console.log(`[SYNC CHECK] Versão do servidor (${serverVer}) mais recente que a local (${lastServerDbVersion}). Sincronizando...`);
+      lastServerDbVersion = serverVer;
+      scheduleSilentSync(100);
+    }
+  } catch (e) {
+    // Silencioso se estiver offline na rua
+  }
+}
+
 // Toast de Notificação para Background Jobs / Fila Assíncrona
 function showBgJobToast(message, duration = 3500, isSuccess = false) {
   const toast = document.getElementById('bg-job-toast');
@@ -452,7 +683,6 @@ async function initApp() {
   const hasConfig = initSupabase();
   
   if (!hasConfig) {
-    // Exibir tela de Setup do Supabase se não estiver configurado
     document.getElementById('supabase-setup-container').classList.remove('hide');
     document.getElementById('login-container').classList.add('hide');
     document.getElementById('app-container').classList.add('hide');
@@ -461,9 +691,6 @@ async function initApp() {
   }
 
   document.getElementById('supabase-setup-container').classList.add('hide');
-
-  // Carregar os usuários antes de prosseguir para podermos ler as permissões
-  await loadUsersOnly();
 
   // Verificar sessão ativa localmente (sessionStorage + localStorage com fallback)
   const activeUserEmail = sessionStorage.getItem('familymoney_user_email') || localStorage.getItem('familymoney_user_email');
@@ -476,51 +703,68 @@ async function initApp() {
     localStorage.setItem('familymoney_user_email', activeUserEmail);
     localStorage.setItem('familymoney_user_name', activeUserName);
 
-    // Enriquecer dados da sessão com as permissões do banco
-    const dbUser = state.users.find(u => u.email === activeUserEmail) || {
-      id: 9999, name: activeUserName, email: activeUserEmail, is_admin: true, only_self_data: false
-    };
-
     const forceAdmin = ['fbdv1202@gmail.com', 'joycesiqueirafs@gmail.com', 'admin@familymoney.com'].includes(activeUserEmail.toLowerCase().trim());
     state.user = { 
-      id: dbUser.id || dbUser.idNum || 9999, 
+      id: 9999, 
       email: activeUserEmail, 
       name: activeUserName,
-      is_admin: forceAdmin || dbUser.is_admin !== false,
-      only_self_data: dbUser.only_self_data === true
+      is_admin: forceAdmin,
+      only_self_data: false
     };
 
+    // 1. EXIBIR IMEDIATAMENTE A INTERFACE DO APP (Elimina delay e tela branca)
     document.getElementById('login-container').classList.add('hide');
     document.getElementById('app-container').classList.remove('remove');
     document.getElementById('app-container').classList.remove('hide');
-    
-    // Ocultar botão de Administração se o usuário não for administrador
+    document.getElementById('user-display-name').textContent = activeUserName;
+
     const adminNavBtn = document.getElementById('admin-nav-btn');
     if (adminNavBtn) {
-      if (state.user.is_admin) {
-        adminNavBtn.style.display = 'flex';
-      } else {
-        adminNavBtn.style.display = 'none';
-        // Se por acaso a aba atual for admin, redirecionar para dashboard
-        if (state.activeTab === 'admin') {
-          state.activeTab = 'dashboard';
-          document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active-view'));
-          document.getElementById('view-dashboard').classList.add('active-view');
-        }
-      }
+      adminNavBtn.style.display = state.user.is_admin ? 'flex' : 'none';
     }
 
-    document.getElementById('user-display-name').textContent = activeUserName;
     restoreSavedTxFilters();
-    loadAllData();
     updateSidebarVisibility();
     adaptNavForMobile();
+
+    // 2. CARREGAMENTO INSTANTÂNEO VIA SNAPSHOT LOCAL (SWR - 0ms de espera)
+    loadLocalSnapshot();
+
+    // 3. CONECTAR SINCRONIZAÇÃO EM TEMPO REAL (SSE)
+    initRealtimeSync();
+
+    // 4. PROCESSAR FILA OFFLINE PENDENTE (caso haja lançamentos feitos na rua sem internet)
+    processOfflineOutbox();
+
+    // 5. REVALIDAÇÃO ASSÍNCRONA COM O SERVIDOR EM SEGUNDO PLANO
+    (async () => {
+      try {
+        await loadUsersOnly();
+        if (state.users && state.users.length > 0) {
+          const dbUser = state.users.find(u => u.email === activeUserEmail);
+          if (dbUser) {
+            state.user.id = dbUser.id || dbUser.idNum || state.user.id;
+            state.user.is_admin = forceAdmin || dbUser.is_admin !== false;
+            state.user.only_self_data = dbUser.only_self_data === true;
+            if (adminNavBtn) {
+              adminNavBtn.style.display = state.user.is_admin ? 'flex' : 'none';
+            }
+          }
+        }
+        await loadAllData();
+        saveLocalSnapshot();
+      } catch (revalErr) {
+        console.warn('[INIT] Erro na revalidação assíncrona dos dados:', revalErr);
+      }
+    })();
+
     if (typeof sendTelemetry === 'function') {
       sendTelemetry({ type: 'SESSION_RESTORED', user: activeUserEmail });
     }
   } else {
     document.getElementById('login-container').classList.remove('hide');
     document.getElementById('app-container').classList.add('hide');
+    loadUsersOnly();
   }
   safeCreateIcons();
 }
@@ -556,6 +800,13 @@ async function logout() {
   sessionStorage.removeItem('familymoney_user_name');
   localStorage.removeItem('familymoney_user_email');
   localStorage.removeItem('familymoney_user_name');
+  try {
+    localStorage.removeItem(FM_CACHE_KEY);
+  } catch (e) {}
+  if (sseConnection) {
+    try { sseConnection.close(); } catch (e) {}
+    sseConnection = null;
+  }
   state.session = null;
   state.user = null;
   if (state.trendChart) {
@@ -731,6 +982,9 @@ async function loadAllData() {
     try { updateDiagnostics(); } catch (e) { console.warn('updateDiagnostics falhou:', e); }
     try { renderAiAgentTab(); } catch (e) { console.warn('renderAiAgentTab falhou:', e); }
     
+    // Salvar snapshot atualizado no cache local para inicialização instantânea
+    saveLocalSnapshot();
+
     // Background Job: Verificação de backup automático diário assíncrono (desacoplado da inicialização)
     scheduleDailyBackupJob();
     
@@ -3716,76 +3970,158 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
     const txId = document.getElementById('tx-id').value;
 
     if (txId) {
-      // ESTORNO: Reverter saldo da transação antiga antes de atualizar
+      // MODO EDIÇÃO: Atualização com estorno seguro
+      showBgJobToast('Atualizando lançamento...');
       const oldTx = state.transactions.find(tx => tx.id == txId);
       if (oldTx) {
         await revertTransactionBalance(oldTx);
       }
 
-      // ATUALIZAÇÃO
       const { error: updateError } = await state.supabase
         .from('transactions')
         .update(newTx)
         .eq('id', parseInt(txId));
       if (updateError) throw updateError;
+
+      // APLICAR NOVO SALDO (APENAS SE EFETIVADO)
+      if (paymentMethod === 'account' && accountId && isEffective) {
+        const accIdNum = parseInt(accountId);
+        const acc = state.accounts.find(a => a.id == accIdNum);
+        if (acc) {
+          const newBalance = finalType === 'income' 
+            ? parseFloat(acc.balance) + amount 
+            : parseFloat(acc.balance) - amount;
+
+          const { error: updateError } = await state.supabase
+            .from('accounts')
+            .update({ balance: newBalance })
+            .eq('id', accIdNum);
+          if (updateError) throw updateError;
+        }
+      } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
+        const originIdNum = parseInt(accountId);
+        const destIdNum = parseInt(destinationAccountId);
+        if (originIdNum === destIdNum) {
+          throw new Error('A conta de origem e destino da transferência devem ser diferentes!');
+        }
+
+        const originAcc = state.accounts.find(a => a.id == originIdNum);
+        const destAcc = state.accounts.find(a => a.id == destIdNum);
+        if (originAcc && destAcc) {
+          const newOriginBalance = parseFloat(originAcc.balance) - amount;
+          await state.supabase.from('accounts').update({ balance: newOriginBalance }).eq('id', originIdNum);
+          const newDestBalance = parseFloat(destAcc.balance) + amount;
+          await state.supabase.from('accounts').update({ balance: newDestBalance }).eq('id', destIdNum);
+        }
+      }
+
+      await loadAllData();
+      clearTransactionForm();
+      document.getElementById('installment-preview-text').classList.add('hide');
+      document.querySelector('.nav-link[data-tab="dashboard"]').click();
+      showBgJobToast('Lançamento atualizado com sucesso!', 2500, true);
     } else {
-      // INSERÇÃO
-      const { error: insertError } = await state.supabase.from('transactions').insert([newTx]);
-      if (insertError) throw insertError;
+      // MODO NOVO LANÇAMENTO: UI Otimista Instantânea (< 15ms) para uso rápido na rua
+      const tempId = 'tmp_' + Date.now();
+      const optimisticTx = {
+        ...newTx,
+        id: tempId,
+        created_at: new Date().toISOString()
+      };
+      
+      // Inserção otimista em memória
+      state.transactions.unshift(optimisticTx);
+
+      // Ajuste de saldo otimista em memória
+      if (paymentMethod === 'account' && accountId && isEffective) {
+        const accIdNum = parseInt(accountId);
+        const acc = state.accounts.find(a => a.id == accIdNum);
+        if (acc) {
+          acc.balance = finalType === 'income'
+            ? parseFloat(acc.balance) + amount
+            : parseFloat(acc.balance) - amount;
+        }
+      } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
+        const originIdNum = parseInt(accountId);
+        const destIdNum = parseInt(destinationAccountId);
+        const originAcc = state.accounts.find(a => a.id == originIdNum);
+        const destAcc = state.accounts.find(a => a.id == destIdNum);
+        if (originAcc && destAcc) {
+          originAcc.balance = parseFloat(originAcc.balance) - amount;
+          destAcc.balance = parseFloat(destAcc.balance) + amount;
+        }
+      }
+
+      // Renderizar UI instantaneamente e salvar snapshot
+      updateLookupMaps();
+      try {
+        const forecastResult = calculateForecast(state.accounts, state.cards, state.fixedItems, state.transactions);
+        state.forecast = forecastResult.forecast || [];
+        renderSidebar(forecastResult.currentBalance || 0);
+        renderDashboard();
+        renderReportsTable();
+        safeCreateIcons();
+      } catch (renderErr) {
+        console.warn('Erro ao atualizar tela com lançamento otimista:', renderErr);
+      }
+      saveLocalSnapshot();
+
+      // Limpar formulário e navegar imediatamente para o Dashboard
+      clearTransactionForm();
+      document.getElementById('installment-preview-text').classList.add('hide');
+      document.querySelector('.nav-link[data-tab="dashboard"]').click();
+      showBgJobToast('Lançamento registrado com sucesso!', 2500, true);
+
+      // Envio assíncrono para o servidor em segundo plano (com tolerância a falhas na rua)
+      (async () => {
+        try {
+          const { error: insertError } = await state.supabase.from('transactions').insert([newTx]);
+          if (insertError) throw insertError;
+
+          if (paymentMethod === 'account' && accountId && isEffective) {
+            const accIdNum = parseInt(accountId);
+            const acc = state.accounts.find(a => a.id == accIdNum);
+            if (acc) {
+              const newBalance = finalType === 'income' 
+                ? parseFloat(acc.balance) + amount 
+                : parseFloat(acc.balance) - amount;
+              await state.supabase.from('accounts').update({ balance: newBalance }).eq('id', accIdNum);
+            }
+          } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
+            const originIdNum = parseInt(accountId);
+            const destIdNum = parseInt(destinationAccountId);
+            const originAcc = state.accounts.find(a => a.id == originIdNum);
+            const destAcc = state.accounts.find(a => a.id == destIdNum);
+            if (originAcc && destAcc) {
+              await state.supabase.from('accounts').update({ balance: parseFloat(originAcc.balance) - amount }).eq('id', originIdNum);
+              await state.supabase.from('accounts').update({ balance: parseFloat(destAcc.balance) + amount }).eq('id', destIdNum);
+            }
+          }
+
+          // Atualizar silenciosamente para consolidar o ID permanente gerado pelo PostgreSQL
+          scheduleSilentSync(150);
+        } catch (netErr) {
+          console.warn('[NETWORK] Falha ao enviar lançamento para o servidor, salvando na fila offline:', netErr);
+          enqueueOfflineAction({
+            type: 'create_transaction',
+            newTx,
+            isRecurring,
+            description,
+            amount,
+            date,
+            categoryId,
+            tagId,
+            cardId,
+            paymentMethod,
+            accountId,
+            destinationAccountId,
+            isEffective,
+            finalType
+          });
+          showBgJobToast('Salvo no dispositivo. Sincronizará assim que houver sinal.', 3500);
+        }
+      })();
     }
-
-    // APLICAR NOVO SALDO (APENAS SE EFETIVADO)
-    if (paymentMethod === 'account' && accountId && isEffective) {
-      const accIdNum = parseInt(accountId);
-      const acc = state.accounts.find(a => a.id == accIdNum);
-      if (acc) {
-        const newBalance = finalType === 'income' 
-          ? parseFloat(acc.balance) + amount 
-          : parseFloat(acc.balance) - amount;
-
-        const { error: updateError } = await state.supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', accIdNum);
-        if (updateError) throw updateError;
-      }
-    } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
-      const originIdNum = parseInt(accountId);
-      const destIdNum = parseInt(destinationAccountId);
-
-      if (originIdNum === destIdNum) {
-        throw new Error('A conta de origem e destino da transferência devem ser diferentes!');
-      }
-
-      const originAcc = state.accounts.find(a => a.id == originIdNum);
-      const destAcc = state.accounts.find(a => a.id == destIdNum);
-
-      if (originAcc && destAcc) {
-        const newOriginBalance = parseFloat(originAcc.balance) - amount;
-        const { error: errorOrigin } = await state.supabase
-          .from('accounts')
-          .update({ balance: newOriginBalance })
-          .eq('id', originIdNum);
-        if (errorOrigin) throw errorOrigin;
-
-        const newDestBalance = parseFloat(destAcc.balance) + amount;
-        const { error: errorDest } = await state.supabase
-          .from('accounts')
-          .update({ balance: newDestBalance })
-          .eq('id', destIdNum);
-        if (errorDest) throw errorDest;
-      }
-    }
-
-    // Recarregar todos os dados do Supabase na memória local e recalcular previsões
-    await loadAllData();
-
-    // Limpar o formulário e redefinir estado padrão
-    clearTransactionForm();
-
-    document.getElementById('installment-preview-text').classList.add('hide');
-
-    document.querySelector('.nav-link[data-tab="dashboard"]').click();
   } catch (err) {
     alert('Erro ao salvar lançamento: ' + err.message);
   }
@@ -6436,22 +6772,45 @@ function initPullToRefresh() {
   });
 }
 
-// Auto-Refresh ao retornar à aba/aplicativo no celular/tablet
-let lastVisibilityCheck = Date.now();
+// ================= SINCRONIZAÇÃO REATIVA MULTIDISPOSITIVO =================
+// 1. Ao retornar ao app no celular/tablet (desbloqueio ou troca de abas)
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.user) {
-    const elapsed = Date.now() - lastVisibilityCheck;
-    if (elapsed > 45000) { // Mais de 45 segundos em segundo plano
-      lastVisibilityCheck = Date.now();
-      triggerManualRefresh(true);
-    }
+    console.log('[LIFECYCLE] App visível novamente - checando sincronização imediatamente...');
+    checkAndSyncIfChanged(true);
+    processOfflineOutbox();
   }
 });
+
+// 2. Ao alternar janelas no Desktop / Tablet
+window.addEventListener('focus', () => {
+  if (state.user) {
+    checkAndSyncIfChanged();
+  }
+});
+
+// 3. Ao recuperar conexão de rede (após túnel, garagem ou perda de 4G/5G)
+window.addEventListener('online', () => {
+  console.log('[NETWORK] Conexão restabelecida. Sincronizando e descarregando outbox...');
+  showBgJobToast('Conexão restabelecida! Sincronizando...', 2500, true);
+  processOfflineOutbox();
+  checkAndSyncIfChanged(true);
+  initRealtimeSync();
+});
+
+// 4. Ao restaurar página do cache do navegador (BFCache / Mobile Safari)
 window.addEventListener('pageshow', (event) => {
-  if (event.persisted && state.user) {
-    triggerManualRefresh(true);
+  if (state.user) {
+    checkAndSyncIfChanged(true);
   }
 });
+
+// 5. Polling de contingência periódica a cada 8 segundos (fallback ultraleve de ~50 bytes caso SSE seja bloqueado por proxy ou operadora móvel)
+setInterval(() => {
+  if (state.user && document.visibilityState === 'visible') {
+    checkAndSyncIfChanged();
+  }
+}, 8000);
 
 // ================= INICIALIZAÇÃO =================
 window.addEventListener('DOMContentLoaded', () => {

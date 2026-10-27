@@ -57,6 +57,69 @@ app.post('/api/auth/pin', async (req, res) => {
   }
 });
 
+// ================= REAL-TIME SYNC HUB (SERVER-SENT EVENTS - SSE) =================
+const sseClients = new Set();
+
+/**
+ * Transmite notificações de mutação instantaneamente para todos os dispositivos conectados
+ */
+function broadcastDbChange(table, action, data = null) {
+  const version = db.bumpDbVersion();
+  const payload = JSON.stringify({
+    type: 'DB_MUTATION',
+    table,
+    action,
+    version,
+    timestamp: Date.now()
+  });
+  console.log(`[REALTIME-SYNC] Mutação em '${table}' (${action}) - Notificando ${sseClients.size} cliente(s) ativo(s)`);
+  for (const client of sseClients) {
+    try {
+      client.res.write(`data: ${payload}\n\n`);
+    } catch (err) {
+      sseClients.delete(client);
+    }
+  }
+}
+
+// Heartbeat a cada 20 segundos para manter conexões móveis ativas através de proxies/NATs
+setInterval(() => {
+  if (sseClients.size === 0) return;
+  const heartbeat = JSON.stringify({ type: 'HEARTBEAT', version: db.getDbVersion(), time: Date.now() });
+  for (const client of sseClients) {
+    try {
+      client.res.write(`data: ${heartbeat}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+}, 20000);
+
+// Endpoint SSE para sincronização contínua em tempo real
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Essencial para Nginx / Coolify Traefik
+  if (res.flushHeaders) res.flushHeaders();
+
+  const client = { res, id: Date.now() };
+  sseClients.add(client);
+
+  // Boas-vindas com a versão atômica atual
+  const welcome = JSON.stringify({ type: 'CONNECTED', version: db.getDbVersion(), timestamp: Date.now() });
+  res.write(`data: ${welcome}\n\n`);
+
+  req.on('close', () => {
+    sseClients.delete(client);
+  });
+});
+
+// Endpoint ultraleve de checagem de versão (~50 bytes) para foco e visibilitychange
+app.get('/api/db/version', (req, res) => {
+  res.json({ ok: true, version: db.getDbVersion() });
+});
+
 // API Genérica estilo PostgREST (/api/db/:table)
 app.get('/api/db/:table', async (req, res) => {
   try {
@@ -70,6 +133,7 @@ app.get('/api/db/:table', async (req, res) => {
 app.post('/api/db/:table', async (req, res) => {
   try {
     const inserted = await db.insertRows(req.params.table, req.body);
+    broadcastDbChange(req.params.table, 'insert', inserted);
     res.status(201).json(inserted);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -79,6 +143,7 @@ app.post('/api/db/:table', async (req, res) => {
 app.patch('/api/db/:table', async (req, res) => {
   try {
     const updated = await db.updateRows(req.params.table, req.body, req.query);
+    broadcastDbChange(req.params.table, 'update', updated);
     res.json(updated);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -88,6 +153,7 @@ app.patch('/api/db/:table', async (req, res) => {
 app.put('/api/db/:table', async (req, res) => {
   try {
     const updated = await db.updateRows(req.params.table, req.body, req.query);
+    broadcastDbChange(req.params.table, 'update', updated);
     res.json(updated);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -97,6 +163,7 @@ app.put('/api/db/:table', async (req, res) => {
 app.delete('/api/db/:table', async (req, res) => {
   try {
     const result = await db.deleteRows(req.params.table, req.query);
+    broadcastDbChange(req.params.table, 'delete', result);
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
