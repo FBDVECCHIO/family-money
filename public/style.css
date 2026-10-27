@@ -1466,7 +1466,7 @@ tr:hover td {
   }
   body {
     font-size: 13px !important;
-    padding-bottom: 75px !important; /* Garantir que o rodapé fixo de navegação não tape conteúdo */
+    padding-bottom: 20px !important;
   }
 
   .container {
@@ -1491,22 +1491,29 @@ tr:hover td {
     padding: 2px 4px !important;
   }
 
-  /* Cabeçalho Fixo e Limpo para Celular */
+  /* Cabeçalho Fixo e Limpo para Celular com Tap Bar Superior */
   .app-header {
-    padding: 10px 16px !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
     flex-direction: row !important;
     justify-content: space-between !important;
     align-items: center !important;
+    padding: 10px 14px 6px 14px !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 1000 !important;
-    background: #18181b !important;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4) !important;
+    background: #FCFDFC !important;
+    border-bottom: 1px solid rgba(20, 36, 28, 0.08) !important;
+    box-shadow: 0 4px 16px -8px rgba(20, 36, 28, 0.12) !important;
   }
   [data-theme="apple"] .app-header {
-    background: rgba(255, 255, 255, 0.95) !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05) !important;
+    background: #FCFDFC !important;
+    border-bottom: 1px solid rgba(20, 36, 28, 0.08) !important;
+    box-shadow: 0 4px 16px -8px rgba(20, 36, 28, 0.12) !important;
+  }
+  [data-theme="dark"] .app-header {
+    background: #181F1C !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
   }
   
   .logo {
@@ -1529,7 +1536,7 @@ tr:hover td {
   }
   
   .header-profile {
-    order: 3 !important;
+    order: 2 !important;
     display: flex !important;
     align-items: center !important;
     gap: 6px !important;
@@ -1577,113 +1584,97 @@ tr:hover td {
     display: none !important;
   }
   
-  /* Barra de Navegação Inferior Fixo e Estático em Linha Única (Sem Encavalamento) */
+  /* Tap Bar Superior no Celular (Design VESSA em Pílulas) */
   .main-nav {
-    order: unset !important;
-    position: fixed !important;
+    order: 3 !important;
+    position: static !important;
     top: auto !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
     width: 100% !important;
-    height: 56px !important;
-    background: #191129 !important;
-    backdrop-filter: blur(12px) !important;
-    -webkit-backdrop-filter: blur(12px) !important;
-    border-top: 1px solid rgba(168, 85, 247, 0.15) !important;
+    flex: 0 0 100% !important;
+    height: auto !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
     display: flex !important;
     flex-direction: row !important;
-    justify-content: space-around !important;
+    justify-content: flex-start !important;
     align-items: center !important;
-    padding: 0 4px !important;
+    padding: 6px 2px 8px 2px !important;
     margin: 0 !important;
-    gap: 2px !important;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
-    z-index: 9999 !important;
-    box-sizing: border-box !important;
-    overflow: hidden !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    z-index: 10 !important;
+  }
+  .main-nav::-webkit-scrollbar {
+    display: none !important;
   }
 
   .nav-link {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 2px !important;
+    display: inline-flex !important;
+    flex-direction: row !important;
     align-items: center !important;
     justify-content: center !important;
-    background: transparent !important;
-    border: none !important;
-    padding: 4px 1px !important;
-    color: var(--text-muted) !important;
-    border-radius: 6px !important;
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    height: 100% !important;
-    font-size: 0.58rem !important;
-    transition: var(--transition) !important;
-    box-sizing: border-box !important;
-    text-transform: uppercase !important;
-    letter-spacing: -0.01em !important;
+    gap: 6px !important;
+    background: rgba(20, 36, 28, 0.04) !important;
+    border: 1px solid rgba(20, 36, 28, 0.08) !important;
+    padding: 7px 14px !important;
+    color: var(--vessa-muted, #5F6B64) !important;
+    border-radius: 999px !important;
+    flex: 0 0 auto !important;
+    height: auto !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
     white-space: nowrap !important;
     cursor: pointer !important;
+    box-shadow: none !important;
   }
   
   .nav-link.active {
-    color: var(--neon-purple) !important;
-    background: transparent !important;
-    border: none !important;
-    text-shadow: 0 0 10px rgba(168, 85, 247, 0.3) !important;
+    background: #18201B !important;
+    color: #FFFFFF !important;
+    border-color: #18201B !important;
+    box-shadow: 0 4px 14px -3px rgba(24, 32, 27, 0.35) !important;
+    text-shadow: none !important;
   }
   
   .nav-link i, .nav-link svg {
-    width: 17px !important;
-    height: 17px !important;
+    width: 15px !important;
+    height: 15px !important;
     margin: 0 !important;
     flex-shrink: 0 !important;
   }
+  .nav-link.active i, .nav-link.active svg {
+    color: #FFFFFF !important;
+  }
   
   .nav-text-desktop {
-    display: none !important;
+    display: inline !important;
   }
   
   .nav-text-mobile {
-    display: block !important;
-    font-size: 0.58rem !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.01em !important;
-    line-height: 1.1 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 100% !important;
+    display: none !important;
   }
   
   .nav-logout-btn {
     display: none !important;
   }
 
-  [data-theme="apple"] .main-nav {
-    background: rgba(245, 245, 247, 0.95) !important;
-    border-top: 1px solid rgba(0, 0, 0, 0.09) !important;
-    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.05) !important;
+  [data-theme="dark"] .nav-link {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #98A49C !important;
   }
-  [data-theme="apple"] .nav-link {
-    color: #86868b !important;
-  }
-  [data-theme="apple"] .nav-link:hover {
-    color: #1d1d1f !important;
-  }
-  [data-theme="apple"] .nav-link.active {
-    color: #000000 !important;
-    background: rgba(0, 0, 0, 0.04) !important;
-  }
-  [data-theme="apple"] .nav-link.active i,
-  [data-theme="apple"] .nav-link.active svg {
-    color: #000000 !important;
-  }
-  [data-theme="apple"] .nav-link.active .nav-text-mobile {
-    color: #000000 !important;
-    font-weight: 700 !important;
+  [data-theme="dark"] .nav-link.active {
+    background: #247B7B !important;
+    color: #FFFFFF !important;
+    border-color: #247B7B !important;
   }
 
   /* Cards de Previsão em Barra de Rolagem Horizontal (Swiper) no Celular */
@@ -1948,11 +1939,15 @@ tr:hover td {
   margin-bottom: 20px;
 }
 
-.inline-fixed-fullwidth {
+.inline-fixed-fullwidth,
+.inline-cards-fullwidth,
+.inline-category-fullwidth {
   width: 100%;
 }
 
-.inline-fixed-fullwidth .summary-box {
+.inline-fixed-fullwidth .summary-box,
+.inline-cards-fullwidth .summary-box,
+.inline-category-fullwidth .summary-box {
   width: 100%;
   box-sizing: border-box;
 }
@@ -3911,3 +3906,404 @@ tr:hover td {
 .memory-fact-delete-btn:hover {
   background: rgba(255, 59, 48, 0.15);
 }
+
+/* ================= VESSA DESIGN SYSTEM & MODAL SUITE ================= */
+:root {
+  --vessa-bg: #EEF0EC;
+  --vessa-card-bg: #FCFDFC;
+  --vessa-text: #18201B;
+  --vessa-muted: #5F6B64;
+  --vessa-border: rgba(20, 36, 28, 0.086);
+  --vessa-primary: #BA4A24;
+  --vessa-primary-hover: #9E3C1B;
+  --vessa-teal: #247B7B;
+  --vessa-amber: #D9822B;
+  --vessa-radius: 22px;
+  --vessa-radius-pill: 999px;
+  --vessa-shadow-card: 0 14px 34px -22px rgba(20, 36, 28, 0.28), 0 1px 2px rgba(20, 36, 28, 0.04);
+  --vessa-shadow-pill: 0 10px 22px -12px rgba(186, 74, 36, 0.7);
+}
+
+/* Aplicar tema Warm Luxury Vessa no tema padrão/apple */
+[data-theme="apple"] {
+  --bg-main: #EEF0EC;
+  --foreground: #18201B;
+  --text-muted: #5F6B64;
+  --border-color: rgba(20, 36, 28, 0.086);
+  --bg-card: #FCFDFC;
+  --bg-card-solid: #FCFDFC;
+  --shadow-card: 0 14px 34px -22px rgba(20, 36, 28, 0.28), 0 1px 2px rgba(20, 36, 28, 0.04);
+  --radius-card: 22px;
+  --font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+[data-theme="apple"] body {
+  background-color: #EEF0EC !important;
+  background-image: none !important;
+  color: #18201B !important;
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+[data-theme="apple"] .glass,
+[data-theme="apple"] .liquid-glass,
+[data-theme="apple"] .card,
+[data-theme="apple"] .summary-box,
+[data-theme="apple"] .forecast-card,
+[data-theme="apple"] .recent-transactions-card,
+[data-theme="apple"] .inline-detail-card,
+[data-theme="apple"] .info-section {
+  background: #FCFDFC !important;
+  border: 1px solid rgba(20, 36, 28, 0.086) !important;
+  border-radius: 22px !important;
+  box-shadow: 0 14px 34px -22px rgba(20, 36, 28, 0.28), 0 1px 2px rgba(20, 36, 28, 0.04) !important;
+  color: #18201B !important;
+}
+
+/* Botões Vessa em Pílula */
+[data-theme="apple"] .btn-primary,
+[data-theme="apple"] .btn-save,
+[data-theme="apple"] .btn-reconcile {
+  border-radius: 999px !important;
+  font-family: 'Urbanist', sans-serif !important;
+  font-weight: 700 !important;
+}
+[data-theme="apple"] .btn-reconcile {
+  background: #BA4A24 !important;
+  color: #FFF !important;
+  border: none !important;
+  box-shadow: 0 4px 12px -2px rgba(186, 74, 36, 0.4) !important;
+  padding: 6px 14px !important;
+  border-radius: 999px !important;
+  font-size: 0.8rem !important;
+}
+[data-theme="apple"] .btn-reconcile:hover {
+  background: #9E3C1B !important;
+  transform: translateY(-1px);
+}
+
+/* VESSA MODAL OVERLAY & CARD */
+.vessa-modal-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(24, 32, 27, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 9999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+}
+.vessa-modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.vessa-modal-card {
+  width: 100%;
+  max-width: 440px;
+  background: #FCFDFC;
+  color: #18201B;
+  border-radius: 24px;
+  border: 1px solid rgba(20, 36, 28, 0.1);
+  box-shadow: 0 28px 64px -16px rgba(20, 36, 28, 0.35);
+  padding: 26px;
+  position: relative;
+  transform: scale(0.95);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+[data-theme="dark"] .vessa-modal-card {
+  background: #191F1C;
+  color: #F2F4F2;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.vessa-modal-overlay.active .vessa-modal-card {
+  transform: scale(1);
+}
+
+.vessa-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.vessa-modal-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+.vessa-modal-sub {
+  font-size: 0.88rem;
+  color: var(--vessa-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+[data-theme="dark"] .vessa-modal-sub {
+  color: #98A49C;
+}
+
+.vessa-input-wrap {
+  margin: 16px 0;
+}
+.vessa-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.vessa-input, .vessa-select {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 36, 28, 0.12);
+  background: rgba(20, 36, 28, 0.03);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+[data-theme="dark"] .vessa-input, [data-theme="dark"] .vessa-select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.vessa-input:focus, .vessa-select:focus {
+  border-color: #BA4A24;
+  background: #FFF;
+}
+[data-theme="dark"] .vessa-input:focus, [data-theme="dark"] .vessa-select:focus {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #BA4A24;
+}
+
+.vessa-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+.vessa-btn-ghost {
+  background: rgba(20, 36, 28, 0.05);
+  border: 1px solid rgba(20, 36, 28, 0.08);
+  color: inherit;
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+[data-theme="dark"] .vessa-btn-ghost {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.vessa-btn-ghost:hover:not(:disabled) {
+  background: rgba(20, 36, 28, 0.1);
+}
+.vessa-btn-solid {
+  background: #BA4A24;
+  color: #FFF;
+  border: none;
+  padding: 9px 20px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 8px 18px -6px rgba(186, 74, 36, 0.7);
+  transition: all 0.18s ease;
+}
+.vessa-btn-solid:hover:not(:disabled) {
+  background: #9E3C1B;
+  transform: translateY(-1px);
+}
+.vessa-btn-solid:disabled, .vessa-btn-ghost:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* SPINNER PARA BOTÕES */
+.vessa-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #FFF;
+  border-radius: 50%;
+  animation: spinVessa 0.6s linear infinite;
+  display: inline-block;
+}
+@keyframes spinVessa {
+  to { transform: rotate(360deg); }
+}
+
+/* ================= TAP BAR SUPERIOR MOBILE ================= */
+@media (max-width: 900px) {
+  .app-header {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 10px 14px 6px 14px !important;
+    gap: 8px !important;
+  }
+
+  .main-nav {
+    order: 3 !important;
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    display: flex !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    gap: 6px !important;
+    padding: 4px 2px 8px 2px !important;
+    scrollbar-width: none !important;
+  }
+  .main-nav::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .nav-link {
+    flex-shrink: 0 !important;
+    padding: 7px 14px !important;
+    border-radius: 999px !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    background: rgba(20, 36, 28, 0.04) !important;
+    border: 1px solid rgba(20, 36, 28, 0.06) !important;
+    color: var(--text-muted) !important;
+    white-space: nowrap !important;
+  }
+  [data-theme="dark"] .nav-link {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  .nav-link.active {
+    background: #18201B !important;
+    color: #FFF !important;
+    border-color: #18201B !important;
+    box-shadow: 0 4px 14px -3px rgba(24, 32, 27, 0.35) !important;
+  }
+  [data-theme="dark"] .nav-link.active {
+    background: #247B7B !important;
+    color: #FFF !important;
+    border-color: #247B7B !important;
+  }
+
+  .nav-link.active i, .nav-link.active svg {
+    color: #FFF !important;
+  }
+
+  .nav-text-desktop {
+    display: inline !important;
+  }
+  .nav-text-mobile {
+    display: none !important;
+  }
+
+  /* Bottom sheet style no mobile para o VessaModal */
+  .vessa-modal-card {
+    border-radius: 26px 26px 20px 20px !important;
+    padding: 22px 18px !important;
+    margin-top: auto;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+}
+
+/* ================= TELA DE LOGIN PIN VESSA ================= */
+[data-theme="apple"] #login-container {
+  background: #EEF0EC !important;
+}
+
+[data-theme="apple"] .pin-terminal-card {
+  background: #FCFDFC !important;
+  border: 1px solid rgba(20, 36, 28, 0.086) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 20px 50px -20px rgba(20, 36, 28, 0.28) !important;
+  color: #18201B !important;
+}
+
+[data-theme="apple"] .pin-terminal-card .brand-badge {
+  background: linear-gradient(135deg, #18201B 0%, #2A3830 100%) !important;
+  color: #FFF !important;
+  border-radius: 14px !important;
+}
+
+[data-theme="apple"] .pin-terminal-card .system-title {
+  color: #18201B !important;
+  font-family: 'Urbanist', sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.5px !important;
+}
+
+[data-theme="apple"] .pin-terminal-card .prompt-subtitle {
+  color: #5F6B64 !important;
+}
+
+[data-theme="apple"] .pin-slot {
+  background: rgba(20, 36, 28, 0.04) !important;
+  border: 1.5px solid rgba(20, 36, 28, 0.12) !important;
+  border-radius: 12px !important;
+}
+[data-theme="apple"] .pin-slot.filled {
+  background: #BA4A24 !important;
+  border-color: #BA4A24 !important;
+  box-shadow: 0 0 0 3px rgba(186, 74, 36, 0.2) !important;
+}
+
+[data-theme="apple"] .key-btn {
+  background: rgba(20, 36, 28, 0.03) !important;
+  border: 1px solid rgba(20, 36, 28, 0.08) !important;
+  color: #18201B !important;
+  font-family: 'Urbanist', sans-serif !important;
+  font-weight: 700 !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 6px rgba(20, 36, 28, 0.04) !important;
+}
+[data-theme="apple"] .key-btn:hover {
+  background: #FFF !important;
+  border-color: #BA4A24 !important;
+  color: #BA4A24 !important;
+  transform: scale(1.05) !important;
+}
+[data-theme="apple"] .key-btn:active {
+  transform: scale(0.96) !important;
+  background: rgba(186, 74, 36, 0.1) !important;
+}
+
+[data-theme="apple"] .user-shortcut {
+  background: rgba(20, 36, 28, 0.03) !important;
+  border: 1px solid rgba(20, 36, 28, 0.08) !important;
+  border-radius: 999px !important;
+  padding: 6px 14px !important;
+}
+[data-theme="apple"] .user-shortcut:hover {
+  background: #FFF !important;
+  border-color: #247B7B !important;
+}
+[data-theme="apple"] .user-shortcut-name {
+  color: #18201B !important;
+  font-weight: 700 !important;
+}
+[data-theme="apple"] .user-shortcut-pin {
+  color: #5F6B64 !important;
+}
+

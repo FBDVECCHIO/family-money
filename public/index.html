@@ -87,7 +87,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Chart.js -->
@@ -316,10 +316,13 @@
               <h3 id="inline-month-title">Detalhamento Financeiro - Selecione um mês</h3>
             </div>
             
-            <div class="inline-summary-row">
-              <!-- Faturas de Cartões (Subiu ao lado do Mapa de Despesas) -->
+            <!-- 1. Faturas de Cartões -->
+            <div class="inline-cards-fullwidth" style="margin-bottom: 20px;">
               <div class="summary-box glass">
-                <h4><i data-lucide="credit-card" class="red-neon"></i> Faturas de Cartões</h4>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                  <h4 style="margin: 0;"><i data-lucide="credit-card" class="red-neon"></i> Faturas de Cartões</h4>
+                  <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">Fechamento &amp; Efetivação</span>
+                </div>
                 <div class="table-responsive">
                   <table>
                     <thead>
@@ -336,20 +339,15 @@
                   </table>
                 </div>
               </div>
-              
-              <!-- Mapa de Despesas (% da Receita) -->
-              <div class="summary-box glass">
-                <h4><i data-lucide="pie-chart" class="text-pastel-purple"></i> Mapa de Despesas (% da Receita)</h4>
-                <div class="category-breakdown-list" id="inline-category-breakdown">
-                  <!-- Inserido dinamicamente -->
-                </div>
-              </div>
             </div>
 
-            <!-- Contas e Lançamentos Fixos (Ocupando a largura total dos dois cards de cima) -->
-            <div class="inline-fixed-fullwidth">
+            <!-- 2. Contas e Lançamentos Fixos (com Edição e Efetivação) -->
+            <div class="inline-fixed-fullwidth" style="margin-bottom: 20px;">
               <div class="summary-box glass">
-                <h4><i data-lucide="list" class="green-neon"></i> Contas e Lançamentos Fixos</h4>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                  <h4 style="margin: 0;"><i data-lucide="list" class="green-neon"></i> Contas e Lançamentos Fixos Vigentes</h4>
+                  <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">Edição Rápida &amp; Efetivação</span>
+                </div>
                 <div class="table-responsive">
                   <table>
                     <thead>
@@ -365,6 +363,19 @@
                       <!-- Inserido dinamicamente -->
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Mapa de Despesas (% da Receita) -->
+            <div class="inline-category-fullwidth">
+              <div class="summary-box glass">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                  <h4 style="margin: 0;"><i data-lucide="pie-chart" class="text-pastel-purple"></i> Mapa de Despesas (% da Receita)</h4>
+                  <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">Distribuição por Categoria</span>
+                </div>
+                <div class="category-breakdown-list" id="inline-category-breakdown">
+                  <!-- Inserido dinamicamente -->
                 </div>
               </div>
             </div>
