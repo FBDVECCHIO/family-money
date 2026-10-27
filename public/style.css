@@ -1846,6 +1846,7 @@ tr:hover td {
   .glass,
   .new-tx-form-wrapper,
   .inline-detail-card,
+  .inline-fixed-fullwidth,
   .inline-detail-lists,
   .detail-list-box,
   .dashboard-details-row,
@@ -1942,9 +1943,28 @@ tr:hover td {
 
 .inline-summary-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+}
+
+.inline-fixed-fullwidth {
+  width: 100%;
+}
+
+.inline-fixed-fullwidth .summary-box {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.summary-box table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.summary-box th,
+.summary-box td {
+  padding: 10px 8px !important;
 }
 
 .summary-box {

@@ -1339,192 +1339,17 @@ function renderDashboard() {
   }
 }
 
-// 3. Gráfico de Tendência (Chart.js - Estilo Fintech Minimalista de Alto Contraste)
+// 3. Gráfico de Tendência (Desativado conforme solicitação do usuário)
 function renderChart() {
-  try {
-    const chartCanvas = document.getElementById('projected-trend-chart');
-    if (!chartCanvas) return;
-    if (typeof Chart === 'undefined') {
-      console.warn('[CHART] Chart.js ainda não disponível.');
-      return;
-    }
-    const ctx = chartCanvas.getContext('2d');
-    if (!ctx) return;
-    if (state.trendChart) {
-      state.trendChart.destroy();
-      state.trendChart = null;
-    }
-
-  const currentTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('familymoney_theme') || 'apple';
-  const isApple = currentTheme === 'apple';
-
-  const labels = state.forecast.map(m => m.label.toUpperCase());
-  const dataPoints = state.forecast.map(m => m.projectedBalance);
-
-  // Paleta de Cores e Alto Contraste (Inspirada no modelo Fintech / Apple Stocks)
-  const strokeColor = isApple ? '#0071e3' : '#3b82f6';
-  const tickColor = isApple ? '#1d1d1f' : '#e5e7eb';
-  const gridColor = isApple ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.08)';
-
-  // Gradiente vertical suave sob a linha
-  const chartHeight = chartCanvas.clientHeight || 260;
-  const gradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
-  if (isApple) {
-    gradient.addColorStop(0, 'rgba(0, 113, 227, 0.24)');
-    gradient.addColorStop(0.7, 'rgba(0, 113, 227, 0.04)');
-    gradient.addColorStop(1, 'rgba(0, 113, 227, 0.0)');
-  } else {
-    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.40)');
-    gradient.addColorStop(0.7, 'rgba(59, 130, 246, 0.08)');
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
-  }
-
-  state.trendChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Saldo Projetado',
-        data: dataPoints,
-        borderColor: strokeColor,
-        borderWidth: 2.5,
-        backgroundColor: gradient,
-        fill: true,
-        tension: 0.38,
-        pointRadius: 0, // Linha contínua e limpa como a referência
-        pointHoverRadius: 6,
-        pointHoverBackgroundColor: strokeColor,
-        pointHoverBorderColor: '#ffffff',
-        pointHoverBorderWidth: 2
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: 'index',
-        intersect: false
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: isApple ? 'rgba(255, 255, 255, 0.96)' : 'rgba(20, 18, 30, 0.96)',
-          titleColor: isApple ? '#1d1d1f' : '#ffffff',
-          bodyColor: strokeColor,
-          borderColor: isApple ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.15)',
-          borderWidth: 1,
-          padding: 10,
-          boxPadding: 4,
-          usePointStyle: true,
-          displayColors: false,
-          callbacks: {
-            title: function(items) {
-              return items[0].label;
-            },
-            label: function(context) {
-              return 'Saldo: ' + formatCurrency(context.parsed.y);
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: {
-            display: false,
-            drawBorder: false
-          },
-          ticks: {
-            color: tickColor,
-            font: {
-              family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
-              size: 11,
-              weight: '600'
-            },
-            padding: 8
-          }
-        },
-        y: {
-          grid: {
-            color: gridColor,
-            drawBorder: false,
-            borderDash: [4, 4]
-          },
-          ticks: {
-            color: tickColor,
-            font: {
-              family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
-              size: 11,
-              weight: '600'
-            },
-            padding: 8,
-            callback: function(value) {
-              return new Intl.NumberFormat('pt-BR', {
-                style: 'currency',
-                currency: 'BRL',
-                maximumFractionDigits: 0
-              }).format(value);
-            }
-          }
-        }
-      }
-    }
-  });
-  } catch (chartErr) {
-    console.warn('[CHART] Erro seguro ao renderizar gráfico:', chartErr);
+  if (state.trendChart) {
+    try { state.trendChart.destroy(); } catch (e) {}
+    state.trendChart = null;
   }
 }
 
-// 4. Diagnóstico de Previsibilidade
+// 4. Diagnóstico de Previsibilidade (Desativado conforme solicitação do usuário)
 function renderDiagnostic() {
-  const diagnosticBox = document.getElementById('diagnostic-box');
-  const forecast = state.forecast;
-
-  const projectedBalances = forecast.map(m => m.projectedBalance);
-  const minBalance = Math.min(...projectedBalances);
-  const minMonth = forecast[projectedBalances.indexOf(minBalance)];
-
-  let maxBill = 0;
-  let maxBillMonth = '';
-  forecast.forEach(m => {
-    const cardSum = m.cardBills.reduce((sum, c) => sum + c.amount, 0);
-    if (cardSum > maxBill) {
-      maxBill = cardSum;
-      maxBillMonth = m.label;
-    }
-  });
-
-  const averageSurplus = forecast.reduce((sum, m) => sum + m.netSurplus, 0) / forecast.length;
-
-  let verdictHtml = '';
-  if (minBalance < 0) {
-    verdictHtml = `
-      <div class="diagnostic-verdict" style="color: var(--color-negative);">
-        <i data-lucide="alert-triangle"></i>
-        <strong>Atenção Familiar!</strong> Seu caixa projetado ficará negativo em <strong>${minMonth.label.toUpperCase()}</strong> (saldo estimado: ${formatCurrency(minBalance)}). 
-        Considere renegociar despesas ou adiar compras no cartão.
-      </div>
-    `;
-  } else {
-    verdictHtml = `
-      <div class="diagnostic-verdict green-neon">
-        <i data-lucide="check-circle"></i>
-        <strong>Parabéns!</strong> A projeção indica que a família estará no positivo por todos os próximos 6 meses. O menor caixa estimado será de ${formatCurrency(minBalance)} em ${minMonth.label.toUpperCase()}.
-      </div>
-    `;
-  }
-
-  diagnosticBox.innerHTML = `
-    <div class="diagnostic-stat">
-      <span>Média Mensal de Sobra</span>
-      <span class="${averageSurplus >= 0 ? 'green-neon' : 'red-neon'}">${formatCurrency(averageSurplus)}</span>
-    </div>
-    <div class="diagnostic-stat">
-      <span>Maior Fatura de Cartões</span>
-      <span class="text-pastel-purple">${formatCurrency(maxBill)} (${maxBillMonth.toUpperCase()})</span>
-    </div>
-    ${verdictHtml}
-  `;
-  lucide.createIcons();
+  // Desativado
 }
 
 // 5. Tabela de Lançamentos Recentes
@@ -1830,12 +1655,16 @@ function renderMonthlyDetail(monthData) {
   const totalFixed = monthData.fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
   const totalExpenses = totalFixed + totalCards + variableAccountExpensesTotal;
   
-  document.getElementById('inline-total-income').textContent = formatCurrency(monthData.totalIncomes);
-  document.getElementById('inline-total-expense').textContent = `-${formatCurrency(totalExpenses)}`;
+  const incEl = document.getElementById('inline-total-income');
+  if (incEl) incEl.textContent = formatCurrency(monthData.totalIncomes);
+  const expEl = document.getElementById('inline-total-expense');
+  if (expEl) expEl.textContent = `-${formatCurrency(totalExpenses)}`;
   
   const surplusElement = document.getElementById('inline-total-surplus');
-  surplusElement.textContent = `${monthData.netSurplus >= 0 ? '+' : ''}${formatCurrency(monthData.netSurplus)}`;
-  surplusElement.className = monthData.netSurplus >= 0 ? 'green-neon' : 'red-neon';
+  if (surplusElement) {
+    surplusElement.textContent = `${monthData.netSurplus >= 0 ? '+' : ''}${formatCurrency(monthData.netSurplus)}`;
+    surplusElement.className = monthData.netSurplus >= 0 ? 'green-neon' : 'red-neon';
+  }
 
   // 1. Resumo do Mapa de Despesas por Categoria (EXCLUSIVO para despesas - NUNCA incluir receitas)
   const categorySums = {};

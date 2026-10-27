@@ -317,38 +317,8 @@
             </div>
             
             <div class="inline-summary-row">
-              <!-- Resumo Geral -->
+              <!-- Faturas de Cartões (Subiu ao lado do Mapa de Despesas) -->
               <div class="summary-box glass">
-                <h4>Resumo Mensal Geral</h4>
-                <div class="summary-bar-wrapper">
-                  <div class="summary-bar-row">
-                    <span>Receitas (Entradas):</span>
-                    <span class="green-neon" id="inline-total-income">R$ 0,00</span>
-                  </div>
-                  <div class="summary-bar-row">
-                    <span>Despesas (Saídas):</span>
-                    <span class="red-neon" id="inline-total-expense">R$ 0,00</span>
-                  </div>
-                  <div class="summary-bar-row border-top">
-                    <span>Sobra Líquida:</span>
-                    <span id="inline-total-surplus" class="green-neon">R$ 0,00</span>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Gasto por Categoria -->
-              <div class="summary-box glass">
-                <h4>Mapa de Despesas (% da Receita)</h4>
-                <div class="category-breakdown-list" id="inline-category-breakdown">
-                  <!-- Inserido dinamicamente -->
-                </div>
-              </div>
-            </div>
-
-            <!-- Tabelas Detalhadas -->
-            <div class="inline-detail-lists">
-              <!-- Faturas de Cartão -->
-              <div class="detail-list-box">
                 <h4><i data-lucide="credit-card" class="red-neon"></i> Faturas de Cartões</h4>
                 <div class="table-responsive">
                   <table>
@@ -357,7 +327,7 @@
                         <th>Cartão</th>
                         <th>Vencimento</th>
                         <th>Valor</th>
-                        <th>Ações</th>
+                        <th style="text-align: right;">Ações</th>
                       </tr>
                     </thead>
                     <tbody id="inline-cards-tbody">
@@ -367,8 +337,18 @@
                 </div>
               </div>
               
-              <!-- Contas e Lançamentos Fixos -->
-              <div class="detail-list-box">
+              <!-- Mapa de Despesas (% da Receita) -->
+              <div class="summary-box glass">
+                <h4><i data-lucide="pie-chart" class="text-pastel-purple"></i> Mapa de Despesas (% da Receita)</h4>
+                <div class="category-breakdown-list" id="inline-category-breakdown">
+                  <!-- Inserido dinamicamente -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Contas e Lançamentos Fixos (Ocupando a largura total dos dois cards de cima) -->
+            <div class="inline-fixed-fullwidth">
+              <div class="summary-box glass">
                 <h4><i data-lucide="list" class="green-neon"></i> Contas e Lançamentos Fixos</h4>
                 <div class="table-responsive">
                   <table>
@@ -386,26 +366,6 @@
                     </tbody>
                   </table>
                 </div>
-              </div>
-            </div>
-          </div>
-
-
-          <!-- Gráfico de Tendência e Detalhes -->
-          <div class="dashboard-details-row">
-            <!-- Gráfico de Tendência -->
-            <div class="details-chart-card glass">
-              <h3><i data-lucide="line-chart" class="chart-title-icon"></i> Tendência do Saldo Projetado</h3>
-              <div class="chart-wrapper">
-                <canvas id="projected-trend-chart"></canvas>
-              </div>
-            </div>
-
-            <!-- Resumo e Alertas de Previsibilidade -->
-            <div class="details-summary-card glass">
-              <h3><i data-lucide="alert-triangle" class="purple-neon"></i> Diagnóstico de Previsibilidade</h3>
-              <div class="diagnostic-content" id="diagnostic-box">
-                <!-- Preenchido dinamicamente -->
               </div>
             </div>
           </div>
