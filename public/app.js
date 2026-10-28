@@ -718,11 +718,14 @@ async function initApp() {
     document.getElementById('app-container').classList.remove('remove');
     document.getElementById('app-container').classList.remove('hide');
     document.getElementById('user-display-name').textContent = activeUserName;
-
-    const adminNavBtn = document.getElementById('admin-nav-btn');
-    if (adminNavBtn) {
-      adminNavBtn.style.display = state.user.is_admin ? 'flex' : 'none';
+    if (typeof updateVessaUserAvatars === 'function') {
+      updateVessaUserAvatars(activeUserName);
     }
+
+    const adminNavBtns = document.querySelectorAll('#admin-nav-btn, #dock-admin-btn, #dock-mobile-admin-btn');
+    adminNavBtns.forEach(btn => {
+      btn.style.display = state.user.is_admin ? 'flex' : 'none';
+    });
 
     restoreSavedTxFilters();
     updateSidebarVisibility();
@@ -747,9 +750,10 @@ async function initApp() {
             state.user.id = dbUser.id || dbUser.idNum || state.user.id;
             state.user.is_admin = forceAdmin || dbUser.is_admin !== false;
             state.user.only_self_data = dbUser.only_self_data === true;
-            if (adminNavBtn) {
-              adminNavBtn.style.display = state.user.is_admin ? 'flex' : 'none';
-            }
+            const adminNavBtns = document.querySelectorAll('#admin-nav-btn, #dock-admin-btn, #dock-mobile-admin-btn');
+            adminNavBtns.forEach(btn => {
+              btn.style.display = state.user.is_admin ? 'flex' : 'none';
+            });
           }
         }
         await loadAllData();
@@ -1240,93 +1244,91 @@ function renderSidebar(totalBalance) {
   safeCreateIcons();
 }
 
-// 2. Dashboard de Previsão de 6 Meses
+// 2. Dashboard de Previsão de 6 Meses VESSA
 function renderDashboard() {
   const cardsContainer = document.getElementById('forecast-cards-container');
-  if (!state.forecast || state.forecast.length === 0) return;
+  if (!cardsContainer || !state.forecast || state.forecast.length === 0) return;
 
   cardsContainer.innerHTML = state.forecast.map((m, idx) => {
-    const isBalanceNegative = m.projectedBalance < 0;
-    
-    // Agrupar faturas por vencimento (Até dia 10 vs Pós dia 10)
-    let amountUpTo10 = 0;
-    let amountAfter10 = 0;
-    
-    m.cardBills.forEach(c => {
-      const cardObj = state.cards.find(card => card.id === parseInt(c.cardId));
-      const dueDay = cardObj ? (cardObj.due_day || cardObj.dueDay || 10) : 10;
-      if (dueDay <= 10) {
-        amountUpTo10 += parseFloat(c.amount || 0);
-      } else {
-        amountAfter10 += parseFloat(c.amount || 0);
-      }
-    });
+    const isCurrentMonth = idx === 0;
+    const isBalanceNegative = m.projectedBalance < 0 || m.netSurplus < 0;
+    const badgeText = isCurrentMonth ? 'Atual' : `Mês ${idx + 1}`;
+    const badgeClass = isCurrentMonth ? 'badge-current' : 'badge-future';
 
-    const subtotalsHtmlArr = [];
-    if (amountUpTo10 > 0) {
-      subtotalsHtmlArr.push(`
-        <div style="font-size: 0.7rem; color: var(--text-dim); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
-          <span>• Até Dia 10:</span>
-          <span>-${formatCurrency(amountUpTo10)}</span>
-        </div>
-      `);
-    }
-    if (amountAfter10 > 0) {
-      subtotalsHtmlArr.push(`
-        <div style="font-size: 0.7rem; color: var(--text-dim); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
-          <span>• Pós Dia 10:</span>
-          <span>-${formatCurrency(amountAfter10)}</span>
-        </div>
-      `);
-    }
-    const subtotalsHtml = subtotalsHtmlArr.join('');
+    // Total de despesas do mês (contas + cartões)
+    const fixedTotal = m.fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const cardsTotal = m.cardBills.reduce((sum, c) => sum + c.amount, 0);
+    const totalExp = fixedTotal + cardsTotal;
+    const totalInc = m.totalIncomes || 0;
+    const progressPct = totalInc > 0 ? Math.min(100, Math.max(10, Math.round((totalInc / (totalInc + totalExp || 1)) * 100))) : 50;
+    const sobraClass = m.netSurplus >= 0 ? 'sobra-positive' : 'sobra-warning';
 
     return `
-      <div class="forecast-card glass ${isBalanceNegative ? 'alert-deficit' : ''}" data-month-index="${idx}" style="border: 1px solid rgba(168, 85, 247, 0.15); transition: border-color 0.3s ease;">
-        <div class="forecast-month-label" style="justify-content: center; text-transform: uppercase; font-weight: 700; border-bottom: none; padding-bottom: 0;">
-          ${m.label.toUpperCase()}
+      <div class="month-forecast-card forecast-card ${isCurrentMonth ? 'current-month' : ''} ${isBalanceNegative ? 'alert-deficit' : ''}" data-month-index="${idx}" title="Clique para ver faturas e contas de ${m.label}">
+        <div class="month-head">
+          <span class="month-label-name">${m.label.toUpperCase()}</span>
+          <span class="month-badge-pill ${badgeClass}">${badgeText}</span>
         </div>
-        <div class="forecast-values" style="margin-top: 10px;">
-          <div class="forecast-val-row value-positive">
-            <span>Receitas:</span>
-            <span>${formatCurrency(m.totalIncomes)}</span>
-          </div>
-          <div class="forecast-val-row">
-            <span>Contas:</span>
-            <span class="red-neon">-${formatCurrency(m.fixedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
-          </div>
-          <div class="forecast-val-row" style="margin-bottom: 2px;">
-            <span>Cartões:</span>
-            <span class="red-neon">-${formatCurrency(m.cardBills.reduce((sum, c) => sum + c.amount, 0))}</span>
-          </div>
-          ${subtotalsHtml}
+        <div class="month-net-sobra ${sobraClass}">
+          ${m.netSurplus >= 0 ? '+' : ''}${formatCurrency(m.netSurplus)}
         </div>
-        <div class="forecast-card-sobra">
-          <span class="sobra-label">Sobra do Mês:</span>
-          <span class="sobra-val ${m.netSurplus >= 0 ? 'green-neon' : 'red-neon'}">
-            ${m.netSurplus >= 0 ? '+' : ''}${formatCurrency(m.netSurplus)}
-          </span>
+        <div class="month-progress-bar" title="Proporção Entradas vs Saídas">
+          <div class="month-progress-fill" style="width: ${progressPct}%;"></div>
         </div>
-        <div class="forecast-card-projected">
-          Projeção: <span class="${m.projectedBalance >= 0 ? 'green-neon' : 'red-neon'}">${formatCurrency(m.projectedBalance)}</span>
+        <div class="month-foot-details">
+          <div class="foot-row"><span>Entradas</span><span class="foot-val">${formatCurrency(totalInc)}</span></div>
+          <div class="foot-row"><span>Saídas</span><span class="foot-val">-${formatCurrency(totalExp)}</span></div>
         </div>
       </div>
     `;
   }).join('');
 
   // Adicionar eventos de clique nos cards de previsão para carregar detalhamento inline
-  const cards = document.querySelectorAll('.forecast-card');
+  const cards = document.querySelectorAll('.month-forecast-card');
   cards.forEach(card => {
     card.addEventListener('click', () => {
       // Remover realces anteriores
-      cards.forEach(c => c.style.borderColor = 'rgba(168, 85, 247, 0.15)');
-      // Adicionar borda verde neon no card ativo
-      card.style.borderColor = 'var(--neon-green)';
+      cards.forEach(c => c.classList.remove('current-month'));
+      // Adicionar classe de destaque orgânico no card ativo
+      card.classList.add('current-month');
       
       const idx = parseInt(card.getAttribute('data-month-index'));
       renderMonthlyDetail(state.forecast[idx]);
     });
   });
+
+  // Atualizar indicadores executivos no Hero Greeting Card VESSA
+  try {
+    const totalSemesterSurplus = state.forecast.reduce((acc, f) => acc + (f.netSurplus || 0), 0);
+    const heroSemesterEl = document.getElementById('vessa-hero-semester-surplus');
+    if (heroSemesterEl) {
+      heroSemesterEl.textContent = (totalSemesterSurplus >= 0 ? '+' : '') + formatCurrency(totalSemesterSurplus);
+    }
+    const openBillsCount = (state.cards || []).filter(c => parseFloat(c.current_bill || 0) > 0).length;
+    const heroInvoicesEl = document.getElementById('vessa-hero-invoices-summary');
+    if (heroInvoicesEl) {
+      heroInvoicesEl.textContent = `${openBillsCount} fatura${openBillsCount === 1 ? '' : 's'}`;
+    }
+    const heroUserEl = document.getElementById('vessa-hero-user-name');
+    if (heroUserEl && state.user && state.user.name) {
+      heroUserEl.textContent = state.user.name.split(' ')[0];
+    }
+    const liveDateEl = document.getElementById('vessa-live-date');
+    if (liveDateEl) {
+      const now = new Date();
+      liveDateEl.textContent = now.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }) + ' · ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+    const cardsBadgeEl = document.getElementById('vessa-cards-pill-count');
+    if (cardsBadgeEl) cardsBadgeEl.textContent = openBillsCount;
+    const mobileCardsBadgeEl = document.getElementById('vessa-mobile-cards-badge');
+    if (mobileCardsBadgeEl) mobileCardsBadgeEl.textContent = openBillsCount;
+    const alertsCountEl = document.getElementById('vessa-alerts-count');
+    if (alertsCountEl) alertsCountEl.textContent = openBillsCount;
+    const mobileAlertsCountEl = document.getElementById('vessa-mobile-alerts-count');
+    if (mobileAlertsCountEl) mobileAlertsCountEl.textContent = openBillsCount;
+  } catch (errHero) {
+    console.warn('Erro ao atualizar Hero Card VESSA:', errHero);
+  }
 
   // Renderizar Gráfico, Diagnóstico e Tabela com isolamento estrito
   try { renderChart(); } catch (e) { console.warn('renderChart falhou:', e); }
@@ -1335,9 +1337,9 @@ function renderDashboard() {
 
   // Selecionar o primeiro mês por padrão e renderizar detalhes inline
   if (cards.length > 0) {
-    cards[0].style.borderColor = 'var(--neon-green)';
     try { renderMonthlyDetail(state.forecast[0]); } catch (e) { console.warn('renderMonthlyDetail falhou:', e); }
   }
+  safeCreateIcons();
 }
 
 // 3. Gráfico de Tendência (Desativado conforme solicitação do usuário)
@@ -3740,12 +3742,17 @@ if (logoutBtnMobile) {
 // Abas Principais
 document.querySelectorAll('.nav-link').forEach(btn => {
   btn.addEventListener('click', () => {
+    const tabName = btn.getAttribute('data-tab');
+    if (!tabName) return;
+
     document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active-view'));
 
-    btn.classList.add('active');
-    const tabName = btn.getAttribute('data-tab');
-    document.getElementById(`view-${tabName}`).classList.add('active-view');
+    // Sincronizar todos os botões de navegação correspondentes a essa aba (desktop dock, mobile dock e header)
+    document.querySelectorAll(`.nav-link[data-tab="${tabName}"]`).forEach(b => b.classList.add('active'));
+    
+    const targetView = document.getElementById(`view-${tabName}`);
+    if (targetView) targetView.classList.add('active-view');
     state.activeTab = tabName;
 
     // Atualizar visibilidade da barra lateral de contas/cartões no celular
@@ -3777,6 +3784,103 @@ function updateSidebarVisibility() {
 
 // Ouvir redimensionamento para ajustar a barra lateral
 window.addEventListener('resize', updateSidebarVisibility);
+
+// ==========================================
+// VESSA LUXURY NAVIGATION & SHORTCUT HELPERS
+// ==========================================
+function updateVessaUserAvatars(name) {
+  const userName = name || (state.user && state.user.name) || 'Fábio';
+  const cleanName = userName.replace(/[\(\)\[\]\{\}\*👑👧👦❤️\.,_-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const parts = cleanName.split(' ').filter(Boolean);
+  let initials = 'FM';
+  if (parts.length >= 2) {
+    initials = (parts[0][0] + parts[1][0]).toUpperCase();
+  } else if (parts.length === 1 && parts[0].length > 0) {
+    initials = parts[0].slice(0, 2).toUpperCase();
+  }
+  const avatarDesk = document.getElementById('vessa-avatar-disc');
+  if (avatarDesk) avatarDesk.textContent = initials;
+  const avatarMobile = document.getElementById('vessa-mobile-avatar');
+  if (avatarMobile) avatarMobile.textContent = initials;
+  const heroUserEl = document.getElementById('vessa-hero-user-name');
+  if (heroUserEl) heroUserEl.textContent = parts[0] || 'Fábio';
+  const userPillName = document.getElementById('user-display-name');
+  if (userPillName) userPillName.textContent = userName;
+}
+
+window.switchVessaSection = function(section) {
+  // Se não estiver no dashboard, navega primeiro para o dashboard
+  if (state.activeTab !== 'dashboard') {
+    const dashBtn = document.querySelector('.nav-link[data-tab="dashboard"]');
+    if (dashBtn) dashBtn.click();
+  }
+
+  // Sincronizar pílulas de aba VESSA desktop e mobile
+  document.querySelectorAll('.tab-pill, .m-tab-pill').forEach(pill => {
+    if (pill.getAttribute('data-vessa-sec') === section) {
+      pill.classList.add('active');
+    } else {
+      pill.classList.remove('active');
+    }
+  });
+
+  // Rolar suavemente até a seção desejada
+  if (section === 'overview') {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else if (section === 'forecast') {
+    const target = document.getElementById('vessa-forecast-box') || document.querySelector('.vessa-top-forecast-section');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (section === 'cards') {
+    const target = document.querySelector('.inline-cards-fullwidth') || document.getElementById('inline-month-detail');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (section === 'fixed') {
+    const target = document.querySelector('.inline-fixed-fullwidth') || document.getElementById('inline-month-detail');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+};
+
+window.switchVessaMobileSection = function(section) {
+  window.switchVessaSection(section);
+};
+
+window.triggerSearchFocus = function() {
+  if (state.activeTab !== 'dashboard') {
+    const dashBtn = document.querySelector('.nav-link[data-tab="dashboard"]');
+    if (dashBtn) dashBtn.click();
+  }
+  const minValInput = document.getElementById('tx-filter-min-val');
+  if (minValInput) {
+    minValInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    minValInput.focus();
+  }
+};
+
+window.triggerNewTxShortcut = function() {
+  const newTxBtn = document.querySelector('.nav-link[data-tab="new-tx"]');
+  if (newTxBtn) {
+    newTxBtn.click();
+  } else {
+    document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active-view'));
+    const viewNewTx = document.getElementById('view-new-tx');
+    if (viewNewTx) viewNewTx.classList.add('active-view');
+    state.activeTab = 'new-tx';
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+window.triggerNewExpenseModal = window.triggerNewTxShortcut;
+
+// Atalhos Globais de Teclado (⌘K / Ctrl+K para busca e N para novo lançamento)
+window.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    window.triggerSearchFocus();
+  }
+  if (e.key.toLowerCase() === 'n' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    window.triggerNewTxShortcut();
+  }
+});
 
 // Abas Admin
 document.querySelectorAll('.admin-tab-btn').forEach(btn => {
