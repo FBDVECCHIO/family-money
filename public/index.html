@@ -87,7 +87,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Chart.js -->
@@ -192,170 +192,67 @@
   </div>
 
   <!-- ================= CONTAINER PRINCIPAL (APÓS LOGIN) ================= -->
-  <div id="app-container" class="hide vessa-app-shell">
+  <div id="app-container" class="hide">
     
-    <!-- 1. DOCK VERTICAL FLUTUANTE NA ESQUERDA (ESTILO VESSA DESKTOP) -->
-    <aside class="vessa-dock hide-mobile" id="vessa-dock">
-      <!-- Ilha Superior: Alternador de Tema -->
-      <div class="dock-island">
-        <button class="dock-btn theme-toggle-btn" id="dock-theme-toggle-btn" title="Alternar Modo Escuro / Linen Luxury" type="button">
-          <i data-lucide="sun"></i>
-        </button>
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo">
+        <i data-lucide="trending-up" class="logo-icon green-neon"></i>
+        <span class="hide-mobile"><span class="logo-text-family">FAMILY</span> <span class="green-neon">MONEY</span></span>
       </div>
-
-      <!-- Ilha Central: Módulos Mestres -->
-      <div class="dock-island">
-        <button class="dock-btn nav-link active" data-tab="dashboard" title="Dashboard Financeiro Geral">
+      
+      <nav class="main-nav">
+        <button class="nav-link active" data-tab="dashboard">
           <i data-lucide="layout-dashboard"></i>
+          <span class="nav-text-desktop">Dashboard</span>
+          <span class="nav-text-mobile">Dash</span>
         </button>
-        <button class="dock-btn nav-link" data-tab="ai-agent" id="dock-ai-agent-btn" title="Especialista IA 24h">
-          <span class="pulse-indicator" title="Monitoramento Ativo 24h"></span>
+        <button class="nav-link" data-tab="ai-agent" id="ai-agent-nav-btn">
           <i data-lucide="bot"></i>
+          <span class="nav-text-desktop">Especialista IA 24h</span>
+          <span class="nav-text-mobile">IA 24h</span>
+          <span class="ai-nav-pulse-dot" title="Monitoramento Ativo 24h"></span>
         </button>
-        <button class="dock-btn nav-link" data-tab="reports" id="dock-reports-btn" title="Relatórios e Análises">
+        <button class="nav-link" data-tab="reports" id="reports-nav-btn">
           <i data-lucide="bar-chart-2"></i>
+          <span class="nav-text-desktop">Relatórios</span>
+          <span class="nav-text-mobile">Rel</span>
         </button>
-        <button class="dock-btn nav-link" data-tab="new-tx" id="dock-new-tx-btn" title="Novo Lançamento">
+        <button class="nav-link" data-tab="new-tx" id="new-tx-nav-btn">
           <i data-lucide="plus-circle"></i>
+          <span class="nav-text-desktop">Novo Lançamento</span>
+          <span class="nav-text-mobile">Novo</span>
         </button>
-        <button class="dock-btn nav-link" data-tab="calculator" id="dock-calculator-btn" title="Calculadora e Simuladores">
+        <button class="nav-link" data-tab="calculator" id="calculator-nav-btn">
           <i data-lucide="calculator"></i>
+          <span class="nav-text-desktop">Calculadora</span>
+          <span class="nav-text-mobile">Calc</span>
         </button>
-        <button class="dock-btn nav-link" data-tab="admin" id="dock-admin-btn" title="Administração e Perfis">
+        <button class="nav-link" id="admin-nav-btn" data-tab="admin">
           <i data-lucide="settings"></i>
+          <span class="nav-text-desktop">Administração</span>
+          <span class="nav-text-mobile">Adm</span>
         </button>
-      </div>
-
-      <!-- Ilha Inferior: Sincronização e Logout -->
-      <div class="dock-island">
-        <button class="dock-btn" id="dock-refresh-btn" type="button" onclick="triggerManualRefresh()" title="Sincronizar Dados em Tempo Real">
-          <i data-lucide="rotate-cw" id="dock-refresh-icon"></i>
+        <button class="nav-logout-btn" id="logout-btn-mobile" title="Sair do App">
+          <i data-lucide="log-out"></i>
         </button>
-        <button class="dock-btn" id="dock-logout-btn" type="button" onclick="logout()" title="Encerrar Sessão">
+      </nav>
+      
+      <div class="header-profile" style="display: flex; align-items: center; gap: 8px;">
+        <button id="refresh-data-btn" class="refresh-pill-btn liquid-glass" type="button" onclick="triggerManualRefresh()" title="Sincronizar e Atualizar Dados Agora">
+          <i data-lucide="rotate-cw" id="refresh-btn-icon"></i>
+          <span class="refresh-btn-text hide-mobile">Atualizar</span>
+        </button>
+        <button id="theme-toggle-btn" class="theme-toggle-pill" type="button" title="Alternar entre Modo Apple e Modo Escuro">
+          <i data-lucide="sun-moon"></i>
+          <span id="theme-toggle-text">Modo Apple</span>
+        </button>
+        <span class="user-badge" id="user-display-name">Carregando...</span>
+        <button id="logout-btn" title="Sair do App">
           <i data-lucide="log-out"></i>
         </button>
       </div>
-    </aside>
-
-    <!-- 2. CORPO PRINCIPAL COM HEADER VESSA -->
-    <div class="vessa-main-area">
-      
-      <!-- TOP HEADER (VESSA DESKTOP & MOBILE HEADER) -->
-      <header class="app-header vessa-top-header">
-        
-        <!-- VISÃO DESKTOP HEADER -->
-        <div class="vessa-header-desktop hide-mobile">
-          <!-- Esquerda: Brand -->
-          <div class="brand-section">
-            <div class="brand-icon-box">FM</div>
-            <div class="brand-texts">
-              <div class="brand-title-row">
-                <span class="brand-name">Family Money</span>
-                <span class="brand-edition-badge">Vessa Edition</span>
-              </div>
-              <span class="brand-subtitle">Gestão Financeira Familiar</span>
-            </div>
-          </div>
-
-          <!-- Centro: White Tab Track do Dashboard -->
-          <nav class="white-tab-track">
-            <button class="tab-pill active" data-vessa-sec="overview" onclick="switchVessaSection('overview')">
-              <i data-lucide="layout-dashboard"></i>
-              <span>Visão Geral</span>
-            </button>
-            <button class="tab-pill" data-vessa-sec="forecast" onclick="switchVessaSection('forecast')">
-              <i data-lucide="calendar"></i>
-              <span>Previsão 6 Meses</span>
-            </button>
-            <button class="tab-pill" data-vessa-sec="cards" onclick="switchVessaSection('cards')">
-              <i data-lucide="credit-card"></i>
-              <span>Faturas &amp; Cartões</span>
-              <span class="pill-counter" id="vessa-cards-pill-count">2</span>
-            </button>
-            <button class="tab-pill" data-vessa-sec="fixed" onclick="switchVessaSection('fixed')">
-              <i data-lucide="receipt"></i>
-              <span>Contas Fixas</span>
-            </button>
-          </nav>
-
-          <!-- Direita: Ações Rápidas & Perfil -->
-          <div class="header-actions">
-            <!-- Busca / Command Palette -->
-            <button class="search-btn" type="button" onclick="triggerSearchFocus()" title="Buscar lançamento ou comando">
-              <i data-lucide="search"></i>
-              <span>Buscar ou comando...</span>
-              <span class="kbd-tag">⌘K</span>
-            </button>
-
-            <!-- Sino de Alertas -->
-            <button class="icon-round-btn" type="button" onclick="switchVessaSection('cards')" title="Alertas de Vencimento">
-              <span class="btn-badge" id="vessa-alerts-count">2</span>
-              <i data-lucide="bell"></i>
-            </button>
-
-            <!-- Botão Terracota + Novo Lançamento -->
-            <button class="btn-new-pill" type="button" onclick="triggerNewTxShortcut()" title="Lançar despesa ou receita (Atalho: N)">
-              <i data-lucide="plus"></i>
-              <span>Novo Lançamento</span>
-            </button>
-
-            <!-- Perfil do Usuário -->
-            <div class="user-pill-btn" title="Perfil Ativo">
-              <div class="avatar-disc" id="vessa-avatar-disc">FP</div>
-              <div class="user-details">
-                <div class="user-role-label">Administrador</div>
-                <div class="user-fullname" id="user-display-name">Carregando...</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- VISÃO MOBILE HEADER (Linha 1: Marca + 4 Círculos / Linha 2: Tap Bar Superior) -->
-        <div class="vessa-header-mobile hide-desktop">
-          <!-- Linha 1 -->
-          <div class="mobile-header-top">
-            <div class="mobile-brand">
-              <div class="mobile-brand-icon">FM</div>
-              <span class="mobile-brand-text">Family Money</span>
-            </div>
-            <div class="mobile-header-actions">
-              <button class="circle-action-btn" type="button" onclick="triggerSearchFocus()" title="Buscar">
-                <i data-lucide="search"></i>
-              </button>
-              <button class="circle-action-btn" type="button" onclick="switchVessaSection('cards')" title="Alertas">
-                <span class="action-badge" id="vessa-mobile-alerts-count">2</span>
-                <i data-lucide="bell"></i>
-              </button>
-              <button class="circle-action-btn btn-plus" type="button" onclick="triggerNewTxShortcut()" title="Novo Lançamento">
-                <i data-lucide="plus"></i>
-              </button>
-              <div class="circle-action-btn btn-avatar" id="vessa-mobile-avatar">FP</div>
-            </div>
-          </div>
-
-          <!-- Linha 2: Tap Bar Superior VESSA -->
-          <nav class="mobile-tab-track">
-            <button class="m-tab-pill active" data-vessa-sec="overview" onclick="switchVessaMobileSection('overview')">Visão Geral</button>
-            <button class="m-tab-pill" data-vessa-sec="forecast" onclick="switchVessaMobileSection('forecast')">Previsão 6M</button>
-            <button class="m-tab-pill" data-vessa-sec="cards" onclick="switchVessaMobileSection('cards')">Faturas <span class="m-tab-badge" id="vessa-mobile-cards-badge">2</span></button>
-            <button class="m-tab-pill" data-vessa-sec="fixed" onclick="switchVessaMobileSection('fixed')">Fixas</button>
-          </nav>
-        </div>
-
-        <!-- Navegação legada invisível/compatível para seletores de teste e listeners existentes -->
-        <nav class="main-nav hide" style="display: none !important;">
-          <button class="nav-link active" data-tab="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></button>
-          <button class="nav-link" data-tab="ai-agent" id="ai-agent-nav-btn"><i data-lucide="bot"></i><span>IA 24h</span></button>
-          <button class="nav-link" data-tab="reports" id="reports-nav-btn"><i data-lucide="bar-chart-2"></i><span>Relatórios</span></button>
-          <button class="nav-link" data-tab="new-tx" id="new-tx-nav-btn"><i data-lucide="plus-circle"></i><span>Novo</span></button>
-          <button class="nav-link" data-tab="calculator" id="calculator-nav-btn"><i data-lucide="calculator"></i><span>Calc</span></button>
-          <button class="nav-link" id="admin-nav-btn" data-tab="admin"><i data-lucide="settings"></i><span>Adm</span></button>
-          <button class="nav-logout-btn" id="logout-btn-mobile"><i data-lucide="log-out"></i></button>
-          <button id="refresh-data-btn" onclick="triggerManualRefresh()"></button>
-          <button id="theme-toggle-btn"></button>
-          <button id="logout-btn"></button>
-        </nav>
-      </header>
+    </header>
 
     <!-- Conteúdo Principal -->
     <main class="app-content">
@@ -395,49 +292,22 @@
         <!-- TELA 1: DASHBOARD -->
         <div id="view-dashboard" class="tab-view active-view">
           
-          <!-- NOVO TOPO DO DASHBOARD VESSA: HERO CARD (ESQUERDA) + 6 MESES DE PREVISIBILIDADE (DIREITA) -->
-          <div class="vessa-top-forecast-section">
-            
-            <!-- Hero Greeting Card VESSA -->
-            <div class="hero-greeting-card">
-              <div>
-                <div class="hero-status-tag">
-                  <span class="live-status-dot"></span>
-                  <span id="vessa-live-date">Carregando data...</span>
-                </div>
-                <h2 class="hero-headline">Olá, <span id="vessa-hero-user-name">Fábio</span>!</h2>
-                <p class="hero-desc">
-                  Fluxo sob controle: <strong id="vessa-hero-invoices-summary">2 faturas</strong> a vencer e folga semestral projetada de <strong id="vessa-hero-semester-surplus">+R$ 0,00</strong>.
-                </p>
-              </div>
-              <div class="hero-actions-row">
-                <button class="btn-hero-solid" type="button" onclick="triggerNewExpenseModal()">+ Nova Despesa</button>
-                <button class="btn-hero-outline" type="button" onclick="switchVessaSection('cards')">💳 Ver Faturas</button>
-              </div>
+          <!-- Cabeçalho Dashboard -->
+          <div class="view-header">
+            <div>
+              <h2 style="font-size: 1.6rem;">Provisão para os Próximos 6 Meses</h2>
+              <p class="subtitle text-pastel-purple">Simulação de receitas recorrentes, despesas fixas e parcelamentos de faturas</p>
             </div>
-
-            <!-- Previsibilidade Financeira · Próximos 6 Meses -->
-            <div class="forecast-container" id="vessa-forecast-box">
-              <div class="forecast-header-row">
-                <div class="forecast-title-wrap">
-                  <span class="forecast-title">Previsibilidade Financeira · Próximos 6 Meses</span>
-                  <span class="forecast-subtitle">Sobra líquida projetada mês a mês</span>
-                </div>
-                <div class="forecast-legend">
-                  <span><span class="legend-dot" style="background: var(--vessa-teal, #247B7B);"></span> Entradas</span>
-                  <span><span class="legend-dot" style="background: var(--vessa-primary, #BA4A24);"></span> Saídas</span>
-                  <button id="export-csv-btn" class="btn btn-outline" style="padding: 3px 9px; font-size: 0.72rem; border-radius: 999px; margin-left: 8px;">
-                    <i data-lucide="download" style="width: 12px; height: 12px;"></i> CSV
-                  </button>
-                </div>
-              </div>
-
-              <!-- Container dos 6 Cards de Previsão por Mês -->
-              <div class="forecast-grid six-months-grid" id="forecast-cards-container">
-                <!-- Preenchido dinamicamente com os 6 meses de projeção -->
-              </div>
+            <div class="actions">
+              <button id="export-csv-btn" class="btn btn-outline">
+                <i data-lucide="download"></i> Exportar Lançamentos
+              </button>
             </div>
+          </div>
 
+          <!-- Cards de Previsão por Mês -->
+          <div class="forecast-grid" id="forecast-cards-container">
+            <!-- Preenchido dinamicamente com 6 meses de projeção -->
           </div>
 
           <!-- Detalhamento Inline do Mês Selecionado (Abaixo dos cards) -->
@@ -446,13 +316,10 @@
               <h3 id="inline-month-title">Detalhamento Financeiro - Selecione um mês</h3>
             </div>
             
-            <!-- 1. Faturas de Cartões -->
-            <div class="inline-cards-fullwidth" style="margin-bottom: 20px;">
+            <div class="inline-summary-row">
+              <!-- Faturas de Cartões (Subiu ao lado do Mapa de Despesas) -->
               <div class="summary-box glass">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                  <h4 style="margin: 0;"><i data-lucide="credit-card" class="red-neon"></i> Faturas de Cartões</h4>
-                  <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">Fechamento &amp; Efetivação</span>
-                </div>
+                <h4><i data-lucide="credit-card" class="red-neon"></i> Faturas de Cartões</h4>
                 <div class="table-responsive">
                   <table>
                     <thead>
@@ -469,15 +336,20 @@
                   </table>
                 </div>
               </div>
+              
+              <!-- Mapa de Despesas (% da Receita) -->
+              <div class="summary-box glass">
+                <h4><i data-lucide="pie-chart" class="text-pastel-purple"></i> Mapa de Despesas (% da Receita)</h4>
+                <div class="category-breakdown-list" id="inline-category-breakdown">
+                  <!-- Inserido dinamicamente -->
+                </div>
+              </div>
             </div>
 
-            <!-- 2. Contas e Lançamentos Fixos (com Edição e Efetivação) -->
-            <div class="inline-fixed-fullwidth" style="margin-bottom: 20px;">
+            <!-- Contas e Lançamentos Fixos (Ocupando a largura total dos dois cards de cima) -->
+            <div class="inline-fixed-fullwidth">
               <div class="summary-box glass">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                  <h4 style="margin: 0;"><i data-lucide="list" class="green-neon"></i> Contas e Lançamentos Fixos Vigentes</h4>
-                  <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">Edição Rápida &amp; Efetivação</span>
-                </div>
+                <h4><i data-lucide="list" class="green-neon"></i> Contas e Lançamentos Fixos</h4>
                 <div class="table-responsive">
                   <table>
                     <thead>
@@ -493,19 +365,6 @@
                       <!-- Inserido dinamicamente -->
                     </tbody>
                   </table>
-                </div>
-              </div>
-            </div>
-
-            <!-- 3. Mapa de Despesas (% da Receita) -->
-            <div class="inline-category-fullwidth">
-              <div class="summary-box glass">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                  <h4 style="margin: 0;"><i data-lucide="pie-chart" class="text-pastel-purple"></i> Mapa de Despesas (% da Receita)</h4>
-                  <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">Distribuição por Categoria</span>
-                </div>
-                <div class="category-breakdown-list" id="inline-category-breakdown">
-                  <!-- Inserido dinamicamente -->
                 </div>
               </div>
             </div>
@@ -1811,46 +1670,6 @@
       </div>
 
     </main>
-    </div> <!-- .vessa-main-area -->
-
-    <!-- 3. DOCK FLUTUANTE INFERIOR MOBILE (ESTILO VESSA SMARTPHONE) -->
-    <footer class="vessa-mobile-dock hide-desktop" id="vessa-mobile-dock">
-      <button class="dock-nav-item nav-link active" data-tab="dashboard">
-        <div class="dock-icon-box">
-          <i data-lucide="layout-dashboard"></i>
-        </div>
-        <span class="dock-label">Dashboard</span>
-      </button>
-
-      <button class="dock-nav-item nav-link" data-tab="ai-agent">
-        <div class="dock-icon-box" style="position: relative;">
-          <span class="pulse-indicator" style="top: 2px; right: 2px; width: 6px; height: 6px;"></span>
-          <i data-lucide="bot"></i>
-        </div>
-        <span class="dock-label">IA 24h</span>
-      </button>
-
-      <button class="dock-nav-item dock-center-action nav-link" data-tab="new-tx" type="button" onclick="triggerNewTxShortcut()">
-        <div class="dock-icon-box">
-          <i data-lucide="plus"></i>
-        </div>
-        <span class="dock-label" style="font-weight: 800; color: var(--text-main, #18201B);">Lançar</span>
-      </button>
-
-      <button class="dock-nav-item nav-link" data-tab="reports">
-        <div class="dock-icon-box">
-          <i data-lucide="bar-chart-2"></i>
-        </div>
-        <span class="dock-label">Relatórios</span>
-      </button>
-
-      <button class="dock-nav-item nav-link" data-tab="admin" id="dock-mobile-admin-btn">
-        <div class="dock-icon-box">
-          <i data-lucide="settings"></i>
-        </div>
-        <span class="dock-label">Ajustes</span>
-      </button>
-    </footer>
   </div>
 
   <!-- Modal de Visualização de Recibo -->

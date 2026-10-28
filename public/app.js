@@ -718,14 +718,11 @@ async function initApp() {
     document.getElementById('app-container').classList.remove('remove');
     document.getElementById('app-container').classList.remove('hide');
     document.getElementById('user-display-name').textContent = activeUserName;
-    if (typeof updateVessaUserAvatars === 'function') {
-      updateVessaUserAvatars(activeUserName);
-    }
 
-    const adminNavBtns = document.querySelectorAll('#admin-nav-btn, #dock-admin-btn, #dock-mobile-admin-btn');
-    adminNavBtns.forEach(btn => {
-      btn.style.display = state.user.is_admin ? 'flex' : 'none';
-    });
+    const adminNavBtn = document.getElementById('admin-nav-btn');
+    if (adminNavBtn) {
+      adminNavBtn.style.display = state.user.is_admin ? 'flex' : 'none';
+    }
 
     restoreSavedTxFilters();
     updateSidebarVisibility();
@@ -750,10 +747,9 @@ async function initApp() {
             state.user.id = dbUser.id || dbUser.idNum || state.user.id;
             state.user.is_admin = forceAdmin || dbUser.is_admin !== false;
             state.user.only_self_data = dbUser.only_self_data === true;
-            const adminNavBtns = document.querySelectorAll('#admin-nav-btn, #dock-admin-btn, #dock-mobile-admin-btn');
-            adminNavBtns.forEach(btn => {
-              btn.style.display = state.user.is_admin ? 'flex' : 'none';
-            });
+            if (adminNavBtn) {
+              adminNavBtn.style.display = state.user.is_admin ? 'flex' : 'none';
+            }
           }
         }
         await loadAllData();
@@ -778,14 +774,20 @@ function adaptNavForMobile() {
   try {
     const nav = document.querySelector('.main-nav');
     const header = document.querySelector('.app-header');
-    if (!nav || !header) return;
-    // Protocolo VESSA: O menu permanece sempre no cabeçalho superior (Tap Bar Superior)
-    if (nav.parentElement !== header) {
-      const profile = header.querySelector('.header-profile');
-      if (profile) {
-        header.insertBefore(nav, profile);
-      } else {
-        header.appendChild(nav);
+    const container = document.getElementById('app-container');
+    if (!nav || !header || !container) return;
+    if (window.innerWidth <= 768) {
+      if (nav.parentElement !== container) {
+        container.appendChild(nav);
+      }
+    } else {
+      if (nav.parentElement !== header) {
+        const profile = header.querySelector('.header-profile');
+        if (profile) {
+          header.insertBefore(nav, profile);
+        } else {
+          header.appendChild(nav);
+        }
       }
     }
   } catch (e) {
@@ -1205,16 +1207,11 @@ function renderSidebar(totalBalance) {
   accountsContainer.innerHTML = state.accounts.map(acc => `
     <div class="account-item">
       <div class="account-info">
-        <span class="name">${escapeHtml(acc.name)}</span>
+        <span class="name">${acc.name}</span>
       </div>
-      <div style="display: inline-flex; align-items: center; gap: 6px;">
-        <span class="balance ${acc.balance >= 0 ? 'green-neon' : 'red-neon'}">
-          ${formatCurrency(acc.balance)}
-        </span>
-        <button type="button" onclick="promptQuickEditAccount(${acc.id}, ${acc.balance}, '${escapeHtml(acc.name)}')" title="Ajustar saldo desta conta" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 0 4px; font-size: 0.8rem; display: inline-flex; align-items: center;">
-          <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i>
-        </button>
-      </div>
+      <span class="balance ${acc.balance >= 0 ? 'green-neon' : 'red-neon'}">
+        ${formatCurrency(acc.balance)}
+      </span>
     </div>
   `).join('');
 
@@ -1240,95 +1237,95 @@ function renderSidebar(totalBalance) {
       </div>
     `;
   }).join('');
-
-  safeCreateIcons();
 }
 
-// 2. Dashboard de Previsão de 6 Meses VESSA
+// 2. Dashboard de Previsão de 6 Meses
 function renderDashboard() {
   const cardsContainer = document.getElementById('forecast-cards-container');
-  if (!cardsContainer || !state.forecast || state.forecast.length === 0) return;
+  if (!state.forecast || state.forecast.length === 0) return;
 
   cardsContainer.innerHTML = state.forecast.map((m, idx) => {
-    const isCurrentMonth = idx === 0;
-    const isBalanceNegative = m.projectedBalance < 0 || m.netSurplus < 0;
-    const badgeText = isCurrentMonth ? 'Atual' : `Mês ${idx + 1}`;
-    const badgeClass = isCurrentMonth ? 'badge-current' : 'badge-future';
+    const isBalanceNegative = m.projectedBalance < 0;
+    
+    // Agrupar faturas por vencimento (Até dia 10 vs Pós dia 10)
+    let amountUpTo10 = 0;
+    let amountAfter10 = 0;
+    
+    m.cardBills.forEach(c => {
+      const cardObj = state.cards.find(card => card.id === parseInt(c.cardId));
+      const dueDay = cardObj ? (cardObj.due_day || cardObj.dueDay || 10) : 10;
+      if (dueDay <= 10) {
+        amountUpTo10 += parseFloat(c.amount || 0);
+      } else {
+        amountAfter10 += parseFloat(c.amount || 0);
+      }
+    });
 
-    // Total de despesas do mês (contas + cartões)
-    const fixedTotal = m.fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const cardsTotal = m.cardBills.reduce((sum, c) => sum + c.amount, 0);
-    const totalExp = fixedTotal + cardsTotal;
-    const totalInc = m.totalIncomes || 0;
-    const progressPct = totalInc > 0 ? Math.min(100, Math.max(10, Math.round((totalInc / (totalInc + totalExp || 1)) * 100))) : 50;
-    const sobraClass = m.netSurplus >= 0 ? 'sobra-positive' : 'sobra-warning';
+    const subtotalsHtmlArr = [];
+    if (amountUpTo10 > 0) {
+      subtotalsHtmlArr.push(`
+        <div style="font-size: 0.7rem; color: var(--text-dim); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
+          <span>• Até Dia 10:</span>
+          <span>-${formatCurrency(amountUpTo10)}</span>
+        </div>
+      `);
+    }
+    if (amountAfter10 > 0) {
+      subtotalsHtmlArr.push(`
+        <div style="font-size: 0.7rem; color: var(--text-dim); display: flex; justify-content: space-between; padding-left: 10px; margin-top: 1px; white-space: nowrap;">
+          <span>• Pós Dia 10:</span>
+          <span>-${formatCurrency(amountAfter10)}</span>
+        </div>
+      `);
+    }
+    const subtotalsHtml = subtotalsHtmlArr.join('');
 
     return `
-      <div class="month-forecast-card forecast-card ${isCurrentMonth ? 'current-month' : ''} ${isBalanceNegative ? 'alert-deficit' : ''}" data-month-index="${idx}" title="Clique para ver faturas e contas de ${m.label}">
-        <div class="month-head">
-          <span class="month-label-name">${m.label.toUpperCase()}</span>
-          <span class="month-badge-pill ${badgeClass}">${badgeText}</span>
+      <div class="forecast-card glass ${isBalanceNegative ? 'alert-deficit' : ''}" data-month-index="${idx}" style="border: 1px solid rgba(168, 85, 247, 0.15); transition: border-color 0.3s ease;">
+        <div class="forecast-month-label" style="justify-content: center; text-transform: uppercase; font-weight: 700; border-bottom: none; padding-bottom: 0;">
+          ${m.label.toUpperCase()}
         </div>
-        <div class="month-net-sobra ${sobraClass}">
-          ${m.netSurplus >= 0 ? '+' : ''}${formatCurrency(m.netSurplus)}
+        <div class="forecast-values" style="margin-top: 10px;">
+          <div class="forecast-val-row value-positive">
+            <span>Receitas:</span>
+            <span>${formatCurrency(m.totalIncomes)}</span>
+          </div>
+          <div class="forecast-val-row">
+            <span>Contas:</span>
+            <span class="red-neon">-${formatCurrency(m.fixedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
+          </div>
+          <div class="forecast-val-row" style="margin-bottom: 2px;">
+            <span>Cartões:</span>
+            <span class="red-neon">-${formatCurrency(m.cardBills.reduce((sum, c) => sum + c.amount, 0))}</span>
+          </div>
+          ${subtotalsHtml}
         </div>
-        <div class="month-progress-bar" title="Proporção Entradas vs Saídas">
-          <div class="month-progress-fill" style="width: ${progressPct}%;"></div>
+        <div class="forecast-card-sobra">
+          <span class="sobra-label">Sobra do Mês:</span>
+          <span class="sobra-val ${m.netSurplus >= 0 ? 'green-neon' : 'red-neon'}">
+            ${m.netSurplus >= 0 ? '+' : ''}${formatCurrency(m.netSurplus)}
+          </span>
         </div>
-        <div class="month-foot-details">
-          <div class="foot-row"><span>Entradas</span><span class="foot-val">${formatCurrency(totalInc)}</span></div>
-          <div class="foot-row"><span>Saídas</span><span class="foot-val">-${formatCurrency(totalExp)}</span></div>
+        <div class="forecast-card-projected">
+          Projeção: <span class="${m.projectedBalance >= 0 ? 'green-neon' : 'red-neon'}">${formatCurrency(m.projectedBalance)}</span>
         </div>
       </div>
     `;
   }).join('');
 
   // Adicionar eventos de clique nos cards de previsão para carregar detalhamento inline
-  const cards = document.querySelectorAll('.month-forecast-card');
+  const cards = document.querySelectorAll('.forecast-card');
   cards.forEach(card => {
     card.addEventListener('click', () => {
       // Remover realces anteriores
-      cards.forEach(c => c.classList.remove('current-month'));
-      // Adicionar classe de destaque orgânico no card ativo
-      card.classList.add('current-month');
+      cards.forEach(c => c.style.borderColor = 'rgba(168, 85, 247, 0.15)');
+      // Adicionar borda verde neon no card ativo
+      card.style.borderColor = 'var(--neon-green)';
       
       const idx = parseInt(card.getAttribute('data-month-index'));
       renderMonthlyDetail(state.forecast[idx]);
     });
   });
-
-  // Atualizar indicadores executivos no Hero Greeting Card VESSA
-  try {
-    const totalSemesterSurplus = state.forecast.reduce((acc, f) => acc + (f.netSurplus || 0), 0);
-    const heroSemesterEl = document.getElementById('vessa-hero-semester-surplus');
-    if (heroSemesterEl) {
-      heroSemesterEl.textContent = (totalSemesterSurplus >= 0 ? '+' : '') + formatCurrency(totalSemesterSurplus);
-    }
-    const openBillsCount = (state.cards || []).filter(c => parseFloat(c.current_bill || 0) > 0).length;
-    const heroInvoicesEl = document.getElementById('vessa-hero-invoices-summary');
-    if (heroInvoicesEl) {
-      heroInvoicesEl.textContent = `${openBillsCount} fatura${openBillsCount === 1 ? '' : 's'}`;
-    }
-    const heroUserEl = document.getElementById('vessa-hero-user-name');
-    if (heroUserEl && state.user && state.user.name) {
-      heroUserEl.textContent = state.user.name.split(' ')[0];
-    }
-    const liveDateEl = document.getElementById('vessa-live-date');
-    if (liveDateEl) {
-      const now = new Date();
-      liveDateEl.textContent = now.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }) + ' · ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    }
-    const cardsBadgeEl = document.getElementById('vessa-cards-pill-count');
-    if (cardsBadgeEl) cardsBadgeEl.textContent = openBillsCount;
-    const mobileCardsBadgeEl = document.getElementById('vessa-mobile-cards-badge');
-    if (mobileCardsBadgeEl) mobileCardsBadgeEl.textContent = openBillsCount;
-    const alertsCountEl = document.getElementById('vessa-alerts-count');
-    if (alertsCountEl) alertsCountEl.textContent = openBillsCount;
-    const mobileAlertsCountEl = document.getElementById('vessa-mobile-alerts-count');
-    if (mobileAlertsCountEl) mobileAlertsCountEl.textContent = openBillsCount;
-  } catch (errHero) {
-    console.warn('Erro ao atualizar Hero Card VESSA:', errHero);
-  }
 
   // Renderizar Gráfico, Diagnóstico e Tabela com isolamento estrito
   try { renderChart(); } catch (e) { console.warn('renderChart falhou:', e); }
@@ -1337,9 +1334,9 @@ function renderDashboard() {
 
   // Selecionar o primeiro mês por padrão e renderizar detalhes inline
   if (cards.length > 0) {
+    cards[0].style.borderColor = 'var(--neon-green)';
     try { renderMonthlyDetail(state.forecast[0]); } catch (e) { console.warn('renderMonthlyDetail falhou:', e); }
   }
-  safeCreateIcons();
 }
 
 // 3. Gráfico de Tendência (Desativado conforme solicitação do usuário)
@@ -2079,20 +2076,43 @@ function renderMonthlyDetail(monthData) {
 }
 
 async function promptQuickEditFixed(id, currentAmount, desc) {
-  showVessaEditValueModal({
-    title: 'Editar Despesa Fixa',
-    subtitle: `Altere o valor previsto para "${cleanDescription(desc)}":`,
-    currentVal: parseFloat(currentAmount),
-    label: 'Novo Valor (R$)',
-    onConfirm: async (newAmount) => {
-      // 1. Atualizar item fixo na base
-      const { error: errFixed } = await state.supabase.from('fixed_items').update({ amount: newAmount }).eq('id', id);
-      if (errFixed) throw errFixed;
-
-      const item = (state.fixedItems || []).find(f => f.id === id);
-      if (item) item.amount = newAmount;
-
-      // 2. Atualizar transação pendente do mês vigente se houver
+  const overlay = document.createElement('div');
+  overlay.className = 'glass-modal-overlay';
+  overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 999999; display: flex; align-items: center; justify-content: center;';
+  
+  overlay.innerHTML = `
+    <div class="liquid-glass" style="width: 90%; max-width: 380px; padding: 24px; border-radius: 18px; color: var(--foreground); box-sizing: border-box; text-align: left;">
+      <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem; font-weight: 700; color: #FFF;">Editar Valor</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">Alterar valor para: <strong style="color: #FFF;">${cleanDescription(desc)}</strong></p>
+      <div class="form-group" style="margin-bottom: 18px;">
+        <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; color: var(--text-muted);">Novo Valor (R$):</label>
+        <input type="number" step="0.01" id="quick-edit-amount-input" value="${currentAmount}" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); color: #FFF; font-size: 1rem; box-sizing: border-box; outline: none;">
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="quick-edit-cancel-btn" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem; cursor: pointer;">Cancelar</button>
+        <button id="quick-edit-confirm-btn" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.85rem; cursor: pointer;">Salvar</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  const input = overlay.querySelector('#quick-edit-amount-input');
+  if (input) {
+    input.focus();
+    input.select();
+  }
+  
+  overlay.querySelector('#quick-edit-cancel-btn').onclick = () => {
+    document.body.removeChild(overlay);
+  };
+  
+  overlay.querySelector('#quick-edit-confirm-btn').onclick = async () => {
+    const val = parseFloat(input.value);
+    document.body.removeChild(overlay);
+    if (isNaN(val) || val <= 0) return;
+    
+    try {
+      await state.supabase.from('fixed_items').update({ amount: val }).eq('id', id);
       const recurrenceTag = `[R:${id}]`;
       const today = new Date();
       const currentYear = today.getFullYear();
@@ -2106,38 +2126,16 @@ async function promptQuickEditFixed(id, currentAmount, desc) {
       });
 
       if (pendingTx) {
-        await state.supabase.from('transactions').update({ amount: newAmount }).eq('id', pendingTx.id);
-        pendingTx.amount = newAmount;
+        await state.supabase.from('transactions').update({ amount: val }).eq('id', pendingTx.id);
       }
 
-      applyOptimisticUpdate();
-      showToast('Valor da despesa fixa atualizado com sucesso no mês vigente!', 3500, true);
-      loadAllData();
+      await loadAllData();
+    } catch (err) {
+      console.error('Erro ao atualizar valor fixo:', err);
     }
-  });
+  };
 }
 window.promptQuickEditFixed = promptQuickEditFixed;
-
-async function promptQuickEditAccount(id, currentBalance, name) {
-  showVessaEditValueModal({
-    title: `Ajustar Saldo: ${name}`,
-    subtitle: 'Informe o saldo bancário consolidado atualizado:',
-    currentVal: parseFloat(currentBalance),
-    label: 'Saldo Consolidado (R$)',
-    onConfirm: async (newBalance) => {
-      const { error: errAcc } = await state.supabase.from('accounts').update({ balance: newBalance }).eq('id', id);
-      if (errAcc) throw errAcc;
-
-      const acc = (state.accounts || []).find(a => a.id === id);
-      if (acc) acc.balance = newBalance;
-
-      applyOptimisticUpdate();
-      showToast(`Saldo da conta ${name} atualizado com sucesso!`, 3500, true);
-      loadAllData();
-    }
-  });
-}
-window.promptQuickEditAccount = promptQuickEditAccount;
 
 // 8. Tabelas e Forms Administrativos
 function renderAdminTables() {
@@ -2393,525 +2391,292 @@ function renderAdminTables() {
   }
 }
 
-// ================= MOTOR DE RECONCILIAÇÃO E MODAIS VESSA =================
-let isReconciling = false;
-
-function applyOptimisticUpdate() {
-  try {
-    if (typeof calculateForecast === 'function') {
-      const forecastResult = calculateForecast(state.accounts || [], state.cards || [], state.fixedItems || [], state.transactions || []);
-      state.forecast = forecastResult.forecast || [];
-      if (typeof renderSidebar === 'function') renderSidebar(forecastResult.currentBalance || 0);
-      if (typeof renderDashboard === 'function') renderDashboard();
-    }
-  } catch (err) {
-    console.warn('[VESSA] Falha na atualização otimista da interface:', err);
-  }
-}
-
-function showVessaActionModal({ title, subtitle, amount = null, accounts = null, defaultAccountId = null, confirmText = 'Confirmar Efetivação', onConfirm = null }) {
-  return new Promise((resolve) => {
-    const existing = document.getElementById('vessa-action-modal-overlay');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'vessa-action-modal-overlay';
-    overlay.className = 'vessa-modal-overlay active';
-
-    const accList = (accounts && accounts.length > 0) ? accounts : (state.accounts || []);
-    const optionsHtml = accList.map(acc => {
-      const isSelected = (defaultAccountId && String(acc.id) === String(defaultAccountId)) ? 'selected' : '';
-      return `<option value="${acc.id}" ${isSelected}>${escapeHtml(acc.name)} (Saldo: ${formatCurrency(acc.balance)})</option>`;
-    }).join('');
-
-    const amountFieldHtml = (amount !== null && amount !== undefined) ? `
-      <div class="vessa-input-wrap">
-        <label class="vessa-label" for="vessa-modal-amount-input">Valor a Efetivar (R$)</label>
-        <input type="number" step="0.01" id="vessa-modal-amount-input" class="vessa-input" value="${parseFloat(amount).toFixed(2)}" style="font-size: 1.1rem; font-weight: 700; color: var(--vessa-primary, #BA4A24);">
-      </div>
-    ` : '';
-
-    overlay.innerHTML = `
-      <div class="vessa-modal-card" role="dialog" aria-modal="true" aria-labelledby="vessa-action-title">
-        <div class="vessa-modal-head">
-          <div>
-            <h3 class="vessa-modal-title" id="vessa-action-title">${escapeHtml(title)}</h3>
-            <p class="vessa-modal-sub">${escapeHtml(subtitle || 'Confirme o valor e a conta bancária para efetivar o lançamento:')}</p>
-          </div>
-        </div>
-        ${amountFieldHtml}
-        <div class="vessa-input-wrap">
-          <label class="vessa-label" for="vessa-modal-account-select">Conta Bancária de Débito/Crédito</label>
-          <select id="vessa-modal-account-select" class="vessa-select">
-            ${optionsHtml}
-          </select>
-        </div>
-        <div class="vessa-modal-actions">
-          <button type="button" class="vessa-btn-ghost" id="vessa-modal-cancel">Cancelar</button>
-          <button type="button" class="vessa-btn-solid" id="vessa-modal-confirm">
-            <span id="vessa-btn-text">${escapeHtml(confirmText)}</span>
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    const close = () => {
-      overlay.classList.remove('active');
-      setTimeout(() => overlay.remove(), 220);
-    };
-
-    overlay.querySelector('#vessa-modal-cancel').onclick = (e) => {
-      e.preventDefault();
-      close();
-      resolve(null);
-    };
-
-    overlay.querySelector('#vessa-modal-confirm').onclick = async (e) => {
-      e.preventDefault();
-      const confirmBtn = overlay.querySelector('#vessa-modal-confirm');
-      const cancelBtn = overlay.querySelector('#vessa-modal-cancel');
-      const btnText = overlay.querySelector('#vessa-btn-text');
-      const sel = overlay.querySelector('#vessa-modal-account-select');
-      const amtInput = overlay.querySelector('#vessa-modal-amount-input');
-
-      const selectedAccountId = sel ? parseInt(sel.value, 10) : null;
-      const finalAmount = amtInput ? parseFloat(amtInput.value) : (amount !== null ? parseFloat(amount) : null);
-
-      if (amtInput && (isNaN(finalAmount) || finalAmount <= 0)) {
-        showToast('Por favor, informe um valor numérico válido maior que zero.', 3000, false);
-        return;
-      }
-
-      if (!selectedAccountId) {
-        showToast('Selecione uma conta bancária para continuar.', 3000, false);
-        return;
-      }
-
-      confirmBtn.disabled = true;
-      cancelBtn.disabled = true;
-      btnText.innerHTML = '<span class="vessa-spinner"></span> Efetivando...';
-
-      try {
-        if (typeof onConfirm === 'function') {
-          await onConfirm({ selectedAccountId, finalAmount });
-        }
-        close();
-        resolve({ selectedAccountId, finalAmount });
-      } catch (err) {
-        console.error('[VESSA] Erro ao confirmar efetivação:', err);
-        showToast('Erro ao efetivar: ' + (err.message || err), 4000, false);
-        confirmBtn.disabled = false;
-        cancelBtn.disabled = false;
-        btnText.textContent = confirmText;
-      }
-    };
-  });
-}
-window.showVessaActionModal = showVessaActionModal;
-
-function showVessaEditValueModal({ title, subtitle, currentVal, label = 'Novo Valor (R$)', onConfirm = null }) {
-  return new Promise((resolve) => {
-    const existing = document.getElementById('vessa-edit-modal-overlay');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'vessa-edit-modal-overlay';
-    overlay.className = 'vessa-modal-overlay active';
-
-    overlay.innerHTML = `
-      <div class="vessa-modal-card" role="dialog" aria-modal="true" aria-labelledby="vessa-edit-title">
-        <div class="vessa-modal-head">
-          <div>
-            <h3 class="vessa-modal-title" id="vessa-edit-title">${escapeHtml(title)}</h3>
-            <p class="vessa-modal-sub">${escapeHtml(subtitle || 'Informe o novo valor desejado:')}</p>
-          </div>
-        </div>
-        <div class="vessa-input-wrap">
-          <label class="vessa-label" for="vessa-edit-value-input">${escapeHtml(label)}</label>
-          <input type="number" step="0.01" id="vessa-edit-value-input" class="vessa-input" value="${parseFloat(currentVal || 0).toFixed(2)}" style="font-size: 1.1rem; font-weight: 700;">
-        </div>
-        <div class="vessa-modal-actions">
-          <button type="button" class="vessa-btn-ghost" id="vessa-edit-cancel">Cancelar</button>
-          <button type="button" class="vessa-btn-solid" id="vessa-edit-confirm">
-            <span id="vessa-edit-btn-text">Salvar Alteração</span>
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    const close = () => {
-      overlay.classList.remove('active');
-      setTimeout(() => overlay.remove(), 220);
-    };
-
-    overlay.querySelector('#vessa-edit-cancel').onclick = (e) => {
-      e.preventDefault();
-      close();
-      resolve(null);
-    };
-
-    overlay.querySelector('#vessa-edit-confirm').onclick = async (e) => {
-      e.preventDefault();
-      const input = overlay.querySelector('#vessa-edit-value-input');
-      const val = parseFloat(input.value);
-      if (isNaN(val) || val < 0) {
-        showToast('Por favor, informe um valor numérico válido.', 3000, false);
-        return;
-      }
-
-      const confirmBtn = overlay.querySelector('#vessa-edit-confirm');
-      const cancelBtn = overlay.querySelector('#vessa-edit-cancel');
-      const btnText = overlay.querySelector('#vessa-edit-btn-text');
-
-      confirmBtn.disabled = true;
-      cancelBtn.disabled = true;
-      btnText.innerHTML = '<span class="vessa-spinner"></span> Salvando...';
-
-      try {
-        if (typeof onConfirm === 'function') {
-          await onConfirm(val);
-        }
-        close();
-        resolve(val);
-      } catch (err) {
-        console.error('[VESSA] Erro ao salvar novo valor:', err);
-        showToast('Erro ao atualizar: ' + (err.message || err), 4000, false);
-        confirmBtn.disabled = false;
-        cancelBtn.disabled = false;
-        btnText.textContent = 'Salvar Alteração';
-      }
-    };
-  });
-}
-window.showVessaEditValueModal = showVessaEditValueModal;
-
-// Alias retrocompatível com a API anterior sem usar alert ou prompt
-function promptAccountSelection(title, defaultAccountId, callback, currentAmount = null) {
-  showVessaActionModal({
-    title,
-    amount: currentAmount,
-    defaultAccountId,
-    confirmText: 'Confirmar',
-    onConfirm: async ({ selectedAccountId, finalAmount }) => {
-      if (typeof callback === 'function') {
-        await callback(selectedAccountId, finalAmount);
-      }
-    }
-  });
-}
-window.promptAccountSelection = promptAccountSelection;
-
 async function payCardBill(cardId, year, month, amount) {
-  if (isReconciling) {
-    showToast('Uma efetivação já está em andamento. Aguarde um instante...', 2500, false);
-    return;
-  }
-
   const card = state.cards.find(c => c.id == cardId);
   if (!card) {
-    showToast('Cartão não encontrado!', 3000, false);
+    alert('Cartão não encontrado!');
     return;
   }
+  
+  // Exibir pop-up para selecionar de qual conta realizar o débito da fatura
+  promptAccountSelection(`Efetivar Fatura: ${card.name}`, card.account_id, async (selectedAccountId) => {
+    const acc = state.accounts.find(a => a.id == selectedAccountId);
+    if (!acc) {
+      alert('Conta bancária selecionada não encontrada!');
+      return;
+    }
+    
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const monthName = months[month] || 'Mês';
+    const label = `${monthName}/${String(year).slice(-2)}`;
+    
+    try {
+      // 1. Inserir registro de fatura paga
+      const { error: errorPaid } = await state.supabase
+        .from('paid_card_bills')
+        .insert([{ card_id: cardId, year, month, amount }]);
+      if (errorPaid) throw errorPaid;
+      
+      // 2. Inserir a transação correspondente no extrato
+      const txPayment = {
+        description: `Pagamento Fatura ${card.name} - ${label}`,
+        amount,
+        date: new Date().toISOString().split('T')[0],
+        category_id: null,
+        payment_method: 'account',
+        type: 'expense',
+        is_effective: true,
+        card_id: null,
+        installments: 1,
+        account_id: selectedAccountId,
+        user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
+      };
+      
+      const { error: errorTx } = await state.supabase.from('transactions').insert([txPayment]);
+      if (errorTx) throw errorTx;
+      
+      // 3. Atualizar o saldo da conta selecionada
+      const newBalance = parseFloat(acc.balance) - amount;
+      const { error: errorAcc } = await state.supabase
+        .from('accounts')
+        .update({ balance: newBalance })
+        .eq('id', selectedAccountId);
+      if (errorAcc) throw errorAcc;
 
-  const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  const monthName = months[month] || 'Mês';
-  const label = `${monthName}/${String(year).slice(-2)}`;
+      // 4. Reconciliar transações individuais do cartão que pertencem a esta fatura
+      const cardTransactionsToReconcile = state.transactions.filter(t => {
+        const cardIdNum = t.card_id || t.cardId;
+        if (parseInt(cardIdNum) !== parseInt(cardId)) return false;
 
-  showVessaActionModal({
-    title: `Efetivar Fatura: ${card.name}`,
-    subtitle: `Fatura de ${label}. Selecione a conta de débito e confirme o pagamento:`,
-    amount: amount,
-    accounts: state.accounts,
-    defaultAccountId: card.account_id || card.accountId,
-    confirmText: 'Pagar Fatura',
-    onConfirm: async ({ selectedAccountId, finalAmount }) => {
-      isReconciling = true;
-      const actualAmount = (finalAmount !== null && !isNaN(finalAmount)) ? finalAmount : amount;
-      const acc = state.accounts.find(a => a.id == selectedAccountId);
-      if (!acc) throw new Error('Conta bancária selecionada não encontrada!');
+        const isCard = t.payment_method === 'card' || t.paymentMethod === 'card';
+        if (!isCard) return false;
 
-      const prevBalance = acc.balance;
-      const prevPaidBills = [...(state.paidCardBills || [])];
-
-      // Atualização otimista local imediata
-      acc.balance = parseFloat(acc.balance) - actualAmount;
-      state.paidCardBills.push({
-        card_id: cardId,
-        cardId: cardId,
-        year: year,
-        month: month,
-        amount: actualAmount
+        // Calcular a fatura a qual esta transação pertence
+        const closingDayVal = card.closing_day || card.closingDay;
+        const dueDayVal = card.due_day || card.dueDay;
+        const firstBill = getCardPaymentMonthAndYear(t.date, closingDayVal, dueDayVal);
+        
+        return parseInt(firstBill.year) === parseInt(year) && parseInt(firstBill.month) === parseInt(month);
       });
-      applyOptimisticUpdate();
 
-      try {
-        // 1. Inserir registro de fatura paga
-        const { error: errorPaid } = await state.supabase
-          .from('paid_card_bills')
-          .insert([{ card_id: cardId, year, month, amount: actualAmount }]);
-        if (errorPaid) throw errorPaid;
-
-        // 2. Inserir a transação correspondente no extrato
-        const txPayment = {
-          description: `Pagamento Fatura ${card.name} - ${label}`,
-          amount: actualAmount,
-          date: new Date().toISOString().split('T')[0],
-          category_id: null,
-          payment_method: 'account',
-          type: 'expense',
-          is_effective: true,
-          card_id: null,
-          installments: 1,
-          account_id: selectedAccountId,
-          user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
-        };
-
-        const { error: errorTx } = await state.supabase.from('transactions').insert([txPayment]);
-        if (errorTx) throw errorTx;
-
-        // 3. Atualizar o saldo da conta selecionada
-        const newBalance = parseFloat(prevBalance) - actualAmount;
-        const { error: errorAcc } = await state.supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', selectedAccountId);
-        if (errorAcc) throw errorAcc;
-
-        // 4. Reconciliar transações individuais do cartão que pertencem a esta fatura
-        const cardTransactionsToReconcile = state.transactions.filter(t => {
-          const cardIdNum = t.card_id || t.cardId;
-          if (parseInt(cardIdNum) !== parseInt(cardId)) return false;
-
-          const isCard = t.payment_method === 'card' || t.paymentMethod === 'card';
-          if (!isCard) return false;
-
-          const closingDayVal = card.closing_day || card.closingDay;
-          const dueDayVal = card.due_day || card.dueDay;
-          const firstBill = getCardPaymentMonthAndYear(t.date, closingDayVal, dueDayVal);
-          
-          return parseInt(firstBill.year) === parseInt(year) && parseInt(firstBill.month) === parseInt(month);
-        });
-
-        if (cardTransactionsToReconcile.length > 0) {
-          const ids = cardTransactionsToReconcile.map(t => t.id);
-          await state.supabase
-            .from('transactions')
-            .update({ is_effective: true })
-            .in('id', ids);
-        }
-
-        showToast(`Fatura do cartão ${card.name} paga com sucesso a partir de ${acc.name}!`, 3500, true);
-        loadAllData();
-      } catch (err) {
-        // Rollback em caso de erro
-        acc.balance = prevBalance;
-        state.paidCardBills = prevPaidBills;
-        applyOptimisticUpdate();
-        throw err;
-      } finally {
-        isReconciling = false;
+      if (cardTransactionsToReconcile.length > 0) {
+        const ids = cardTransactionsToReconcile.map(t => t.id);
+        console.log(`Reconciliando ${ids.length} transações do cartão ${card.name} para a fatura de ${monthName}/${year}`);
+        
+        const { error: errorReconcile } = await state.supabase
+          .from('transactions')
+          .update({ is_effective: true })
+          .in('id', ids);
+        if (errorReconcile) throw errorReconcile;
       }
+      
+      alert(`Fatura do cartão ${card.name} paga com sucesso a partir da conta ${acc.name}!`);
+      loadAllData();
+    } catch (err) {
+      alert('Erro ao pagar fatura: ' + err.message);
     }
   });
 }
-window.payCardBill = payCardBill;
+
+function promptAccountSelection(title, defaultAccountId, callback, currentAmount = null) {
+  const overlay = document.createElement('div');
+  overlay.id = 'dynamic-account-prompt-modal';
+  overlay.style = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.85); z-index: 99999999;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(12px);
+  `;
+  
+  const optionsHtml = state.accounts.map(acc => {
+    const isSelected = (defaultAccountId && String(acc.id) === String(defaultAccountId)) ? 'selected' : '';
+    return `<option value="${acc.id}" ${isSelected}>${acc.name} (Saldo: ${formatCurrency(acc.balance)})</option>`;
+  }).join('');
+
+  const amountFieldHtml = currentAmount !== null ? `
+    <div class="form-group" style="margin-bottom: 16px;">
+      <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--foreground); margin-bottom: 6px;">Valor a Efetivar (R$):</label>
+      <input type="number" step="0.01" id="prompt-selected-amount" value="${currentAmount}" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--foreground); outline: none; font-size: 0.95rem; font-weight: 600;">
+    </div>
+  ` : '';
+  
+  overlay.innerHTML = `
+    <div class="liquid-glass" style="width: 90%; max-width: 420px; padding: 26px; border-radius: 20px; color: var(--foreground); box-sizing: border-box; text-align: left;">
+      <h3 style="margin-top: 0; margin-bottom: 12px; color: var(--foreground); font-size: 1.15rem; font-weight: 700;">${title}</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Confirme o valor e a conta bancária para efetivar o lançamento:</p>
+      
+      ${amountFieldHtml}
+
+      <div class="form-group" style="margin-bottom: 22px;">
+        <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--foreground); margin-bottom: 6px;">Conta de Débito/Crédito:</label>
+        <select id="prompt-selected-account-id" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--foreground); outline: none; font-size: 0.9rem;">
+          ${optionsHtml}
+        </select>
+      </div>
+      
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="prompt-cancel-btn" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem; cursor: pointer;">Cancelar</button>
+        <button id="prompt-confirm-btn" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.85rem; cursor: pointer;">Confirmar Efetivação</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  
+  overlay.querySelector('#prompt-cancel-btn').onclick = () => {
+    document.body.removeChild(overlay);
+  };
+  
+  overlay.querySelector('#prompt-confirm-btn').onclick = () => {
+    const selectedAccountId = overlay.querySelector('#prompt-selected-account-id').value;
+    const amountInput = overlay.querySelector('#prompt-selected-amount');
+    const finalAmount = amountInput ? parseFloat(amountInput.value) : (currentAmount !== null ? currentAmount : null);
+    document.body.removeChild(overlay);
+    if (selectedAccountId) {
+      callback(parseInt(selectedAccountId), finalAmount);
+    }
+  };
+}
 
 async function reconcileRecurrence(recurrenceId, year, month) {
-  if (isReconciling) {
-    showToast('Uma efetivação já está em andamento. Aguarde um instante...', 2500, false);
-    return;
-  }
-
   const item = state.fixedItems.find(f => f.id == recurrenceId);
   if (!item) return;
 
   const day = Math.min(parseInt(item.day_of_month || item.dayOfMonth || 10), 28);
   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  const isIncome = item.type === 'income';
 
-  showVessaActionModal({
-    title: `Efetivar: ${cleanDescription(item.description)}`,
-    subtitle: `Lançamento fixo de ${isIncome ? 'receita' : 'despesa'}. Confirme o valor e a conta bancária:`,
-    amount: parseFloat(item.amount),
-    accounts: state.accounts,
-    defaultAccountId: item.account_id || item.accountId,
-    confirmText: 'Efetivar Agora',
-    onConfirm: async ({ selectedAccountId, finalAmount }) => {
-      isReconciling = true;
+  promptAccountSelection(`Efetivar Recorrência: ${cleanDescription(item.description)}`, item.account_id, async (selectedAccountId, finalAmount) => {
+    try {
       const amount = (finalAmount !== null && !isNaN(finalAmount)) ? finalAmount : parseFloat(item.amount);
+
+      // 1. Inserir transação efetivada
+      const payload = {
+        description: `${item.description} [R:${item.id}]`,
+        amount: amount,
+        date: dateStr,
+        category_id: item.category_id || item.categoryId || null,
+        tag_id: item.tag_id || item.tagId || null,
+        payment_method: 'account',
+        type: item.type || 'expense',
+        is_effective: true, // Já cria efetivado!
+        card_id: null,
+        installments: 1,
+        account_id: selectedAccountId,
+        user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
+      };
+
+      const { error: insertError } = await state.supabase.from('transactions').insert([payload]);
+      if (insertError) throw insertError;
+
+      // 2. Atualizar saldo da conta vinculada selecionada
       const acc = state.accounts.find(a => a.id == selectedAccountId);
-      if (!acc) throw new Error('Conta bancária selecionada não encontrada!');
-
-      const prevBalance = acc.balance;
-      const newBalance = isIncome ? (parseFloat(acc.balance) + amount) : (parseFloat(acc.balance) - amount);
-      acc.balance = newBalance;
-      applyOptimisticUpdate();
-
-      try {
-        const payload = {
-          description: `${item.description} [R:${item.id}]`,
-          amount: amount,
-          date: dateStr,
-          category_id: item.category_id || item.categoryId || null,
-          tag_id: item.tag_id || item.tagId || null,
-          payment_method: 'account',
-          type: item.type || 'expense',
-          is_effective: true,
-          card_id: null,
-          installments: 1,
-          account_id: selectedAccountId,
-          user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null
-        };
-
-        const { data: insertedData, error: insertError } = await state.supabase.from('transactions').insert([payload]).select();
-        if (insertError) throw insertError;
-
-        if (insertedData && insertedData[0]) {
-          state.transactions.unshift(insertedData[0]);
-        }
+      if (acc) {
+        const isIncome = item.type === 'income';
+        const newBalance = isIncome
+          ? parseFloat(acc.balance) + amount
+          : parseFloat(acc.balance) - amount;
 
         const { error: updateAccError } = await state.supabase
           .from('accounts')
           .update({ balance: newBalance })
           .eq('id', selectedAccountId);
         if (updateAccError) throw updateAccError;
-
-        if (Math.abs(amount - parseFloat(item.amount)) > 0.001) {
-          item.amount = amount;
-          await state.supabase.from('fixed_items').update({ amount }).eq('id', item.id);
-        }
-
-        applyOptimisticUpdate();
-        showToast('Lançamento recorrente efetivado e saldo atualizado!', 3500, true);
-        loadAllData();
-      } catch (err) {
-        acc.balance = prevBalance;
-        applyOptimisticUpdate();
-        throw err;
-      } finally {
-        isReconciling = false;
       }
+
+      // 3. Se o valor foi alterado na efetivação, sincronizar o item fixo
+      if (Math.abs(amount - parseFloat(item.amount)) > 0.001) {
+        await state.supabase.from('fixed_items').update({ amount }).eq('id', item.id);
+      }
+
+      alert('Lançamento recorrente efetivado e saldo atualizado!');
+      loadAllData();
+    } catch (err) {
+      alert('Erro ao efetivar lançamento: ' + err.message);
     }
-  });
+  }, parseFloat(item.amount));
 }
-window.reconcileRecurrence = reconcileRecurrence;
 
 async function reconcileTransaction(id) {
-  if (isReconciling) {
-    showToast('Uma efetivação já está em andamento. Aguarde um instante...', 2500, false);
-    return;
-  }
-
   const tx = state.transactions.find(t => t.id == id);
   if (!tx) return;
   
   if (tx.payment_method === 'transfer') {
-    isReconciling = true;
+    // Efetivação direta para transferências (não requer prompt de conta única)
     try {
-      const amount = parseFloat(tx.amount);
-      const originAcc = state.accounts.find(a => a.id == tx.account_id);
-      const destAcc = state.accounts.find(a => a.id == tx.destination_account_id);
-      if (!originAcc || !destAcc) throw new Error('Contas de origem ou destino não encontradas.');
-
-      const prevOrig = originAcc.balance;
-      const prevDest = destAcc.balance;
-
-      originAcc.balance = parseFloat(originAcc.balance) - amount;
-      destAcc.balance = parseFloat(destAcc.balance) + amount;
-      tx.is_effective = true;
-      applyOptimisticUpdate();
-
       const { error: updateTxError } = await state.supabase
         .from('transactions')
         .update({ is_effective: true })
         .eq('id', id);
-      if (updateTxError) {
-        originAcc.balance = prevOrig;
-        destAcc.balance = prevDest;
-        tx.is_effective = false;
-        applyOptimisticUpdate();
-        throw updateTxError;
+      if (updateTxError) throw updateTxError;
+      
+      const amount = parseFloat(tx.amount);
+      const originAcc = state.accounts.find(a => a.id == tx.account_id);
+      const destAcc = state.accounts.find(a => a.id == tx.destination_account_id);
+      
+      if (originAcc && destAcc) {
+        const newOriginBalance = parseFloat(originAcc.balance) - amount;
+        const newDestBalance = parseFloat(destAcc.balance) + amount;
+        
+        const { error: errOrigin } = await state.supabase
+          .from('accounts')
+          .update({ balance: newOriginBalance })
+          .eq('id', tx.account_id);
+        if (errOrigin) throw errOrigin;
+        
+        const { error: errDest } = await state.supabase
+          .from('accounts')
+          .update({ balance: newDestBalance })
+          .eq('id', tx.destination_account_id);
+        if (errDest) throw errDest;
       }
       
-      await state.supabase.from('accounts').update({ balance: originAcc.balance }).eq('id', tx.account_id);
-      await state.supabase.from('accounts').update({ balance: destAcc.balance }).eq('id', tx.destination_account_id);
-      
-      applyOptimisticUpdate();
-      showToast('Transferência efetivada e saldos atualizados!', 3500, true);
+      alert('Transferência efetivada e saldos atualizados!');
       loadAllData();
     } catch (err) {
-      showToast('Erro ao efetivar transferência: ' + err.message, 4000, false);
-    } finally {
-      isReconciling = false;
+      alert('Erro ao efetivar transferência: ' + err.message);
     }
   } else {
-    showVessaActionModal({
-      title: `Efetivar: ${cleanDescription(tx.description)}`,
-      subtitle: 'Confirme o valor e a conta bancária para efetivar o lançamento:',
-      amount: parseFloat(tx.amount),
-      accounts: state.accounts,
-      defaultAccountId: tx.account_id,
-      confirmText: 'Efetivar Agora',
-      onConfirm: async ({ selectedAccountId, finalAmount }) => {
-        isReconciling = true;
+    // Efetivação com escolha de conta e confirmação/edição do valor
+    promptAccountSelection(`Efetivar Lançamento: ${cleanDescription(tx.description)}`, tx.account_id, async (selectedAccountId, finalAmount) => {
+      try {
         const amount = (finalAmount !== null && !isNaN(finalAmount)) ? finalAmount : parseFloat(tx.amount);
+
+        const { error: updateTxError } = await state.supabase
+          .from('transactions')
+          .update({ is_effective: true, account_id: selectedAccountId, amount: amount })
+          .eq('id', id);
+        if (updateTxError) throw updateTxError;
+        
         const isIncome = tx.type === 'income';
+        
         const acc = state.accounts.find(a => a.id == selectedAccountId);
-        if (!acc) throw new Error('Conta bancária selecionada não encontrada!');
-
-        const prevBalance = acc.balance;
-        const prevEffective = tx.is_effective;
-        const prevAmount = tx.amount;
-        const prevAccountId = tx.account_id;
-
-        const newBalance = isIncome ? (parseFloat(acc.balance) + amount) : (parseFloat(acc.balance) - amount);
-        acc.balance = newBalance;
-        tx.is_effective = true;
-        tx.amount = amount;
-        tx.account_id = selectedAccountId;
-        applyOptimisticUpdate();
-
-        try {
-          const { error: updateTxError } = await state.supabase
-            .from('transactions')
-            .update({ is_effective: true, account_id: selectedAccountId, amount: amount })
-            .eq('id', id);
-          if (updateTxError) throw updateTxError;
-
+        if (acc) {
+          const newBalance = isIncome
+            ? parseFloat(acc.balance) + amount
+            : parseFloat(acc.balance) - amount;
+            
           const { error: updateAccError } = await state.supabase
             .from('accounts')
             .update({ balance: newBalance })
             .eq('id', selectedAccountId);
           if (updateAccError) throw updateAccError;
-
-          const matchRecurrence = tx.description ? tx.description.match(/\[R:(\d+)\]/) : null;
-          if (matchRecurrence && Math.abs(amount - parseFloat(prevAmount)) > 0.001) {
-            const rId = parseInt(matchRecurrence[1], 10);
-            await state.supabase.from('fixed_items').update({ amount }).eq('id', rId);
-          }
-
-          applyOptimisticUpdate();
-          showToast('Lançamento efetivado e saldo atualizado!', 3500, true);
-          loadAllData();
-        } catch (err) {
-          acc.balance = prevBalance;
-          tx.is_effective = prevEffective;
-          tx.amount = prevAmount;
-          tx.account_id = prevAccountId;
-          applyOptimisticUpdate();
-          throw err;
-        } finally {
-          isReconciling = false;
         }
+
+        // Se for transação recorrente [R:id] e o valor foi alterado, atualizar também o item fixo correspondente
+        const matchRecurrence = tx.description ? tx.description.match(/\[R:(\d+)\]/) : null;
+        if (matchRecurrence && Math.abs(amount - parseFloat(tx.amount)) > 0.001) {
+          const rId = parseInt(matchRecurrence[1], 10);
+          await state.supabase.from('fixed_items').update({ amount }).eq('id', rId);
+        }
+        
+        alert('Lançamento efetivado e saldo atualizado!');
+        loadAllData();
+      } catch (err) {
+        alert('Erro ao efetivar lançamento: ' + err.message);
       }
-    });
+    }, parseFloat(tx.amount));
   }
 }
-window.reconcileTransaction = reconcileTransaction;
 
 async function revertTransactionBalance(tx) {
   const isAccount = tx.payment_method === 'account' || tx.paymentMethod === 'account';
@@ -3742,17 +3507,12 @@ if (logoutBtnMobile) {
 // Abas Principais
 document.querySelectorAll('.nav-link').forEach(btn => {
   btn.addEventListener('click', () => {
-    const tabName = btn.getAttribute('data-tab');
-    if (!tabName) return;
-
     document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active-view'));
 
-    // Sincronizar todos os botões de navegação correspondentes a essa aba (desktop dock, mobile dock e header)
-    document.querySelectorAll(`.nav-link[data-tab="${tabName}"]`).forEach(b => b.classList.add('active'));
-    
-    const targetView = document.getElementById(`view-${tabName}`);
-    if (targetView) targetView.classList.add('active-view');
+    btn.classList.add('active');
+    const tabName = btn.getAttribute('data-tab');
+    document.getElementById(`view-${tabName}`).classList.add('active-view');
     state.activeTab = tabName;
 
     // Atualizar visibilidade da barra lateral de contas/cartões no celular
@@ -3784,103 +3544,6 @@ function updateSidebarVisibility() {
 
 // Ouvir redimensionamento para ajustar a barra lateral
 window.addEventListener('resize', updateSidebarVisibility);
-
-// ==========================================
-// VESSA LUXURY NAVIGATION & SHORTCUT HELPERS
-// ==========================================
-function updateVessaUserAvatars(name) {
-  const userName = name || (state.user && state.user.name) || 'Fábio';
-  const cleanName = userName.replace(/[\(\)\[\]\{\}\*👑👧👦❤️\.,_-]/g, ' ').replace(/\s+/g, ' ').trim();
-  const parts = cleanName.split(' ').filter(Boolean);
-  let initials = 'FM';
-  if (parts.length >= 2) {
-    initials = (parts[0][0] + parts[1][0]).toUpperCase();
-  } else if (parts.length === 1 && parts[0].length > 0) {
-    initials = parts[0].slice(0, 2).toUpperCase();
-  }
-  const avatarDesk = document.getElementById('vessa-avatar-disc');
-  if (avatarDesk) avatarDesk.textContent = initials;
-  const avatarMobile = document.getElementById('vessa-mobile-avatar');
-  if (avatarMobile) avatarMobile.textContent = initials;
-  const heroUserEl = document.getElementById('vessa-hero-user-name');
-  if (heroUserEl) heroUserEl.textContent = parts[0] || 'Fábio';
-  const userPillName = document.getElementById('user-display-name');
-  if (userPillName) userPillName.textContent = userName;
-}
-
-window.switchVessaSection = function(section) {
-  // Se não estiver no dashboard, navega primeiro para o dashboard
-  if (state.activeTab !== 'dashboard') {
-    const dashBtn = document.querySelector('.nav-link[data-tab="dashboard"]');
-    if (dashBtn) dashBtn.click();
-  }
-
-  // Sincronizar pílulas de aba VESSA desktop e mobile
-  document.querySelectorAll('.tab-pill, .m-tab-pill').forEach(pill => {
-    if (pill.getAttribute('data-vessa-sec') === section) {
-      pill.classList.add('active');
-    } else {
-      pill.classList.remove('active');
-    }
-  });
-
-  // Rolar suavemente até a seção desejada
-  if (section === 'overview') {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } else if (section === 'forecast') {
-    const target = document.getElementById('vessa-forecast-box') || document.querySelector('.vessa-top-forecast-section');
-    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } else if (section === 'cards') {
-    const target = document.querySelector('.inline-cards-fullwidth') || document.getElementById('inline-month-detail');
-    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } else if (section === 'fixed') {
-    const target = document.querySelector('.inline-fixed-fullwidth') || document.getElementById('inline-month-detail');
-    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-};
-
-window.switchVessaMobileSection = function(section) {
-  window.switchVessaSection(section);
-};
-
-window.triggerSearchFocus = function() {
-  if (state.activeTab !== 'dashboard') {
-    const dashBtn = document.querySelector('.nav-link[data-tab="dashboard"]');
-    if (dashBtn) dashBtn.click();
-  }
-  const minValInput = document.getElementById('tx-filter-min-val');
-  if (minValInput) {
-    minValInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    minValInput.focus();
-  }
-};
-
-window.triggerNewTxShortcut = function() {
-  const newTxBtn = document.querySelector('.nav-link[data-tab="new-tx"]');
-  if (newTxBtn) {
-    newTxBtn.click();
-  } else {
-    document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active-view'));
-    const viewNewTx = document.getElementById('view-new-tx');
-    if (viewNewTx) viewNewTx.classList.add('active-view');
-    state.activeTab = 'new-tx';
-  }
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-window.triggerNewExpenseModal = window.triggerNewTxShortcut;
-
-// Atalhos Globais de Teclado (⌘K / Ctrl+K para busca e N para novo lançamento)
-window.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-    e.preventDefault();
-    window.triggerSearchFocus();
-  }
-  if (e.key.toLowerCase() === 'n' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
-    e.preventDefault();
-    window.triggerNewTxShortcut();
-  }
-});
 
 // Abas Admin
 document.querySelectorAll('.admin-tab-btn').forEach(btn => {
