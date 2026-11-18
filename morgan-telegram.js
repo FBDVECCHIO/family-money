@@ -420,18 +420,19 @@ async function handleTelegramMessage(token, msg) {
     return;
   }
 
-  // 4. Atalhos de comandos diretos (/briefing, /cartoes, /saldos)
-  const lowerCmd = rawText.toLowerCase();
-  if (lowerCmd === '/briefing' || lowerCmd.startsWith('/briefing@')) {
+  // 4. Atalhos de comandos diretos (/briefing, /cartoes, /saldos ou texto puro "saldos", "briefing", "cartoes")
+  const lowerCmd = rawText.toLowerCase().trim().replace(/^@\w*morgan\w*bot\b\s*/i, '');
+  const cleanCmd = lowerCmd.replace(/^\//, '');
+  if (cleanCmd === 'briefing' || lowerCmd.startsWith('/briefing@')) {
     await broadcastTelegramBriefing(chatId);
     return;
   }
-  if (lowerCmd === '/cartoes' || lowerCmd.startsWith('/cartoes@')) {
+  if (cleanCmd === 'cartoes' || cleanCmd === 'cartao' || lowerCmd.startsWith('/cartoes@')) {
     const out = await agent.runLocalAutonomousParserAndReasoning('Qual o melhor cartão para usar hoje?', { channel: 'telegram', chatId, senderName });
     await sendTelegramMessage(chatId, out.reply, undefined, token, isGroup ? msg.message_id : null);
     return;
   }
-  if (lowerCmd === '/saldos' || lowerCmd.startsWith('/saldos@')) {
+  if (cleanCmd === 'saldos' || cleanCmd === 'saldo' || lowerCmd.startsWith('/saldos@')) {
     const out = await agent.runLocalAutonomousParserAndReasoning('Me mostre os saldos e a projeção de 6 meses', { channel: 'telegram', chatId, senderName });
     await sendTelegramMessage(chatId, out.reply, undefined, token, isGroup ? msg.message_id : null);
     return;

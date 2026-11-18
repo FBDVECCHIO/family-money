@@ -705,15 +705,16 @@ async function processMorganMessage({
     parts: currentUserParts
   });
 
-  // Priorizar modelos Flash-Lite de baixa latência (~700ms) e excluir modelos 2.x descontinuados (HTTP 404)
-  const deprecatedModels = new Set(['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite']);
+  // Priorizar modelos Flash de baixa latência (~700ms) com fallback resiliente para todas as versões suportadas
   const candidateModels = [
-    'gemini-3.5-flash-lite',
-    'gemini-3.1-flash-lite',
-    'gemini-flash-lite-latest',
     settings.gemini_model,
+    'gemini-3.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-flash-lite-latest',
     'gemini-3.8-flash'
-  ].filter((v, i, a) => v && !deprecatedModels.has(v) && a.indexOf(v) === i);
+  ].filter((v, i, a) => v && a.indexOf(v) === i);
 
   const executedActions = [];
   let activeModel = candidateModels[0];
