@@ -502,7 +502,12 @@ async function buildMorganRichContext() {
   const cdiAnnual = 10.65;
   const monthlyLiquidCdi = (health.totalLiquid * (cdiAnnual / 100)) / 12;
 
-  // Faturas do mês atual detalhadas por cartão
+  // Faturas do mês atual detalhadas por cartão (com próxima data exata de vencimento para ordenação precisa)
+  const nowDate = new Date();
+  const curY = nowDate.getFullYear();
+  const curM = nowDate.getMonth();
+  const curD = nowDate.getDate();
+
   const currentMonthForecast = forecast[0] || { cardBills: [] };
   const currentBillsByCard = cards.map(c => {
     const items = (currentMonthForecast.cardBills || []).filter(b => Number(b.cardId) === Number(c.id));
@@ -512,6 +517,22 @@ async function buildMorganRichContext() {
       Number(pb.year) === currentMonthForecast.year &&
       Number(pb.month) === (currentMonthForecast.month + 1)
     );
+    const dueD = parseInt(c.due_day || 10, 10);
+    let nextDueYear = curY;
+    let nextDueMonth = curM; // 0-indexed
+    if (dueD < curD || isPaid) {
+      nextDueMonth += 1;
+      if (nextDueMonth > 11) {
+        nextDueMonth = 0;
+        nextDueYear += 1;
+      }
+    }
+    const nextDueDateISO = `${nextDueYear}-${String(nextDueMonth + 1).padStart(2, '0')}-${String(dueD).padStart(2, '0')}`;
+    const targetForecastMonth = forecast.find(fm => fm.year === nextDueYear && fm.month === nextDueMonth) || currentMonthForecast;
+    const nextDueItems = (targetForecastMonth.cardBills || []).filter(b => Number(b.cardId) === Number(c.id));
+    const nextDueBillAmount = nextDueItems.reduce((s, b) => s + Number(b.amount || 0), 0);
+    const daysUntilNextDue = Math.max(0, Math.round((new Date(nextDueYear, nextDueMonth, dueD, 12, 0, 0).getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24)));
+
     return {
       cardId: c.id,
       cardName: c.name,
@@ -519,10 +540,13 @@ async function buildMorganRichContext() {
       dueDay: c.due_day,
       accountId: c.account_id,
       currentBillAmount: Number(total.toFixed(2)),
+      nextDueDateISO,
+      nextDueBillAmount: Number(nextDueBillAmount.toFixed(2)),
+      daysUntilNextDue,
       itemsCount: items.length,
       isPaid
     };
-  });
+  }).sort((a, b) => a.nextDueDateISO.localeCompare(b.nextDueDateISO));
 
   return {
     raw: { accounts, cards, categories, tags, fixedItems, transactions, paidBills, users, settings, forecast },
@@ -546,7 +570,7 @@ async function buildMorganRichContext() {
         account_id: f.account_id,
         card_id: f.card_id
       })),
-      ultimosLancamentos: transactions.slice(0, 25).map(t => ({
+      ultimosLancamentos: transactions.slice(0, 45).map(t => ({
         id: t.id,
         data: t.date,
         descricao: t.description,
@@ -558,6 +582,18 @@ async function buildMorganRichContext() {
         card_id: t.card_id,
         parcelas: t.installments || 1
       })),
+      todosLancamentosPendentesNaoEfetivados: transactions
+        .filter(t => t.is_effective === false && t.payment_method !== 'card')
+        .slice(0, 40)
+        .map(t => ({
+          id: t.id,
+          data: t.date,
+          descricao: t.description,
+          valor: Number(t.amount),
+          tipo: t.type,
+          metodo: t.payment_method,
+          account_id: t.account_id
+        })),
       pendenciasDeHoje: {
         lancamentosNaoEfetivados: todayPending.pendingTransactions.map(t => ({
           id: t.id,
@@ -995,7 +1031,7 @@ async function executeToolAction(toolName, args = {}, options = {}) {
   }
 
   // --------------------------------------------------------------------------
-  // 3. CONCILIATE TRANSACTION (Efetivar Lançamento ou Conta Fixa do Mês)
+  // 3. CONCILIATE TRANSACTION (Efetivar Lançamento ou Conta Fixa do Mês, com opção de editar valor/conta)
   // --------------------------------------------------------------------------
   if (toolName === 'conciliate_transaction') {
     let targetTx = null;
@@ -1007,6 +1043,36 @@ async function executeToolAction(toolName, args = {}, options = {}) {
         || transactions.find(t => normalizeStr(t.description).includes(q));
     }
 
+    // Se não achou transação no mês mas existe item fixo (recorrência) correspondente, gera e já efetiva a transação do mês!
+    if (!targetTx && args.description) {
+      const q = normalizeStr(args.description);
+      const matchedFixed = fixedItems.find(f => normalizeStr(f.description).includes(q));
+      if (matchedFixed) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(Math.min(28, Math.max(1, Number(matchedFixed.day_of_month || 10)))).padStart(2, '0');
+        const chosenAcc = args.account_name || args.account_id
+          ? resolveEntityByNameOrId(accounts, args.account_name || args.account_id, true)
+          : resolveEntityByNameOrId(accounts, matchedFixed.account_id, true);
+        const effAmount = (args.amount !== undefined && !isNaN(parseFloat(args.amount)))
+          ? Math.abs(parseFloat(args.amount))
+          : parseFloat(matchedFixed.amount || 0);
+
+        return await executeToolAction('create_transaction', {
+          description: `${matchedFixed.description} [R:${matchedFixed.id}]`,
+          amount: effAmount,
+          date: args.date || `${y}-${m}-${d}`,
+          type: matchedFixed.type || 'expense',
+          payment_method: matchedFixed.card_id ? 'card' : 'account',
+          account_id: chosenAcc ? chosenAcc.id : matchedFixed.account_id,
+          card_id: matchedFixed.card_id || null,
+          category_id: matchedFixed.category_id || null,
+          is_effective: args.is_effective !== undefined ? Boolean(args.is_effective) : true
+        }, options);
+      }
+    }
+
     if (!targetTx) {
       return { ok: false, error: 'Lançamento não encontrado para conciliação/efetivação.' };
     }
@@ -1014,35 +1080,70 @@ async function executeToolAction(toolName, args = {}, options = {}) {
     const newEffectiveState = args.is_effective !== undefined ? Boolean(args.is_effective) : true;
     const oldEffectiveState = targetTx.is_effective !== false;
 
-    if (newEffectiveState === oldEffectiveState) {
+    const newAmount = (args.amount !== undefined && !isNaN(parseFloat(args.amount)) && parseFloat(args.amount) > 0)
+      ? Math.abs(parseFloat(args.amount))
+      : parseFloat(targetTx.amount || 0);
+    const oldAmount = parseFloat(targetTx.amount || 0);
+
+    const newAcc = (args.account_name || args.account_id)
+      ? resolveEntityByNameOrId(accounts, args.account_name || args.account_id, false)
+      : accounts.find(a => Number(a.id) === Number(targetTx.account_id));
+    const oldAcc = accounts.find(a => Number(a.id) === Number(targetTx.account_id));
+    const targetAcc = newAcc || oldAcc || resolveEntityByNameOrId(accounts, null, true);
+
+    if (newEffectiveState === oldEffectiveState && Math.abs(newAmount - oldAmount) < 0.001 && (!targetAcc || Number(targetAcc.id) === Number(targetTx.account_id))) {
       return {
         ok: true,
         status: 'noop',
-        summary: `O lançamento "${targetTx.description}" já estava ${newEffectiveState ? 'efetivado' : 'pendente'}.`
+        summary: `O lançamento "${targetTx.description}" já estava ${newEffectiveState ? 'efetivado' : 'pendente'} com valor ${formatBRL(newAmount)}.`
       };
     }
 
-    const acc = accounts.find(a => Number(a.id) === Number(targetTx.account_id));
-    const amount = parseFloat(targetTx.amount || 0);
-    let balanceBefore = acc ? parseFloat(acc.balance || 0) : null;
-    let balanceAfter = balanceBefore;
-
-    await db.updateRows('transactions', { is_effective: newEffectiveState }, { id: `eq.${targetTx.id}` });
-
-    if (acc && targetTx.payment_method === 'account') {
-      if (newEffectiveState && !oldEffectiveState) {
-        balanceAfter = targetTx.type === 'income' ? (balanceBefore + amount) : (balanceBefore - amount);
-      } else if (!newEffectiveState && oldEffectiveState) {
-        balanceAfter = targetTx.type === 'income' ? (balanceBefore - amount) : (balanceBefore + amount);
-      }
-      balanceAfter = Number(balanceAfter.toFixed(2));
-      await db.updateRows('accounts', { balance: balanceAfter }, { id: `eq.${acc.id}` });
-      notifyMutation('accounts', 'update', { id: acc.id, balance: balanceAfter });
+    // Estornar impacto anterior se já estava efetivado em conta
+    if (oldEffectiveState && targetTx.payment_method === 'account' && oldAcc) {
+      const revertedOld = targetTx.type === 'income'
+        ? Number((parseFloat(oldAcc.balance || 0) - oldAmount).toFixed(2))
+        : Number((parseFloat(oldAcc.balance || 0) + oldAmount).toFixed(2));
+      await db.updateRows('accounts', { balance: revertedOld }, { id: `eq.${oldAcc.id}` });
+      oldAcc.balance = revertedOld;
+      notifyMutation('accounts', 'update', { id: oldAcc.id, balance: revertedOld });
     }
 
-    notifyMutation('transactions', 'update', { id: targetTx.id, is_effective: newEffectiveState });
+    const txPatch = {
+      is_effective: newEffectiveState,
+      amount: newAmount
+    };
+    if (targetAcc && targetTx.payment_method === 'account') {
+      txPatch.account_id = targetAcc.id;
+    }
+    if (args.date) txPatch.date = args.date;
+    if (args.new_description) txPatch.description = String(args.new_description).trim();
 
-    const summary = `Lançamento "${targetTx.description}" (${formatBRL(amount)}) marcado como ${newEffectiveState ? 'EFETIVADO' : 'PENDENTE'}${acc ? ` — Saldo ${acc.name}: ${formatBRL(balanceAfter)}` : ''}.`;
+    await db.updateRows('transactions', txPatch, { id: `eq.${targetTx.id}` });
+
+    let balanceBefore = targetAcc ? parseFloat(targetAcc.balance || 0) : null;
+    let balanceAfter = balanceBefore;
+
+    if (targetAcc && targetTx.payment_method === 'account' && newEffectiveState) {
+      balanceAfter = targetTx.type === 'income'
+        ? Number((balanceBefore + newAmount).toFixed(2))
+        : Number((balanceBefore - newAmount).toFixed(2));
+      await db.updateRows('accounts', { balance: balanceAfter }, { id: `eq.${targetAcc.id}` });
+      targetAcc.balance = balanceAfter;
+      notifyMutation('accounts', 'update', { id: targetAcc.id, balance: balanceAfter });
+    }
+
+    // Se for item recorrente [R:ID] e o valor mudou, atualizar também o valor base em fixed_items se solicitado
+    const rMatch = String(targetTx.description || '').match(/\[R:(\d+)\]/);
+    if (rMatch && Math.abs(newAmount - oldAmount) > 0.001) {
+      const rId = parseInt(rMatch[1], 10);
+      await db.updateRows('fixed_items', { amount: newAmount }, { id: `eq.${rId}` });
+      notifyMutation('fixed_items', 'update', { id: rId, amount: newAmount });
+    }
+
+    notifyMutation('transactions', 'update', { id: targetTx.id, ...txPatch });
+
+    const summary = `Lançamento "${txPatch.description || targetTx.description}" (${formatBRL(newAmount)}) marcado como ${newEffectiveState ? 'EFETIVADO' : 'PENDENTE'}${targetAcc ? ` — Conta ${targetAcc.name} (Saldo: ${formatBRL(balanceAfter)})` : ''}.`;
 
     const logInserted = await db.insertRows('morgan_action_logs', {
       action_type: 'conciliate_transaction',
@@ -1055,7 +1156,8 @@ async function executeToolAction(toolName, args = {}, options = {}) {
         type: 'conciliate_transaction',
         txId: targetTx.id,
         previousEffective: oldEffectiveState,
-        accountId: acc ? acc.id : null,
+        previousAmount: oldAmount,
+        accountId: targetAcc ? targetAcc.id : null,
         accountBalanceBefore: balanceBefore
       },
       executed_at: new Date().toISOString()
@@ -1071,7 +1173,156 @@ async function executeToolAction(toolName, args = {}, options = {}) {
   }
 
   // --------------------------------------------------------------------------
-  // 4. DELETE TRANSACTION (Governança Vermelha: Sempre Pede Confirmação Prévia)
+  // 3B. UPDATE TRANSACTION (Editar Valor, Descrição, Data, Conta, Cartão, Categoria ou Status de Qualquer Lançamento)
+  // --------------------------------------------------------------------------
+  if (toolName === 'update_transaction') {
+    let targetTx = null;
+    if (args.transaction_id) {
+      targetTx = transactions.find(t => Number(t.id) === Number(args.transaction_id));
+    } else if (args.search_description || args.description) {
+      const q = normalizeStr(args.search_description || args.description);
+      targetTx = transactions.find(t => normalizeStr(t.description).includes(q));
+    }
+
+    if (!targetTx) {
+      return { ok: false, error: 'Lançamento não localizado para edição.' };
+    }
+
+    const previousTxSnapshot = { ...targetTx };
+    const oldAcc = accounts.find(a => Number(a.id) === Number(targetTx.account_id));
+    const oldDestAcc = accounts.find(a => Number(a.id) === Number(targetTx.destination_account_id));
+    const oldBalanceSnapshot = {
+      oldAccId: oldAcc ? oldAcc.id : null,
+      oldAccBalance: oldAcc ? Number(oldAcc.balance) : null,
+      oldDestAccId: oldDestAcc ? oldDestAcc.id : null,
+      oldDestAccBalance: oldDestAcc ? Number(oldDestAcc.balance) : null
+    };
+
+    // 1. Estornar impacto financeiro anterior nas contas se estava efetivado
+    const oldAmount = Math.abs(parseFloat(targetTx.amount || 0));
+    const wasEffective = targetTx.is_effective !== false;
+    if (wasEffective && targetTx.payment_method === 'account' && oldAcc) {
+      const rev = targetTx.type === 'income'
+        ? Number((parseFloat(oldAcc.balance) - oldAmount).toFixed(2))
+        : Number((parseFloat(oldAcc.balance) + oldAmount).toFixed(2));
+      await db.updateRows('accounts', { balance: rev }, { id: `eq.${oldAcc.id}` });
+      oldAcc.balance = rev;
+    } else if (wasEffective && targetTx.payment_method === 'transfer' && oldAcc && oldDestAcc) {
+      const revOrig = Number((parseFloat(oldAcc.balance) + oldAmount).toFixed(2));
+      const revDest = Number((parseFloat(oldDestAcc.balance) - oldAmount).toFixed(2));
+      await db.updateRows('accounts', { balance: revOrig }, { id: `eq.${oldAcc.id}` });
+      await db.updateRows('accounts', { balance: revDest }, { id: `eq.${oldDestAcc.id}` });
+      oldAcc.balance = revOrig;
+      oldDestAcc.balance = revDest;
+    }
+
+    // 2. Preparar novos campos atualizados
+    const newAmount = (args.new_amount !== undefined || args.amount !== undefined)
+      ? Math.abs(parseFloat(args.new_amount !== undefined ? args.new_amount : args.amount))
+      : oldAmount;
+    const newType = args.type ? ((args.type === 'income' || normalizeStr(args.type) === 'receita') ? 'income' : (args.type === 'transfer' ? 'transfer' : 'expense')) : targetTx.type;
+    let newMethod = args.payment_method || targetTx.payment_method;
+    if (args.card_name || args.card_id) newMethod = 'card';
+    else if (args.account_name || args.account_id) newMethod = (newType === 'transfer' ? 'transfer' : 'account');
+
+    let newAccId = targetTx.account_id;
+    let newCardId = targetTx.card_id;
+    if (newMethod === 'card') {
+      const c = (args.card_name || args.card_id)
+        ? resolveEntityByNameOrId(cards, args.card_name || args.card_id, true)
+        : cards.find(x => Number(x.id) === Number(targetTx.card_id));
+      newCardId = c ? c.id : targetTx.card_id;
+      newAccId = null;
+    } else {
+      const a = (args.account_name || args.account_id)
+        ? resolveEntityByNameOrId(accounts, args.account_name || args.account_id, true)
+        : accounts.find(x => Number(x.id) === Number(targetTx.account_id));
+      newAccId = a ? a.id : targetTx.account_id;
+      newCardId = null;
+    }
+
+    const rTagMatch = String(targetTx.description || '').match(/\[R:\d+\]/);
+    let newDesc = args.new_description ? String(args.new_description).trim() : targetTx.description;
+    if (rTagMatch && !newDesc.includes(rTagMatch[0])) {
+      newDesc = `${newDesc} ${rTagMatch[0]}`;
+    }
+
+    let newCatId = targetTx.category_id;
+    if (args.category_name || args.category_id) {
+      const cat = resolveEntityByNameOrId(categories, args.category_name || args.category_id, false);
+      if (cat) newCatId = cat.id;
+    }
+
+    const newEffective = args.is_effective !== undefined ? Boolean(args.is_effective) : (newMethod === 'card' ? false : wasEffective);
+    const newInstallments = args.installments ? Math.max(1, parseInt(args.installments, 10)) : (targetTx.installments || 1);
+    const newDate = args.date || targetTx.date;
+
+    const patchPayload = {
+      description: newDesc,
+      amount: newAmount,
+      date: newDate,
+      type: newType,
+      payment_method: newMethod,
+      account_id: newAccId,
+      card_id: newCardId,
+      category_id: newCatId,
+      installments: newInstallments,
+      is_effective: newEffective
+    };
+
+    await db.updateRows('transactions', patchPayload, { id: `eq.${targetTx.id}` });
+
+    // 3. Aplicar novo impacto financeiro nas contas se efetivado
+    const updatedAcc = accounts.find(a => Number(a.id) === Number(newAccId));
+    const updatedDestAcc = accounts.find(a => Number(a.id) === Number(targetTx.destination_account_id));
+    if (newEffective && newMethod === 'account' && updatedAcc) {
+      const newBal = newType === 'income'
+        ? Number((parseFloat(updatedAcc.balance) + newAmount).toFixed(2))
+        : Number((parseFloat(updatedAcc.balance) - newAmount).toFixed(2));
+      await db.updateRows('accounts', { balance: newBal }, { id: `eq.${updatedAcc.id}` });
+      updatedAcc.balance = newBal;
+      notifyMutation('accounts', 'update', { id: updatedAcc.id, balance: newBal });
+    } else if (newEffective && newMethod === 'transfer' && updatedAcc && updatedDestAcc) {
+      const newOrig = Number((parseFloat(updatedAcc.balance) - newAmount).toFixed(2));
+      const newDest = Number((parseFloat(updatedDestAcc.balance) + newAmount).toFixed(2));
+      await db.updateRows('accounts', { balance: newOrig }, { id: `eq.${updatedAcc.id}` });
+      await db.updateRows('accounts', { balance: newDest }, { id: `eq.${updatedDestAcc.id}` });
+      updatedAcc.balance = newOrig;
+      updatedDestAcc.balance = newDest;
+      notifyMutation('accounts', 'update', { id: updatedAcc.id });
+    }
+
+    notifyMutation('transactions', 'update', { id: targetTx.id, ...patchPayload });
+
+    const summary = `Lançamento #${targetTx.id} atualizado: "${newDesc}" ➔ ${formatBRL(newAmount)} (${newDate}) [${newEffective ? 'Efetivado' : 'Pendente'}]${updatedAcc ? ` — Saldo ${updatedAcc.name}: ${formatBRL(updatedAcc.balance)}` : ''}.`;
+    const logInserted = await db.insertRows('morgan_action_logs', {
+      action_type: 'update_transaction',
+      status: 'executed',
+      channel,
+      chat_id: String(chatId),
+      summary,
+      payload_json: { toolName, args, txId: targetTx.id, patchPayload },
+      undo_snapshot_json: {
+        type: 'update_transaction',
+        txId: targetTx.id,
+        previousTx: previousTxSnapshot,
+        ...oldBalanceSnapshot
+      },
+      executed_at: new Date().toISOString()
+    });
+
+    return {
+      ok: true,
+      status: 'executed',
+      actionLogId: logInserted[0]?.id,
+      canUndo: true,
+      summary,
+      transaction: { ...targetTx, ...patchPayload }
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // 4. DELETE TRANSACTION (Exclusão Direta com Botão [Desfazer] se < Limite, ou Confirmação se >= Limite)
   // --------------------------------------------------------------------------
   if (toolName === 'delete_transaction') {
     let targetTx = null;
@@ -1082,11 +1333,21 @@ async function executeToolAction(toolName, args = {}, options = {}) {
       targetTx = transactions.find(t => normalizeStr(t.description).includes(q));
     }
 
+    // Se o usuário pediu para excluir e o item está apenas em fixed_items, redireciona para delete_fixed_item!
+    if (!targetTx && args.description) {
+      const q = normalizeStr(args.description);
+      const matchedFixed = fixedItems.find(f => normalizeStr(f.description).includes(q));
+      if (matchedFixed) {
+        return await executeToolAction('delete_fixed_item', { fixed_item_id: matchedFixed.id, also_delete_current_month_tx: true }, { ...options, forceExecute: true });
+      }
+    }
+
     if (!targetTx) {
       return { ok: false, error: 'Lançamento não localizado para exclusão.' };
     }
 
-    if (!forceExecute) {
+    const txAmount = Math.abs(parseFloat(targetTx.amount || 0));
+    if (!forceExecute && txAmount >= threshold) {
       const pendingLog = await db.insertRows('morgan_action_logs', {
         action_type: 'delete_transaction',
         status: 'pending_confirmation',
@@ -1095,7 +1356,7 @@ async function executeToolAction(toolName, args = {}, options = {}) {
         summary: `[CONFIRMAR EXCLUSÃO] Excluir "${targetTx.description}" (${formatBRL(targetTx.amount)}) de ${targetTx.date}`,
         payload_json: {
           toolName: 'delete_transaction',
-          args: { transaction_id: targetTx.id }
+          args: { transaction_id: targetTx.id, also_delete_fixed_recurrence: args.also_delete_fixed_recurrence }
         }
       });
 
@@ -1108,15 +1369,27 @@ async function executeToolAction(toolName, args = {}, options = {}) {
       };
     }
 
-    // Execução confirmada: estornar saldo se aplicável e remover transação
+    // Execução imediata: estornar saldo se aplicável e remover transação (com Undo completo disponível!)
     const amount = parseFloat(targetTx.amount || 0);
     const isEff = targetTx.is_effective !== false;
     const acc = accounts.find(a => Number(a.id) === Number(targetTx.account_id));
     const destAcc = accounts.find(a => Number(a.id) === Number(targetTx.destination_account_id));
 
+    let deletedFixedItem = null;
+    const rMatch = String(targetTx.description || '').match(/\[R:(\d+)\]/);
+    if (args.also_delete_fixed_recurrence && rMatch) {
+      const rId = parseInt(rMatch[1], 10);
+      deletedFixedItem = fixedItems.find(f => Number(f.id) === rId) || null;
+      if (deletedFixedItem) {
+        await db.deleteRows('fixed_items', { id: `eq.${rId}` });
+        notifyMutation('fixed_items', 'delete', { id: rId });
+      }
+    }
+
     const undoSnapshot = {
       type: 'delete_transaction',
       deletedTx: { ...targetTx },
+      deletedFixedItem,
       accountId: acc ? acc.id : null,
       accountBalanceBefore: acc ? Number(acc.balance) : null,
       destAccountId: destAcc ? destAcc.id : null,
@@ -1140,7 +1413,8 @@ async function executeToolAction(toolName, args = {}, options = {}) {
     await db.deleteRows('transactions', { id: `eq.${targetTx.id}` });
     notifyMutation('transactions', 'delete', { id: targetTx.id });
 
-    const summary = `Lançamento "${targetTx.description}" (${formatBRL(amount)}) excluído e saldo estornado com sucesso.`;
+    const fixedSuffix = deletedFixedItem ? ` (A recorrência fixa "${deletedFixedItem.description}" também foi removida permanentemente)` : '';
+    const summary = `Lançamento "${targetTx.description}" (${formatBRL(amount)}) excluído${isEff && acc ? ' e saldo estornado' : ''} com sucesso${fixedSuffix}.`;
     const logInserted = await db.insertRows('morgan_action_logs', {
       action_type: 'delete_transaction',
       status: 'executed',
@@ -1374,6 +1648,291 @@ async function executeToolAction(toolName, args = {}, options = {}) {
       summary,
       fixedItem: inserted[0]
     };
+  }
+
+  // --------------------------------------------------------------------------
+  // 7B. UPDATE FIXED ITEM (Editar Valor, Dia, Conta, Cartão ou Descrição de Despesa/Receita Fixa)
+  // --------------------------------------------------------------------------
+  if (toolName === 'update_fixed_item') {
+    let targetFixed = null;
+    if (args.fixed_item_id) {
+      targetFixed = fixedItems.find(f => Number(f.id) === Number(args.fixed_item_id));
+    } else if (args.search_description || args.description) {
+      const q = normalizeStr(args.search_description || args.description);
+      targetFixed = fixedItems.find(f => normalizeStr(f.description).includes(q));
+    }
+
+    if (!targetFixed) {
+      return { ok: false, error: 'Item fixo recorrente não localizado para edição.' };
+    }
+
+    const previousFixedSnapshot = { ...targetFixed };
+    const patch = {};
+    if (args.new_description) patch.description = String(args.new_description).trim();
+    if (args.new_amount !== undefined || args.amount !== undefined) {
+      const val = Math.abs(parseFloat(args.new_amount !== undefined ? args.new_amount : args.amount));
+      if (val > 0) patch.amount = val;
+    }
+    if (args.day_of_month !== undefined) {
+      patch.day_of_month = Math.min(31, Math.max(1, parseInt(args.day_of_month, 10)));
+    }
+    if (args.type) {
+      patch.type = (args.type === 'income' || normalizeStr(args.type) === 'receita') ? 'income' : 'expense';
+    }
+    if (args.card_name || args.card_id) {
+      const c = resolveEntityByNameOrId(cards, args.card_name || args.card_id, false);
+      if (c) {
+        patch.card_id = c.id;
+        patch.account_id = null;
+      }
+    } else if (args.account_name || args.account_id) {
+      const a = resolveEntityByNameOrId(accounts, args.account_name || args.account_id, false);
+      if (a) {
+        patch.account_id = a.id;
+        patch.card_id = null;
+      }
+    }
+    if (args.category_name || args.category_id) {
+      const cat = resolveEntityByNameOrId(categories, args.category_name || args.category_id, false);
+      if (cat) patch.category_id = cat.id;
+    }
+
+    await db.updateRows('fixed_items', patch, { id: `eq.${targetFixed.id}` });
+    notifyMutation('fixed_items', 'update', { id: targetFixed.id, ...patch });
+
+    // Sincronizar eventual transação pendente deste mês com [R:ID]
+    const rTag = `[R:${targetFixed.id}]`;
+    const pendingLinkedTxs = transactions.filter(t => t.is_effective === false && String(t.description || '').includes(rTag));
+    for (const ptx of pendingLinkedTxs) {
+      const txSync = {};
+      if (patch.amount !== undefined) txSync.amount = patch.amount;
+      if (patch.description !== undefined) txSync.description = `${patch.description} ${rTag}`;
+      if (Object.keys(txSync).length > 0) {
+        await db.updateRows('transactions', txSync, { id: `eq.${ptx.id}` });
+        notifyMutation('transactions', 'update', { id: ptx.id, ...txSync });
+      }
+    }
+
+    const updatedDesc = patch.description || targetFixed.description;
+    const updatedAmt = patch.amount !== undefined ? patch.amount : targetFixed.amount;
+    const updatedDay = patch.day_of_month !== undefined ? patch.day_of_month : targetFixed.day_of_month;
+    const summary = `Despesa/Receita Fixa #${targetFixed.id} atualizada: "${updatedDesc}" ➔ ${formatBRL(updatedAmt)} (Vencimento: todo dia ${updatedDay}).`;
+
+    const logInserted = await db.insertRows('morgan_action_logs', {
+      action_type: 'update_fixed_item',
+      status: 'executed',
+      channel,
+      chat_id: String(chatId),
+      summary,
+      payload_json: { toolName, args, fixedItemId: targetFixed.id, patch },
+      undo_snapshot_json: {
+        type: 'update_fixed_item',
+        fixedItemId: targetFixed.id,
+        previousFixed: previousFixedSnapshot
+      },
+      executed_at: new Date().toISOString()
+    });
+
+    return {
+      ok: true,
+      status: 'executed',
+      actionLogId: logInserted[0]?.id,
+      canUndo: true,
+      summary
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // 7C. DELETE FIXED ITEM (Cancelar / Excluir Despesa Fixa ou Assinatura Recorrente, Único ou em Lote)
+  // --------------------------------------------------------------------------
+  if (toolName === 'delete_fixed_item') {
+    let matchedItems = [];
+    if (args.fixed_item_id) {
+      const found = fixedItems.find(f => Number(f.id) === Number(args.fixed_item_id));
+      if (found) matchedItems = [found];
+    } else if (args.description || args.search_description) {
+      const q = normalizeStr(args.description || args.search_description);
+      const allMatches = fixedItems.filter(f => normalizeStr(f.description).includes(q));
+      if (args.delete_all_matching) {
+        matchedItems = allMatches;
+      } else if (args.amount !== undefined) {
+        const targetAmt = Math.abs(parseFloat(args.amount));
+        const byAmt = allMatches.filter(f => Math.abs(parseFloat(f.amount) - targetAmt) < 0.05);
+        matchedItems = byAmt.length > 0 ? [byAmt[0]] : (allMatches.length > 0 ? [allMatches[0]] : []);
+      } else if (allMatches.length > 0) {
+        matchedItems = [allMatches[0]];
+      }
+    }
+
+    if (matchedItems.length === 0) {
+      return { ok: false, error: 'Nenhuma despesa/receita fixa encontrada com essa descrição ou ID.' };
+    }
+
+    const deletedFixedRecords = [];
+    const deletedLinkedTxs = [];
+    const alsoDeletePendingTx = args.also_delete_current_month_tx !== false;
+
+    for (const item of matchedItems) {
+      deletedFixedRecords.push({ ...item });
+      await db.deleteRows('fixed_items', { id: `eq.${item.id}` });
+      notifyMutation('fixed_items', 'delete', { id: item.id });
+
+      if (alsoDeletePendingTx) {
+        const rTag = `[R:${item.id}]`;
+        const linkedPending = transactions.filter(t => t.is_effective === false && String(t.description || '').includes(rTag));
+        for (const ptx of linkedPending) {
+          deletedLinkedTxs.push({ ...ptx });
+          await db.deleteRows('transactions', { id: `eq.${ptx.id}` });
+          notifyMutation('transactions', 'delete', { id: ptx.id });
+        }
+      }
+    }
+
+    const namesList = deletedFixedRecords.map(f => `"${f.description}" (${formatBRL(f.amount)} - dia ${f.day_of_month})`).join(', ');
+    const txRemovedNote = deletedLinkedTxs.length > 0
+      ? ` e ${deletedLinkedTxs.length} lançamento(s) pendente(s) vinculado(s) deste mês também removido(s)`
+      : '';
+    const summary = `Recorrência(s) fixa(s) cancelada(s)/excluída(s) permanentemente: ${namesList}${txRemovedNote}.`;
+
+    const logInserted = await db.insertRows('morgan_action_logs', {
+      action_type: 'delete_fixed_item',
+      status: 'executed',
+      channel,
+      chat_id: String(chatId),
+      summary,
+      payload_json: { toolName, args },
+      undo_snapshot_json: {
+        type: 'delete_fixed_item',
+        deletedFixedRecords,
+        deletedLinkedTxs
+      },
+      executed_at: new Date().toISOString()
+    });
+
+    return {
+      ok: true,
+      status: 'executed',
+      actionLogId: logInserted[0]?.id,
+      canUndo: true,
+      summary,
+      deletedCount: deletedFixedRecords.length
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // 7D. MANAGE ENTITY (Administração Geral de Contas Bancárias, Cartões de Crédito e Categorias)
+  // --------------------------------------------------------------------------
+  if (toolName === 'manage_entity') {
+    const entityType = normalizeStr(args.entity_type || '');
+    const op = normalizeStr(args.operation || 'update'); // 'create', 'update', 'delete'
+
+    if (entityType.includes('card') || entityType.includes('cartao')) {
+      if (op === 'create') {
+        const acc = resolveEntityByNameOrId(accounts, args.account_name || args.account_id, true);
+        const inserted = await db.insertRows('cards', {
+          name: String(args.name || 'Novo Cartão').trim(),
+          closing_day: Math.min(31, Math.max(1, parseInt(args.closing_day || 1, 10))),
+          due_day: Math.min(31, Math.max(1, parseInt(args.due_day || 10, 10))),
+          account_id: acc ? acc.id : (accounts[0]?.id || 6)
+        });
+        notifyMutation('cards', 'insert', inserted[0]);
+        return {
+          ok: true,
+          status: 'executed',
+          summary: `Cartão de crédito "${inserted[0].name}" (Fechamento dia ${inserted[0].closing_day}, Vencimento dia ${inserted[0].due_day}) cadastrado com sucesso!`
+        };
+      }
+      const targetCard = resolveEntityByNameOrId(cards, args.entity_id || args.name || args.search_name, false);
+      if (!targetCard) return { ok: false, error: 'Cartão não localizado.' };
+      if (op === 'delete') {
+        await db.deleteRows('cards', { id: `eq.${targetCard.id}` });
+        notifyMutation('cards', 'delete', { id: targetCard.id });
+        return { ok: true, status: 'executed', summary: `Cartão "${targetCard.name}" excluído com sucesso.` };
+      }
+      const patch = {};
+      if (args.new_name) patch.name = String(args.new_name).trim();
+      if (args.closing_day) patch.closing_day = Math.min(31, Math.max(1, parseInt(args.closing_day, 10)));
+      if (args.due_day) patch.due_day = Math.min(31, Math.max(1, parseInt(args.due_day, 10)));
+      if (args.account_name || args.account_id) {
+        const acc = resolveEntityByNameOrId(accounts, args.account_name || args.account_id, false);
+        if (acc) patch.account_id = acc.id;
+      }
+      await db.updateRows('cards', patch, { id: `eq.${targetCard.id}` });
+      notifyMutation('cards', 'update', { id: targetCard.id, ...patch });
+      return {
+        ok: true,
+        status: 'executed',
+        summary: `Cartão "${patch.name || targetCard.name}" atualizado (Fechamento: dia ${patch.closing_day || targetCard.closing_day} | Vencimento: dia ${patch.due_day || targetCard.due_day}).`
+      };
+    }
+
+    if (entityType.includes('account') || entityType.includes('conta')) {
+      if (op === 'create') {
+        const inserted = await db.insertRows('accounts', {
+          name: String(args.name || 'Nova Conta').trim(),
+          balance: Number(parseFloat(args.balance || 0).toFixed(2))
+        });
+        notifyMutation('accounts', 'insert', inserted[0]);
+        return {
+          ok: true,
+          status: 'executed',
+          summary: `Conta bancária "${inserted[0].name}" cadastrada com saldo inicial de ${formatBRL(inserted[0].balance)}.`
+        };
+      }
+      const targetAcc = resolveEntityByNameOrId(accounts, args.entity_id || args.name || args.search_name, false);
+      if (!targetAcc) return { ok: false, error: 'Conta bancária não localizada.' };
+      if (op === 'delete') {
+        await db.deleteRows('accounts', { id: `eq.${targetAcc.id}` });
+        notifyMutation('accounts', 'delete', { id: targetAcc.id });
+        return { ok: true, status: 'executed', summary: `Conta bancária "${targetAcc.name}" excluída com sucesso.` };
+      }
+      const patch = {};
+      if (args.new_name) patch.name = String(args.new_name).trim();
+      if (args.balance !== undefined) patch.balance = Number(parseFloat(args.balance).toFixed(2));
+      await db.updateRows('accounts', patch, { id: `eq.${targetAcc.id}` });
+      notifyMutation('accounts', 'update', { id: targetAcc.id, ...patch });
+      return {
+        ok: true,
+        status: 'executed',
+        summary: `Conta bancária "${patch.name || targetAcc.name}" atualizada com sucesso (Saldo: ${formatBRL(patch.balance !== undefined ? patch.balance : targetAcc.balance)}).`
+      };
+    }
+
+    if (entityType.includes('categor')) {
+      if (op === 'create') {
+        const inserted = await db.insertRows('categories', {
+          name: String(args.name || 'Nova Categoria').trim(),
+          icon: args.icon || 'tag',
+          color: args.color || '#8b5cf6'
+        });
+        notifyMutation('categories', 'insert', inserted[0]);
+        return {
+          ok: true,
+          status: 'executed',
+          summary: `Categoria "${inserted[0].name}" criada com sucesso!`
+        };
+      }
+      const targetCat = resolveEntityByNameOrId(categories, args.entity_id || args.name || args.search_name, false);
+      if (!targetCat) return { ok: false, error: 'Categoria não localizada.' };
+      if (op === 'delete') {
+        await db.deleteRows('categories', { id: `eq.${targetCat.id}` });
+        notifyMutation('categories', 'delete', { id: targetCat.id });
+        return { ok: true, status: 'executed', summary: `Categoria "${targetCat.name}" excluída com sucesso.` };
+      }
+      const patch = {};
+      if (args.new_name) patch.name = String(args.new_name).trim();
+      if (args.color) patch.color = args.color;
+      if (args.icon) patch.icon = args.icon;
+      await db.updateRows('categories', patch, { id: `eq.${targetCat.id}` });
+      notifyMutation('categories', 'update', { id: targetCat.id, ...patch });
+      return {
+        ok: true,
+        status: 'executed',
+        summary: `Categoria "${patch.name || targetCat.name}" atualizada com sucesso.`
+      };
+    }
+
+    return { ok: false, error: 'Tipo de entidade inválido para manage_entity (use account, card ou category).' };
   }
 
   // --------------------------------------------------------------------------
@@ -1645,17 +2204,35 @@ async function undoExecutedAction(actionLogId) {
     notifyMutation('accounts', 'update', {});
   } else if (snap.type === 'conciliate_transaction') {
     if (snap.txId) {
-      await db.updateRows('transactions', { is_effective: snap.previousEffective }, { id: `eq.${snap.txId}` });
+      const txRestore = { is_effective: snap.previousEffective };
+      if (snap.previousAmount !== undefined) txRestore.amount = snap.previousAmount;
+      await db.updateRows('transactions', txRestore, { id: `eq.${snap.txId}` });
       notifyMutation('transactions', 'update', { id: snap.txId });
     }
     if (snap.accountId && snap.accountBalanceBefore !== null) {
       await db.updateRows('accounts', { balance: snap.accountBalanceBefore }, { id: `eq.${snap.accountId}` });
       notifyMutation('accounts', 'update', { id: snap.accountId });
     }
+  } else if (snap.type === 'update_transaction') {
+    if (snap.txId && snap.previousTx) {
+      await db.updateRows('transactions', snap.previousTx, { id: `eq.${snap.txId}` });
+      notifyMutation('transactions', 'update', { id: snap.txId });
+    }
+    if (snap.oldAccId && snap.oldAccBalance !== null && snap.oldAccBalance !== undefined) {
+      await db.updateRows('accounts', { balance: snap.oldAccBalance }, { id: `eq.${snap.oldAccId}` });
+    }
+    if (snap.oldDestAccId && snap.oldDestAccBalance !== null && snap.oldDestAccBalance !== undefined) {
+      await db.updateRows('accounts', { balance: snap.oldDestAccBalance }, { id: `eq.${snap.oldDestAccId}` });
+    }
+    notifyMutation('accounts', 'update', {});
   } else if (snap.type === 'delete_transaction') {
     if (snap.deletedTx) {
       await db.insertRows('transactions', snap.deletedTx);
       notifyMutation('transactions', 'insert', snap.deletedTx);
+    }
+    if (snap.deletedFixedItem) {
+      await db.insertRows('fixed_items', snap.deletedFixedItem);
+      notifyMutation('fixed_items', 'insert', snap.deletedFixedItem);
     }
     if (snap.accountId && snap.accountBalanceBefore !== null) {
       await db.updateRows('accounts', { balance: snap.accountBalanceBefore }, { id: `eq.${snap.accountId}` });
@@ -1682,6 +2259,24 @@ async function undoExecutedAction(actionLogId) {
     if (snap.fixedItemId) {
       await db.deleteRows('fixed_items', { id: `eq.${snap.fixedItemId}` });
       notifyMutation('fixed_items', 'delete', { id: snap.fixedItemId });
+    }
+  } else if (snap.type === 'update_fixed_item') {
+    if (snap.fixedItemId && snap.previousFixed) {
+      await db.updateRows('fixed_items', snap.previousFixed, { id: `eq.${snap.fixedItemId}` });
+      notifyMutation('fixed_items', 'update', { id: snap.fixedItemId });
+    }
+  } else if (snap.type === 'delete_fixed_item') {
+    if (Array.isArray(snap.deletedFixedRecords)) {
+      for (const fRec of snap.deletedFixedRecords) {
+        await db.insertRows('fixed_items', fRec);
+      }
+      notifyMutation('fixed_items', 'insert', {});
+    }
+    if (Array.isArray(snap.deletedLinkedTxs)) {
+      for (const tRec of snap.deletedLinkedTxs) {
+        await db.insertRows('transactions', tRec);
+      }
+      notifyMutation('transactions', 'insert', {});
     }
   } else if (snap.type === 'save_family_memory_fact') {
     await db.updateMorganSettings({

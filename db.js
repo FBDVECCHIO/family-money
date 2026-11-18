@@ -540,6 +540,8 @@ async function selectRows(table, query = {}) {
       }
       return proj;
     });
+  } else {
+    rows = rows.map(r => ({ ...r }));
   }
 
   return rows;

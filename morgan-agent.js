@@ -54,24 +54,49 @@ const MORGAN_TOOLS_DECLARATIONS = [
   },
   {
     name: 'conciliate_transaction',
-    description: 'Marca um lançamento pendente como efetivado/pago (is_effective = true) ou reverte para pendente, ajustando o saldo da conta bancária vinculada.',
+    description: 'Marca um lançamento pendente como efetivado/pago (is_effective = true) ou reverte para pendente, ajustando o saldo da conta bancária vinculada. Permite também alterar o valor pago (amount) ou escolher a conta bancária (account_name) no momento da efetivação. Se for uma conta fixa recorrente que ainda não gerou lançamento no mês, cria e já efetiva automaticamente.',
     parameters: {
       type: 'OBJECT',
       properties: {
         transaction_id: { type: 'INTEGER', description: 'ID numérico do lançamento (se conhecido)' },
-        description: { type: 'STRING', description: 'Texto parcial da descrição do lançamento caso o ID não seja informado' },
-        is_effective: { type: 'BOOLEAN', description: 'true para efetivar/conciliar, false para marcar como pendente' }
+        description: { type: 'STRING', description: 'Texto parcial da descrição do lançamento ou da conta fixa caso o ID não seja informado' },
+        is_effective: { type: 'BOOLEAN', description: 'true para efetivar/pagar/conciliar, false para voltar a pendente' },
+        amount: { type: 'NUMBER', description: 'Valor exato efetivado (opcional, caso o valor pago seja diferente do valor previsto)' },
+        account_name: { type: 'STRING', description: 'Nome da conta bancária onde foi pago/debitado (opcional, ex: Itaú Personalite, Itaú PJ, ML - COFRE)' },
+        date: { type: 'STRING', description: 'Data da efetivação YYYY-MM-DD (opcional)' }
+      }
+    }
+  },
+  {
+    name: 'update_transaction',
+    description: 'Edita/altera qualquer lançamento existente (muda valor, descrição, data, categoria, conta bancária, cartão de crédito, número de parcelas ou status de efetivação) e recalcula automaticamente os saldos das contas envolvidas.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        transaction_id: { type: 'INTEGER', description: 'ID numérico do lançamento a editar (se conhecido)' },
+        search_description: { type: 'STRING', description: 'Descrição atual ou parcial do lançamento para localizá-lo caso o ID não seja informado' },
+        new_description: { type: 'STRING', description: 'Nova descrição do lançamento (se quiser renomear)' },
+        new_amount: { type: 'NUMBER', description: 'Novo valor em reais do lançamento (se quiser alterar o valor)' },
+        date: { type: 'STRING', description: 'Nova data YYYY-MM-DD (se quiser alterar a data)' },
+        type: { type: 'STRING', description: '"expense", "income" ou "transfer"' },
+        payment_method: { type: 'STRING', description: '"account", "card" ou "transfer"' },
+        account_name: { type: 'STRING', description: 'Nova conta bancária (ex: Itaú PJ, Itaú Personalite, ML - COFRE, Bradesco)' },
+        card_name: { type: 'STRING', description: 'Novo cartão de crédito (ex: Azul Infinite, Black Infinite, Nubanck)' },
+        category_name: { type: 'STRING', description: 'Nova categoria do lançamento' },
+        installments: { type: 'INTEGER', description: 'Novo número de parcelas' },
+        is_effective: { type: 'BOOLEAN', description: 'true se efetivado, false se pendente' }
       }
     }
   },
   {
     name: 'delete_transaction',
-    description: 'Solicita a exclusão de um lançamento financeiro e o estorno do respectivo saldo. Sempre gera um pedido de confirmação de segurança para o usuário.',
+    description: 'Exclui um lançamento financeiro do extrato e estorna automaticamente seu impacto no saldo da conta. Se o usuário pedir também para cancelar da recorrência fixa, defina also_delete_fixed_recurrence=true.',
     parameters: {
       type: 'OBJECT',
       properties: {
         transaction_id: { type: 'INTEGER', description: 'ID numérico do lançamento a excluir' },
-        description: { type: 'STRING', description: 'Descrição parcial do lançamento caso o ID não seja conhecido' }
+        description: { type: 'STRING', description: 'Descrição parcial do lançamento caso o ID não seja conhecido' },
+        also_delete_fixed_recurrence: { type: 'BOOLEAN', description: 'true se o usuário pediu para remover também das contas fixas/recorrências mensais' }
       }
     }
   },
@@ -104,7 +129,7 @@ const MORGAN_TOOLS_DECLARATIONS = [
   },
   {
     name: 'create_fixed_item',
-    description: 'Cadastra uma nova despesa fixa mensal (assinatura, aluguel, escola) ou receita recorrente (salário, dividendo).',
+    description: 'Cadastra uma nova despesa fixa mensal (assinatura, aluguel, escola, academia) ou receita recorrente (salário, dividendo) na tabela de itens fixos (fixed_items).',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -117,6 +142,56 @@ const MORGAN_TOOLS_DECLARATIONS = [
         category_name: { type: 'STRING', description: 'Nome da categoria' }
       },
       required: ['description', 'amount', 'day_of_month', 'type']
+    }
+  },
+  {
+    name: 'update_fixed_item',
+    description: 'Edita/altera uma despesa fixa mensal ou receita recorrente cadastrada em fixed_items (altera valor mensal, dia de vencimento, descrição, conta bancária ou cartão de crédito).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        fixed_item_id: { type: 'INTEGER', description: 'ID numérico do item fixo em itensFixosRecorrentes (se conhecido)' },
+        search_description: { type: 'STRING', description: 'Nome atual da conta fixa/assinatura para localizar (ex: Pano Bianco, Netflix, Vivo, Mesada)' },
+        new_description: { type: 'STRING', description: 'Novo nome/descrição da conta fixa' },
+        new_amount: { type: 'NUMBER', description: 'Novo valor mensal em reais' },
+        day_of_month: { type: 'INTEGER', description: 'Novo dia de vencimento (1 a 31)' },
+        account_name: { type: 'STRING', description: 'Nova conta bancária vinculada' },
+        card_name: { type: 'STRING', description: 'Novo cartão de crédito vinculado' },
+        category_name: { type: 'STRING', description: 'Nova categoria' }
+      }
+    }
+  },
+  {
+    name: 'delete_fixed_item',
+    description: 'Cancela/exclui permanentemente uma ou todas as despesas fixas / assinaturas recorrentes da tabela fixed_items (ex: "cancele a academia nas contas fixas", "remova das recorrências"). Também remove automaticamente os lançamentos pendentes não efetivados deste mês gerados por essa recorrência.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        fixed_item_id: { type: 'INTEGER', description: 'ID numérico do item fixo em itensFixosRecorrentes (se conhecido)' },
+        description: { type: 'STRING', description: 'Nome ou descrição parcial da conta fixa/recorrência a cancelar (ex: Pano Bianco Academia, Netflix)' },
+        amount: { type: 'NUMBER', description: 'Valor específico caso existam duas recorrências com o mesmo nome e queira excluir apenas uma' },
+        delete_all_matching: { type: 'BOOLEAN', description: 'true para excluir TODOS os itens fixos que contenham essa descrição (ex: excluir todas as mensalidades da Pano Bianco)' },
+        also_delete_current_month_tx: { type: 'BOOLEAN', description: 'true (padrão) para remover também os lançamentos pendentes [R:ID] deste mês' }
+      }
+    }
+  },
+  {
+    name: 'manage_entity',
+    description: 'Administração geral: cria, edita ou exclui Contas Bancárias (account), Cartões de Crédito (card) ou Categorias (category). Permite alterar dia de fechamento/vencimento de cartão, renomear conta ou criar nova categoria.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        entity_type: { type: 'STRING', description: '"account" (conta bancária), "card" (cartão de crédito) ou "category" (categoria)' },
+        operation: { type: 'STRING', description: '"create" (criar), "update" (editar) ou "delete" (excluir)' },
+        entity_id: { type: 'INTEGER', description: 'ID da conta, cartão ou categoria (se conhecido)' },
+        name: { type: 'STRING', description: 'Nome da entidade (para criar ou localizar)' },
+        new_name: { type: 'STRING', description: 'Novo nome (em caso de edição/update)' },
+        balance: { type: 'NUMBER', description: 'Saldo da conta bancária (para account)' },
+        closing_day: { type: 'INTEGER', description: 'Dia de fechamento do cartão (1 a 31)' },
+        due_day: { type: 'INTEGER', description: 'Dia de vencimento da fatura do cartão (1 a 31)' },
+        account_name: { type: 'STRING', description: 'Conta vinculada ao cartão de crédito' }
+      },
+      required: ['entity_type', 'operation']
     }
   },
   {
@@ -230,14 +305,27 @@ DIRETRIZES E MEMÓRIA PERMANENTE DA FAMÍLIA:
 - Fatos e Regras Memorizadas:
 ${(mem.fatosMemorizados && mem.fatosMemorizados.length > 0) ? mem.fatosMemorizados.map(f => `  * ${f}`).join('\n') : '  * (Nenhum fato extra cadastrado)'}
 
-COMO VOCÊ OPERA (CAPACIDADES ATIVAS E REATIVAS):
-1. VOCÊ TEM MÃOS OPERACIONAIS (TOOLS): Sempre que o usuário pedir para lançar uma despesa, registrar uma receita, fazer uma transferência entre contas, efetivar/conciliar um lançamento, excluir um item, ajustar saldo, pagar fatura, simular compra ou memorizar um fato, CHAME IMEDIATAMENTE A FERRAMENTA CORRESPONDENTE.
-2. PRECISÃO DE VALORES E CONTAS:
-   - O campo \`amount\` em \`create_transaction\` e \`transfer_between_accounts\` deve ser EXATAMENTE o valor informado pelo usuário (ex: se o usuário disser "lance 10,00", \`amount\` é \`10\`). NUNCA multiplique nem altere o valor informado.
-   - Diferencie com atenção as contas da família: "Itaú PJ" (conta empresa/PJ), "Itaú Personalite" (conta pessoal/PF), "ML - COFRE" (Mercado Livre / Cofre) e "Bradesco".
-3. ÁUDIO E FOTOS DE COMPROVANTES: Se o usuário enviar um áudio (nota de voz) dizendo o que gastou ou enviar a foto de um comprovante PIX/nota fiscal/cupom de cartão, extraia o valor exato, estabelecimento/descrição, categoria, conta ou cartão e chame \`create_transaction\` (ou \`transfer_between_accounts\`) imediatamente.
-4. SAUDAÇÕES E CONVERSAS DE GRUPO: Se alguém no grupo ou chat privado mandar apenas "oi", "oi?", "olá", "tudo bem?", responda de forma cordial, breve, prestativa e humana (sem despejar relatórios longos não solicitados).
-5. COMUNICAÇÃO: Responda em português do Brasil com elegância executiva, clareza, formatação Markdown limpa e números precisos baseados exclusivamente no snapshot real abaixo.
+COMO VOCÊ OPERA (ADMINISTRAÇÃO TOTAL, EFETIVAÇÃO, EDIÇÃO E EXECUÇÃO IMEDIATA):
+1. VOCÊ TEM ADMINISTRAÇÃO TOTAL E MÃOS OPERACIONAIS (16 TOOLS):
+   - **Lançar gasto/receita:** \`create_transaction\`
+   - **Editar/alterar qualquer lançamento (mudar valor, data, conta, cartão, categoria ou descrição):** \`update_transaction\`
+   - **Efetivar/pagar um lançamento pendente ou conta fixa do mês (podendo informar em qual conta foi pago ou novo valor):** \`conciliate_transaction\`
+   - **Excluir um lançamento do mês:** \`delete_transaction\`
+   - **Criar, Editar ou Cancelar/Excluir Contas Fixas e Assinaturas Recorrentes (\`itensFixosRecorrentes\`):** \`create_fixed_item\`, \`update_fixed_item\`, \`delete_fixed_item\`. ATENÇÃO: Quando o usuário pedir para "cancelar das contas fixas", "tirar da recorrência" ou "excluir a assinatura fixa", chame \`delete_fixed_item\` (e se houver mais de uma com o mesmo nome, use \`delete_all_matching: true\` ou chame para cada ID)!
+   - **Transferir entre contas:** \`transfer_between_accounts\`
+   - **Ajustar saldo de conta:** \`adjust_account_balance\`
+   - **Quitar fatura de cartão:** \`pay_card_bill\`
+   - **Criar/editar cartões, contas ou categorias:** \`manage_entity\`
+2. LIBERDADE DE EXECUÇÃO IMEDIATA (NÃO PEÇA CONFIRMAÇÃO EM TEXTO ANTES DE AGIR):
+   - Quando o usuário pedir para lançar, editar, efetivar/pagar ou excluir algo, **EXECUTE A FERRAMENTA IMEDIATAMENTE NA MESMA RESPOSTA**! Não fique perguntando "Você quer que eu faça isso?" sem chamar a tool — o próprio sistema já anexa um botão \`[↩️ Desfazer]\` em todas as ações executadas caso o usuário queira reverter.
+3. PRECISÃO DE VALORES, DATAS DE VENCIMENTO E CONTAS:
+   - O campo \`amount\` deve ser EXATAMENTE o valor informado pelo usuário.
+   - Diferencie com atenção as contas da família: "Itaú PJ" (ID 7), "Itaú Personalite" (ID 6), "ML - COFRE" (ID 9) e "Bradesco" (ID 11).
+   - Ao responder sobre **próximo vencimento de cartão de crédito**, olhe o campo \`nextDueDateISO\` e \`daysUntilNextDue\` em \`cartoesCadastrados\` (que já está ordenado do vencimento mais próximo para o mais distante!).
+4. ÁUDIO E FOTOS DE COMPROVANTES:
+   - Se o usuário enviar um áudio (nota de voz) ou foto de comprovante pedindo qualquer lançamento, edição, efetivação ou exclusão, chame a ferramenta correspondente imediatamente no primeiro turno!
+5. SAUDAÇÕES E CONVERSAS DE GRUPO: Se alguém mandar apenas "oi", "oi?", "olá", responda de forma cordial, breve e prestativa.
+6. COMUNICAÇÃO: Responda em português do Brasil com elegância executiva, clareza e números precisos baseados exclusivamente no snapshot real abaixo.
 
 [SNAPSHOT FINANCEIRO EM TEMPO REAL DA BASE DE DADOS]
 ${JSON.stringify(richContext)}`;
@@ -324,6 +412,26 @@ function formatImmediateToolReply(toolName, toolResult) {
 
   if (toolName === 'transfer_between_accounts') {
     return `✅ **Transferência Entre Contas Concluída!**\n\n${toolResult.summary}\n\n*Os saldos de origem e destino já foram atualizados em tempo real.*`;
+  }
+
+  if (toolName === 'update_transaction') {
+    return `✏️ **Lançamento Editado com Sucesso!**\n\n${toolResult.summary}\n\n*O painel Family Money e os saldos já foram atualizados em tempo real.*`;
+  }
+
+  if (toolName === 'conciliate_transaction') {
+    return `✅ **Efetivação / Conciliação Concluída!**\n\n${toolResult.summary}\n\n*O saldo da conta já foi atualizado em tempo real.*`;
+  }
+
+  if (toolName === 'delete_transaction') {
+    return `🗑️ **Lançamento Excluído com Sucesso!**\n\n${toolResult.summary}\n\n*O painel Family Money já foi atualizado em tempo real.*`;
+  }
+
+  if (toolName === 'create_fixed_item' || toolName === 'update_fixed_item' || toolName === 'delete_fixed_item') {
+    return `📌 **Gestão de Contas Fixas & Recorrências Concluída!**\n\n${toolResult.summary}\n\n*As recorrências e projeções de 6 meses já foram atualizadas.*`;
+  }
+
+  if (toolName === 'manage_entity') {
+    return `⚙️ **Administração do Sistema Concluída!**\n\n${toolResult.summary}`;
   }
 
   if (toolName === 'generate_executive_briefing' && toolResult.briefingText) {
@@ -460,32 +568,111 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
     }
   }
 
-  // 3. Comando de Exclusão ("excluir lançamento 15", "apagar transação 12")
-  if ((q.includes('exclu') || q.includes('apag') || q.includes('delet') || q.includes('remov')) && (q.includes('lancamento') || q.includes('transacao') || /#?\d+/.test(q))) {
+  // 3. Comando de Exclusão (Transação ou Conta Fixa / Recorrência)
+  if (q.includes('exclu') || q.includes('apag') || q.includes('delet') || q.includes('remov') || q.includes('cancel')) {
+    const isFixedTarget = q.includes('fixa') || q.includes('recorren') || q.includes('assinatura') || q.includes('mensalidade');
     const idMatch = text.match(/#?(\d+)/);
-    const args = idMatch ? { transaction_id: parseInt(idMatch[1], 10) } : { description: text.replace(/excluir|apagar|deletar|lancamento|transacao/gi, '').trim() };
-    const res = await engine.executeToolAction('delete_transaction', args, { channel, chatId });
-    if (res.ok) {
-      executedActions.push(res);
-      return {
-        reply: res.summary,
-        actions: executedActions,
-        engineUsed: 'native-autonomous'
-      };
+    const cleanTargetDesc = text
+      .replace(/morgan|por favor|ainda|esta|constando|nas|minhas|contas|fixas|recorrencias|recorrencia|assinaturas|lancamento|transacao|excluir|exclua|apagar|apague|deletar|delete|remover|remova|cancelar|cancele|la|tb|tambem|tudo|todos|todas/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (isFixedTarget) {
+      const args = idMatch
+        ? { fixed_item_id: parseInt(idMatch[1], 10), also_delete_current_month_tx: true }
+        : { description: cleanTargetDesc, delete_all_matching: true, also_delete_current_month_tx: true };
+      const res = await engine.executeToolAction('delete_fixed_item', args, { channel, chatId });
+      if (res.ok) {
+        executedActions.push({ toolName: 'delete_fixed_item', ...res });
+        return {
+          reply: `✅ **Recorrência Fixa Cancelada!**\n\n${res.summary}`,
+          actions: executedActions,
+          engineUsed: 'native-autonomous'
+        };
+      }
+    } else if (q.includes('lancamento') || q.includes('transacao') || idMatch || cleanTargetDesc.length >= 3) {
+      const args = idMatch
+        ? { transaction_id: parseInt(idMatch[1], 10) }
+        : { description: cleanTargetDesc };
+      const res = await engine.executeToolAction('delete_transaction', args, { channel, chatId });
+      if (res.ok) {
+        executedActions.push({ toolName: 'delete_transaction', ...res });
+        return {
+          reply: `✅ **Exclusão Executada!**\n\n${res.summary}`,
+          actions: executedActions,
+          engineUsed: 'native-autonomous'
+        };
+      }
     }
   }
 
-  // 4. Comando de Conciliação / Efetivação ("efetivar lançamento 4", "conciliar 4")
-  if (q.includes('efetiv') || q.includes('concili')) {
-    const idMatch = text.match(/#?(\d+)/);
-    const args = idMatch
-      ? { transaction_id: parseInt(idMatch[1], 10), is_effective: true }
-      : { description: text.replace(/efetivar|conciliar|lancamento/gi, '').trim(), is_effective: true };
+  // 3B. Comando de Edição / Alteração ("altere o valor de X para Y", "edite o lançamento X para Y", "mude X para Y")
+  if (q.includes('alter') || q.includes('edit') || q.includes('mudar') || q.includes('mude') || q.includes('corrig') || q.includes('atualiz')) {
+    const newAmount = extractMoneyAmount(text);
+    const idMatch = text.match(/#(\d+)\b|id\s*(\d+)/i);
+    const isFixedTarget = q.includes('fixa') || q.includes('recorren') || q.includes('assinatura');
+    const cleanSearch = text
+      .replace(/morgan|por favor|alterar|altere|editar|edite|mudar|mude|corrigir|corrija|atualizar|atualize|o valor|valor|lancamento|transacao|despesa|conta fixa|fixa|para|por/gi, ' ')
+      .replace(/r\$\s*(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)/gi, ' ')
+      .replace(/(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)\s*(reais)?/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (isFixedTarget && (idMatch || cleanSearch.length >= 2)) {
+      const res = await engine.executeToolAction('update_fixed_item', {
+        fixed_item_id: idMatch ? parseInt(idMatch[1] || idMatch[2], 10) : undefined,
+        search_description: cleanSearch || undefined,
+        new_amount: newAmount || undefined
+      }, { channel, chatId });
+      if (res.ok) {
+        executedActions.push({ toolName: 'update_fixed_item', ...res });
+        return {
+          reply: `✅ **Conta Fixa Atualizada!**\n\n${res.summary}`,
+          actions: executedActions,
+          engineUsed: 'native-autonomous'
+        };
+      }
+    } else if (idMatch || cleanSearch.length >= 2) {
+      const res = await engine.executeToolAction('update_transaction', {
+        transaction_id: idMatch ? parseInt(idMatch[1] || idMatch[2], 10) : undefined,
+        search_description: cleanSearch || undefined,
+        new_amount: newAmount || undefined
+      }, { channel, chatId });
+      if (res.ok) {
+        executedActions.push({ toolName: 'update_transaction', ...res });
+        return {
+          reply: `✅ **Lançamento Editado com Sucesso!**\n\n${res.summary}`,
+          actions: executedActions,
+          engineUsed: 'native-autonomous'
+        };
+      }
+    }
+  }
+
+  // 4. Comando de Conciliação / Efetivação ("efetivar lançamento 4", "efetive a mesada da Sofia", "dar baixa no convênio")
+  if (q.includes('efetiv') || q.includes('concili') || q.includes('dar baixa') || q.includes('marcar como pago') || q.includes('marque como pago')) {
+    const idMatch = text.match(/#(\d+)\b|id\s*(\d+)/i);
+    const customAmount = extractMoneyAmount(text);
+    const accHintMatch = q.match(/\b(?:na\s+conta|no\s+banco|conta|pelo|pela|no|na)\s+(?:do\s+|da\s+)?(itau\s+pj|itau\s+personalite|itau\s+pf|personalite|pj|ml\s*-?\s*cofre|mercado\s+livre|cofre|bradesco|itau)\b/i);
+    const cleanTarget = text
+      .replace(/morgan|por favor|efetivar|efetive|conciliar|concilie|dar baixa|marcar como pago|marque como pago|lancamento|transacao|despesa|pagamento|da|do|de|na|no|em/gi, ' ')
+      .replace(/#\d+/g, ' ')
+      .replace(/r\$\s*(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const args = {
+      transaction_id: idMatch ? parseInt(idMatch[1] || idMatch[2], 10) : undefined,
+      description: !idMatch ? cleanTarget : undefined,
+      amount: customAmount || undefined,
+      account_name: accHintMatch ? accHintMatch[1] : undefined,
+      is_effective: true
+    };
     const res = await engine.executeToolAction('conciliate_transaction', args, { channel, chatId });
     if (res.ok) {
-      executedActions.push(res);
+      executedActions.push({ toolName: 'conciliate_transaction', ...res });
       return {
-        reply: `✅ **Conciliação Realizada!**\n\n${res.summary}`,
+        reply: `✅ **Efetivação Realizada com Sucesso!**\n\n${res.summary}`,
         actions: executedActions,
         engineUsed: 'native-autonomous'
       };
@@ -662,8 +849,8 @@ async function processMorganMessage({
 
   const userPromptLabel = cleanInputText || (media
     ? (media.mimeType.startsWith('audio/')
-      ? '[Áudio de voz enviado pelo usuário: transcreva o pedido financeiro, execute a ferramenta de lançamento/transferência/consulta apropriada com o valor exato e responda]'
-      : '[Imagem de comprovante/recibo enviada pelo usuário: extraia valor exato, data, estabelecimento e categoria, registre o lançamento via create_transaction e responda]')
+      ? '[Áudio de voz enviado pelo usuário: ouça com atenção e, se for um comando para lançar despesa/receita, editar valor/data/conta, efetivar pagamento pendente, transferir entre contas ou cancelar/excluir lançamento ou conta fixa recorrente, EXECUTE A FERRAMENTA CORRESPONDENTE IMEDIATAMENTE com os valores exatos e responda]'
+      : '[Imagem de comprovante/recibo enviada pelo usuário: extraia valor exato, data, estabelecimento e categoria, registre o lançamento via create_transaction imediatamente e responda]')
     : 'Olá Morgan');
 
   await appendConversationTurn(channel, chatId, 'user', userPromptLabel);

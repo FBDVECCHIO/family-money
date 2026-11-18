@@ -11,7 +11,7 @@ const morganScheduler = require('./morgan-scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const APP_VERSION = '9.1';
+const APP_VERSION = '9.3';
 const BUILD_TIME = Date.now();
 
 // Habilitar CORS e Parse de JSON
