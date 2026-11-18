@@ -68,6 +68,12 @@ function loadLocalDatabase() {
           dirty = true;
         }
       }
+
+      // Se local_db.json estiver completamente vazio (sem contas e sem transações), regerar do seed_backup.json
+      const hasAnyData = (localDb.accounts && localDb.accounts.length > 0) || (localDb.transactions && localDb.transactions.length > 0);
+      if (!hasAnyData && fs.existsSync(SEED_FILE)) {
+        throw new Error('local_db.json vazio — restaurando automaticamente a partir do seed_backup.json');
+      }
       // Podar backups históricos para manter tamanho < 3MB
       if (localDb.app_backups && localDb.app_backups.length > 5) {
         localDb.app_backups.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
@@ -98,12 +104,17 @@ function loadLocalDatabase() {
     }
   }
 
-  // Fallback para o seed_backup.json auditado
+  // Fallback para o seed_backup.json auditado (suporta tanto formato seed.tables[tbl].records quanto formato direto seed[tbl])
   if (fs.existsSync(SEED_FILE)) {
     const seed = JSON.parse(fs.readFileSync(SEED_FILE, 'utf-8'));
     localDb = {};
     for (const tbl of MANAGED_TABLES) {
-      let records = seed.tables[tbl]?.records || [];
+      let records = [];
+      if (seed.tables && seed.tables[tbl] && Array.isArray(seed.tables[tbl].records)) {
+        records = seed.tables[tbl].records;
+      } else if (Array.isArray(seed[tbl])) {
+        records = seed[tbl];
+      }
       if (tbl === 'app_backups' && records.length > 5) {
         records = records.slice(0, 5);
       }
