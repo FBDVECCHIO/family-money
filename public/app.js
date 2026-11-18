@@ -6180,10 +6180,34 @@ function initAiAgent() {
       if (!data.ok) return;
 
       const s = data.settings || {};
-      if (keyInput && s.gemini_api_key) keyInput.value = s.gemini_api_key;
-      if (tgTokenInput && s.telegram_bot_token) tgTokenInput.value = s.telegram_bot_token;
+      if (keyInput && (s.gemini_api_key || localStorage.getItem('fm_gemini_api_key'))) {
+        keyInput.value = s.gemini_api_key || localStorage.getItem('fm_gemini_api_key') || '';
+      }
+      if (tgTokenInput && (s.telegram_bot_token || localStorage.getItem('fm_telegram_bot_token'))) {
+        tgTokenInput.value = s.telegram_bot_token || localStorage.getItem('fm_telegram_bot_token') || '';
+      }
       if (briefingTimeInput && s.briefing_time) briefingTimeInput.value = s.briefing_time;
       if (approvalThresholdInput && s.approval_threshold !== undefined) approvalThresholdInput.value = s.approval_threshold;
+
+      // Auto-resincronizar com o servidor se o navegador tinha o token salvo e o servidor ainda não estava online
+      const localTgToken = localStorage.getItem('fm_telegram_bot_token');
+      const localGemKey = localStorage.getItem('fm_gemini_api_key');
+      if ((!data.telegram || !data.telegram.active) && localTgToken) {
+        fetch('/api/morgan/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telegram_bot_token: localTgToken,
+            gemini_api_key: localGemKey || undefined
+          })
+        }).then(r => r.json()).then(reData => {
+          if (reData.telegram && reData.telegram.active && tgStatusBadge) {
+            tgStatusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+            tgStatusBadge.style.color = '#34d399';
+            tgStatusBadge.textContent = `🟢 Online (@${reData.telegram.bot.username})`;
+          }
+        }).catch(() => {});
+      }
 
       if (tgStatusBadge) {
         if (data.telegram && data.telegram.active) {
@@ -6317,36 +6341,52 @@ function initAiAgent() {
     });
   }
 
+  // Sincronizar automaticamente na inicialização da página se houver tokens salvos no navegador
+  refreshMorganBackendStatusUI();
+
   if (saveSettingsBtn) {
     saveSettingsBtn.addEventListener('click', async () => {
       localStorage.setItem('fm_ai_engine', tempEngine);
       const geminiVal = keyInput ? keyInput.value.trim() : '';
-      if (geminiVal) {
-        localStorage.setItem('fm_gemini_api_key', geminiVal);
-      }
+      const tgVal = tgTokenInput ? tgTokenInput.value.trim() : '';
+      if (geminiVal) localStorage.setItem('fm_gemini_api_key', geminiVal);
+      if (tgVal) localStorage.setItem('fm_telegram_bot_token', tgVal);
+
+      saveSettingsBtn.disabled = true;
+      saveSettingsBtn.textContent = 'Conectando ao Telegram...';
 
       try {
         const res = await fetch('/api/morgan/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            gemini_api_key: geminiVal,
-            telegram_bot_token: tgTokenInput ? tgTokenInput.value.trim() : undefined,
+            gemini_api_key: geminiVal || undefined,
+            telegram_bot_token: tgVal || undefined,
             briefing_time: briefingTimeInput ? briefingTimeInput.value : '08:00',
             approval_threshold: approvalThresholdInput ? Number(approvalThresholdInput.value || 1000) : 1000
           })
         });
         const data = await res.json();
+        await refreshMorganBackendStatusUI();
+
         if (data.telegram && data.telegram.active) {
-          showToast(`Agente 24/7 salvo! Bot @${data.telegram.bot.username} conectado no Telegram!`);
+          showToast(`🟢 Bot @${data.telegram.bot.username} ONLINE no Telegram! Envie /parear 1202 agora!`);
+          if (settingsModal) settingsModal.classList.add('hide');
+        } else if (data.telegram && data.telegram.error) {
+          showToast(`⚠️ Erro no Token do Telegram: ${data.telegram.error}`);
+        } else if (!data.ok && data.error) {
+          showToast(`⚠️ Erro ao salvar no servidor: ${data.error}`);
         } else {
           showToast('Configurações do Agente Morgan 24/7 salvas no servidor!');
+          if (settingsModal) settingsModal.classList.add('hide');
         }
       } catch (e) {
-        showToast('Configurações salvas localmente.');
+        showToast('Erro de conexão com o servidor: ' + e.message);
+      } finally {
+        saveSettingsBtn.disabled = false;
+        saveSettingsBtn.textContent = 'Salvar & Ativar no Servidor 24/7';
       }
 
-      if (settingsModal) settingsModal.classList.add('hide');
       renderAiAgentTab();
     });
   }

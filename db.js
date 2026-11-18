@@ -545,8 +545,14 @@ async function insertRows(table, data) {
   if (isPostgres && pool) {
     const inserted = [];
     for (const rec of records) {
-      const keys = Object.keys(rec);
-      const vals = Object.values(rec);
+      const cleanRec = {};
+      for (const [k, v] of Object.entries(rec)) {
+        if (v !== undefined) cleanRec[k] = v;
+      }
+      const keys = Object.keys(cleanRec);
+      const vals = Object.values(cleanRec).map(v =>
+        (typeof v === 'object' && v !== null && !(v instanceof Date)) ? JSON.stringify(v) : v
+      );
       const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
       const cols = keys.map(k => `"${k}"`).join(', ');
       const sql = `INSERT INTO ${table} (${cols}) VALUES (${placeholders}) RETURNING *`;
@@ -600,12 +606,18 @@ async function updateRows(table, updates, query = {}) {
   const { filters } = parseFilters(query);
 
   if (isPostgres && pool) {
-    const updateKeys = Object.keys(updates);
+    const cleanUpdates = {};
+    for (const [k, v] of Object.entries(updates)) {
+      if (v !== undefined) cleanUpdates[k] = v;
+    }
+    const updateKeys = Object.keys(cleanUpdates);
     if (updateKeys.length === 0) return [];
 
     let paramIdx = 1;
     const setClauses = updateKeys.map(k => `"${k}" = $${paramIdx++}`).join(', ');
-    const params = Object.values(updates);
+    const params = Object.values(cleanUpdates).map(v =>
+      (typeof v === 'object' && v !== null && !(v instanceof Date)) ? JSON.stringify(v) : v
+    );
 
     let whereClause = '';
     if (filters.length > 0) {
@@ -761,6 +773,8 @@ async function getStatus() {
   };
 }
 
+let memoryMorganSettingsCache = null;
+
 /**
  * Recupera ou inicializa as configurações e memória persistente do Agente Morgan
  */
@@ -789,25 +803,30 @@ async function getMorganSettings() {
     const rows = await selectRows('morgan_settings');
     if (rows && rows.length > 0) {
       const row = rows[0];
-      return {
+      const normalized = {
         ...defaultSettings,
+        ...(memoryMorganSettingsCache || {}),
         ...row,
         facts_json: Array.isArray(row.facts_json)
           ? row.facts_json
-          : (typeof row.facts_json === 'string' ? JSON.parse(row.facts_json || '[]') : []),
+          : (typeof row.facts_json === 'string' ? JSON.parse(row.facts_json || '[]') : (memoryMorganSettingsCache?.facts_json || [])),
         telegram_allowed_chat_ids: Array.isArray(row.telegram_allowed_chat_ids)
           ? row.telegram_allowed_chat_ids
-          : (typeof row.telegram_allowed_chat_ids === 'string' ? JSON.parse(row.telegram_allowed_chat_ids || '[]') : []),
-        gemini_api_key: row.gemini_api_key || process.env.GEMINI_API_KEY || '',
-        telegram_bot_token: row.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || '',
+          : (typeof row.telegram_allowed_chat_ids === 'string' ? JSON.parse(row.telegram_allowed_chat_ids || '[]') : (memoryMorganSettingsCache?.telegram_allowed_chat_ids || [])),
+        gemini_api_key: row.gemini_api_key || memoryMorganSettingsCache?.gemini_api_key || process.env.GEMINI_API_KEY || '',
+        telegram_bot_token: row.telegram_bot_token || memoryMorganSettingsCache?.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || '',
         approval_threshold: Number(row.approval_threshold ?? defaultSettings.approval_threshold)
       };
+      memoryMorganSettingsCache = normalized;
+      return normalized;
     }
-    const inserted = await insertRows('morgan_settings', defaultSettings);
-    return inserted[0] || defaultSettings;
+    const toInsert = memoryMorganSettingsCache ? { ...defaultSettings, ...memoryMorganSettingsCache } : defaultSettings;
+    const inserted = await insertRows('morgan_settings', toInsert);
+    memoryMorganSettingsCache = inserted[0] || toInsert;
+    return memoryMorganSettingsCache;
   } catch (err) {
     console.warn('[DB] Aviso ao ler morgan_settings:', err.message);
-    return defaultSettings;
+    return memoryMorganSettingsCache || defaultSettings;
   }
 }
 
@@ -816,20 +835,31 @@ async function getMorganSettings() {
  */
 async function updateMorganSettings(patch = {}) {
   const current = await getMorganSettings();
+  const cleanPatch = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v !== undefined) cleanPatch[k] = v;
+  }
+
   const merged = {
     ...current,
-    ...patch,
+    ...cleanPatch,
     updated_at: new Date().toISOString()
   };
+  memoryMorganSettingsCache = { ...merged, id: 1 };
   delete merged.id;
 
-  const rows = await selectRows('morgan_settings');
-  if (rows && rows.length > 0) {
-    const updated = await updateRows('morgan_settings', merged, { id: `eq.${rows[0].id}` });
-    return updated[0] || { id: rows[0].id, ...merged };
-  } else {
-    const inserted = await insertRows('morgan_settings', { id: 1, ...merged });
-    return inserted[0];
+  try {
+    const rows = await selectRows('morgan_settings');
+    if (rows && rows.length > 0) {
+      const updated = await updateRows('morgan_settings', merged, { id: `eq.${rows[0].id}` });
+      return updated[0] || memoryMorganSettingsCache;
+    } else {
+      const inserted = await insertRows('morgan_settings', { id: 1, ...merged });
+      return inserted[0] || memoryMorganSettingsCache;
+    }
+  } catch (err) {
+    console.error('[DB] Erro ao persistir morgan_settings no banco, mantendo em cache ativo:', err.message);
+    return memoryMorganSettingsCache;
   }
 }
 

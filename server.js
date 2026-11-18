@@ -10,7 +10,7 @@ const morganScheduler = require('./morgan-scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const APP_VERSION = '9.0';
+const APP_VERSION = '9.1';
 const BUILD_TIME = Date.now();
 
 // Habilitar CORS e Parse de JSON
@@ -216,7 +216,7 @@ app.post('/api/morgan/settings', async (req, res) => {
     const patch = req.body || {};
     const updated = await db.updateMorganSettings(patch);
     broadcastDbChange('morgan_settings', 'update', updated);
-    const tgResult = await morganTelegram.startOrReloadTelegramBot();
+    const tgResult = await morganTelegram.startOrReloadTelegramBot(patch.telegram_bot_token || updated.telegram_bot_token);
     res.json({
       ok: true,
       settings: updated,

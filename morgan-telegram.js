@@ -21,6 +21,7 @@ let currentToken = '';
 let lastUpdateId = 0;
 let pollingTimer = null;
 let botProfile = null;
+let pollingGeneration = 0;
 
 /**
  * Converte Markdown simples do Morgan para HTML seguro do Telegram
@@ -270,9 +271,14 @@ async function handleTelegramMessage(token, msg) {
   const settings = await db.getMorganSettings();
   const allowedIds = (settings.telegram_allowed_chat_ids || []).map(String);
 
-  // 1. Comando de Pareamento Seguro por PIN (/parear 1202)
-  if (rawText.toLowerCase().startsWith('/parear')) {
-    const pinArg = rawText.replace(/^\/parear\s*/i, '').trim();
+  console.log(`[MORGAN-TELEGRAM] Mensagem recebida de ${senderName} (chat_id: ${chatId}): "${rawText || '[Mídia]'}"`);
+
+  // 1. Comando de Pareamento Seguro por PIN (/parear 1202 ou apenas 1202 quando não pareado)
+  const isPairCommand = /^\/parear(?:@\S+)?\b/i.test(rawText);
+  const isDirectPinTry = !allowedIds.includes(chatId) && /^\d{4,6}$/.test(rawText);
+
+  if (isPairCommand || isDirectPinTry) {
+    const pinArg = isPairCommand ? rawText.replace(/^\/parear(?:@\S+)?\s*/i, '').trim() : rawText;
     const user = await db.authenticatePin(pinArg);
     if (user) {
       if (!allowedIds.includes(chatId)) {
@@ -295,10 +301,10 @@ async function handleTelegramMessage(token, msg) {
         token
       );
       return;
-    } else {
+    } else if (isPairCommand) {
       await sendTelegramMessage(
         chatId,
-        `❌ **PIN incorreto.** Para vincular sua conta ao Family Money, envie:\n\`/parear <SEU_PIN>\` *(ex: /parear 1202)*`,
+        `❌ **PIN incorreto.** Para vincular sua conta ao Family Money, envie:\n\`/parear 1202\` *(ou apenas digite seu PIN de 4 dígitos)*`,
         undefined,
         token
       );
@@ -307,12 +313,12 @@ async function handleTelegramMessage(token, msg) {
   }
 
   // 2. Comando /start
-  if (rawText.toLowerCase() === '/start') {
+  if (/^\/start(?:@\S+)?$/i.test(rawText)) {
     const isAllowed = allowedIds.includes(chatId);
     if (!isAllowed) {
       await sendTelegramMessage(
         chatId,
-        `👋 Olá, **${senderName}**! Eu sou o **Morgan**, Chief Financial Officer Autônomo do **Family Money**.\n\n🔒 Por segurança bancária, este canal exige autenticação única.\nSeu Chat ID é: \`${chatId}\`\n\nEnvie agora o comando abaixo com o seu PIN do aplicativo para liberar seu acesso:\n👉 \`/parear 1202\``,
+        `👋 Olá, **${senderName}**! Eu sou o **Morgan**, Chief Financial Officer Autônomo do **Family Money**.\n\n🔒 Por segurança bancária, este canal exige autenticação única.\nSeu Chat ID é: \`${chatId}\`\n\nEnvie agora o comando abaixo (ou apenas o seu PIN) para liberar seu acesso:\n👉 \`/parear 1202\``,
         undefined,
         token
       );
@@ -372,15 +378,17 @@ async function handleTelegramMessage(token, msg) {
 /**
  * Loop de Long Polling do Telegram Bot
  */
-async function pollTelegramUpdates() {
-  if (!pollingActive || !currentToken) return;
+async function pollTelegramUpdates(gen = pollingGeneration) {
+  if (!pollingActive || !currentToken || gen !== pollingGeneration) return;
 
   try {
     const res = await callTelegramApi(currentToken, 'getUpdates', {
       offset: lastUpdateId + 1,
-      timeout: 15,
+      timeout: 10,
       allowed_updates: ['message', 'callback_query']
     });
+
+    if (gen !== pollingGeneration) return;
 
     if (res && res.ok && Array.isArray(res.result)) {
       for (const update of res.result) {
@@ -397,12 +405,14 @@ async function pollTelegramUpdates() {
           console.error('[MORGAN-TELEGRAM] Erro ao processar update:', handlerErr.message);
         }
       }
+    } else if (res && !res.ok) {
+      console.warn('[MORGAN-TELEGRAM] Aviso em getUpdates:', res.description || res);
     }
   } catch (err) {
     // Silenciar timeouts normais de rede e re-tentar no próximo ciclo
   } finally {
-    if (pollingActive) {
-      pollingTimer = setTimeout(pollTelegramUpdates, 1500);
+    if (pollingActive && gen === pollingGeneration) {
+      pollingTimer = setTimeout(() => pollTelegramUpdates(gen), 1200);
     }
   }
 }
@@ -410,14 +420,15 @@ async function pollTelegramUpdates() {
 /**
  * Inicializa ou reinicia o Bot do Telegram com o token configurado no banco
  */
-async function startOrReloadTelegramBot() {
+async function startOrReloadTelegramBot(explicitToken = null) {
   const settings = await db.getMorganSettings();
-  const token = (settings.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || '').trim();
+  const token = (explicitToken || settings.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || '').trim();
 
   if (!token) {
     pollingActive = false;
     currentToken = '';
     botProfile = null;
+    pollingGeneration++;
     if (pollingTimer) clearTimeout(pollingTimer);
     return { active: false, reason: 'Token não configurado' };
   }
@@ -435,15 +446,17 @@ async function startOrReloadTelegramBot() {
       return { active: false, error: me.description || 'Token inválido no Telegram' };
     }
 
-    // Remover eventual webhook antigo para liberar getUpdates
-    await callTelegramApi(token, 'deleteWebhook');
+    // Remover eventual webhook antigo (mas mantendo pending_update_count para responder mensagens que já foram enviadas!)
+    await callTelegramApi(token, 'deleteWebhook', { drop_pending_updates: false });
 
     currentToken = token;
     botProfile = me.result;
     pollingActive = true;
+    pollingGeneration++;
+    const myGen = pollingGeneration;
     if (pollingTimer) clearTimeout(pollingTimer);
     console.log(`[MORGAN-TELEGRAM] Bot ativo e conectado como @${botProfile.username} (${botProfile.first_name})`);
-    pollTelegramUpdates();
+    pollTelegramUpdates(myGen);
 
     return { active: true, bot: botProfile };
   } catch (err) {
