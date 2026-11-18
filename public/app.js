@@ -282,20 +282,15 @@ async function processOfflineOutbox() {
         if (insErr) throw insErr;
 
         if (paymentMethod === 'account' && accountId && isEffective) {
-          const accIdNum = parseInt(accountId);
-          const acc = state.accounts.find(a => a.id == accIdNum);
-          if (acc) {
-            const newBal = finalType === 'income' ? parseFloat(acc.balance) + amount : parseFloat(acc.balance) - amount;
-            await state.supabase.from('accounts').update({ balance: newBal }).eq('id', accIdNum);
-          }
+          const accIdNum = parseInt(accountId, 10);
+          const delta = finalType === 'income' ? amount : -amount;
+          await adjustAccountBalanceAtomic(accIdNum, delta);
         } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
-          const oId = parseInt(accountId);
-          const dId = parseInt(destinationAccountId);
-          const oAcc = state.accounts.find(a => a.id == oId);
-          const dAcc = state.accounts.find(a => a.id == dId);
-          if (oAcc && dAcc) {
-            await state.supabase.from('accounts').update({ balance: parseFloat(oAcc.balance) - amount }).eq('id', oId);
-            await state.supabase.from('accounts').update({ balance: parseFloat(dAcc.balance) + amount }).eq('id', dId);
+          const oId = parseInt(accountId, 10);
+          const dId = parseInt(destinationAccountId, 10);
+          if (oId !== dId) {
+            await adjustAccountBalanceAtomic(oId, -amount);
+            await adjustAccountBalanceAtomic(dId, amount);
           }
         }
         processedCount++;
@@ -319,10 +314,70 @@ async function processOfflineOutbox() {
 let sseConnection = null;
 let lastServerDbVersion = 0;
 let silentSyncDebounceTimer = null;
+let isSubmittingTx = false;
+let isGeneratingRecurring = false;
+
+/**
+ * Determina com 100% de precisão o tipo de uma transação ('expense', 'income' ou 'transfer'),
+ * eliminando o bug onde t.amount > 0 convertia despesas sem t.type em 'income'.
+ */
+function resolveTransactionType(t, cat = null) {
+  if (!t) return 'expense';
+  const pm = t.payment_method || t.paymentMethod;
+  if (pm === 'transfer' || t.type === 'transfer') return 'transfer';
+  if (t.type === 'income' || t.type === 'expense') return t.type;
+  if (cat && cat.name && cat.name.toLowerCase().includes('receita')) return 'income';
+  return 'expense';
+}
+
+/**
+ * Ajusta o saldo de uma conta bancária de forma atômica consultando o valor real no servidor
+ * antes de aplicar o delta (+amount ou -amount). Impede deduções/adições em duplicidade.
+ */
+async function adjustAccountBalanceAtomic(accountId, deltaAmount) {
+  const accIdNum = parseInt(accountId, 10);
+  if (!accIdNum || isNaN(accIdNum)) return null;
+  const delta = Number(parseFloat(deltaAmount || 0).toFixed(2));
+  if (Math.abs(delta) < 0.001) return null;
+
+  let baseBalance = null;
+  try {
+    const { data: freshRows, error: fetchErr } = await state.supabase
+      .from('accounts')
+      .select('*')
+      .eq('id', accIdNum);
+    if (!fetchErr && Array.isArray(freshRows) && freshRows.length > 0) {
+      baseBalance = parseFloat(freshRows[0].balance || 0);
+    }
+  } catch (e) {}
+
+  const localAcc = state.accounts.find(a => parseInt(a.id, 10) === accIdNum);
+  if (baseBalance === null || isNaN(baseBalance)) {
+    baseBalance = localAcc ? parseFloat(localAcc.balance || 0) : 0;
+  }
+
+  const newBalance = Number((baseBalance + delta).toFixed(2));
+  const { error: updateErr } = await state.supabase
+    .from('accounts')
+    .update({ balance: newBalance })
+    .eq('id', accIdNum);
+  if (updateErr) throw updateErr;
+
+  if (localAcc) {
+    localAcc.balance = newBalance;
+  }
+  return newBalance;
+}
 
 function scheduleSilentSync(delayMs = 300) {
+  if (isSubmittingTx) {
+    clearTimeout(silentSyncDebounceTimer);
+    silentSyncDebounceTimer = setTimeout(() => scheduleSilentSync(delayMs), 350);
+    return;
+  }
   clearTimeout(silentSyncDebounceTimer);
   silentSyncDebounceTimer = setTimeout(async () => {
+    if (isSubmittingTx) return;
     try {
       await loadAllData();
       saveLocalSnapshot();
@@ -818,7 +873,10 @@ async function logout() {
 }
 
 async function autoGenerateRecurringTransactions() {
+  if (isGeneratingRecurring) return;
   if (!state.supabase || !state.fixedItems || state.fixedItems.length === 0) return;
+  isGeneratingRecurring = true;
+  try {
 
   const today = new Date();
   const currentYear = today.getFullYear();
@@ -838,7 +896,7 @@ async function autoGenerateRecurringTransactions() {
         : (t.payment_method === 'account' || t.paymentMethod === 'account');
       
       if (!isMethodMatch) return false;
-      if (!t.description.includes(recurrenceTag)) return false;
+      if (!t.description || !t.description.includes(recurrenceTag)) return false;
 
       // Verificar se a transação é do mesmo mês e ano
       const txDate = new Date(t.date + 'T12:00:00');
@@ -879,6 +937,9 @@ async function autoGenerateRecurringTransactions() {
     } else if (insertedData && insertedData.length > 0) {
       state.transactions = [...insertedData, ...state.transactions];
     }
+  }
+  } finally {
+    isGeneratingRecurring = false;
   }
 }
 
@@ -1021,9 +1082,10 @@ function scheduleDailyBackupJob() {
 function calculateForecast(accounts, cards, fixedItems, transactions) {
   let currentTotalBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance || 0), 0);
 
-  // Gerar os próximos 6 meses a partir da data de hoje
+  // Gerar os próximos 6 meses a partir da data de hoje (fixando dia 1 para evitar overflow de meses 31->28/30)
   const forecastMonths = [];
   let tempDate = new Date();
+  tempDate.setDate(1);
   
   for (let i = 0; i < 6; i++) {
     forecastMonths.push({
@@ -1476,7 +1538,7 @@ function renderTransactionsTable() {
         pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
       }
 
-      const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+      const finalType = resolveTransactionType(t, cat);
       const isEffective = t.is_effective !== false;
 
       let valueHtml = '';
@@ -1642,7 +1704,7 @@ function renderMonthlyDetail(monthData) {
     if (t.description && t.description.includes('[R:')) return; // Recorrência fixa já processada no Bloco A
     
     const cat = state.lookupMaps.categories.get(t.category_id || t.categoryId);
-    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+    const finalType = resolveTransactionType(t, cat);
     if (finalType !== 'expense') return;
 
     const txDate = new Date(t.date + 'T12:00:00');
@@ -1728,7 +1790,7 @@ function renderMonthlyDetail(monthData) {
     if (t.description && t.description.includes('[R:')) return;
 
     const cat = state.lookupMaps.categories.get(catIdNum);
-    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+    const finalType = resolveTransactionType(t, cat);
     
     // Assegurar que é estritamente uma despesa (afinal é um mapa de despesa e não de receita)
     if (finalType !== 'expense') return;
@@ -2435,13 +2497,8 @@ async function payCardBill(cardId, year, month, amount) {
       const { error: errorTx } = await state.supabase.from('transactions').insert([txPayment]);
       if (errorTx) throw errorTx;
       
-      // 3. Atualizar o saldo da conta selecionada
-      const newBalance = parseFloat(acc.balance) - amount;
-      const { error: errorAcc } = await state.supabase
-        .from('accounts')
-        .update({ balance: newBalance })
-        .eq('id', selectedAccountId);
-      if (errorAcc) throw errorAcc;
+      // 3. Atualizar o saldo da conta selecionada de forma atômica
+      await adjustAccountBalanceAtomic(selectedAccountId, -Math.abs(parseFloat(amount)));
 
       // 4. Reconciliar transações individuais do cartão que pertencem a esta fatura
       const cardTransactionsToReconcile = state.transactions.filter(t => {
@@ -2568,20 +2625,9 @@ async function reconcileRecurrence(recurrenceId, year, month) {
       const { error: insertError } = await state.supabase.from('transactions').insert([payload]);
       if (insertError) throw insertError;
 
-      // 2. Atualizar saldo da conta vinculada selecionada
-      const acc = state.accounts.find(a => a.id == selectedAccountId);
-      if (acc) {
-        const isIncome = item.type === 'income';
-        const newBalance = isIncome
-          ? parseFloat(acc.balance) + amount
-          : parseFloat(acc.balance) - amount;
-
-        const { error: updateAccError } = await state.supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', selectedAccountId);
-        if (updateAccError) throw updateAccError;
-      }
+      // 2. Atualizar saldo da conta vinculada selecionada de forma atômica
+      const isIncome = item.type === 'income';
+      await adjustAccountBalanceAtomic(selectedAccountId, isIncome ? Math.abs(amount) : -Math.abs(amount));
 
       // 3. Se o valor foi alterado na efetivação, sincronizar o item fixo
       if (Math.abs(amount - parseFloat(item.amount)) > 0.001) {
@@ -2599,36 +2645,26 @@ async function reconcileRecurrence(recurrenceId, year, month) {
 async function reconcileTransaction(id) {
   const tx = state.transactions.find(t => t.id == id);
   if (!tx) return;
+  if (tx.is_effective !== false) return; // Já efetivada, evita efetivação em duplicidade
   
-  if (tx.payment_method === 'transfer') {
+  if (tx.payment_method === 'transfer' || tx.type === 'transfer') {
     // Efetivação direta para transferências (não requer prompt de conta única)
     try {
+      const amount = Math.abs(parseFloat(tx.amount));
+      const originIdNum = parseInt(tx.account_id || tx.accountId, 10);
+      const destIdNum = parseInt(tx.destination_account_id || tx.destinationAccountId, 10);
+      if (!originIdNum || !destIdNum || originIdNum === destIdNum) {
+        throw new Error('Contas de origem e destino inválidas ou idênticas para transferência.');
+      }
+
       const { error: updateTxError } = await state.supabase
         .from('transactions')
-        .update({ is_effective: true })
+        .update({ is_effective: true, type: 'transfer' })
         .eq('id', id);
       if (updateTxError) throw updateTxError;
       
-      const amount = parseFloat(tx.amount);
-      const originAcc = state.accounts.find(a => a.id == tx.account_id);
-      const destAcc = state.accounts.find(a => a.id == tx.destination_account_id);
-      
-      if (originAcc && destAcc) {
-        const newOriginBalance = parseFloat(originAcc.balance) - amount;
-        const newDestBalance = parseFloat(destAcc.balance) + amount;
-        
-        const { error: errOrigin } = await state.supabase
-          .from('accounts')
-          .update({ balance: newOriginBalance })
-          .eq('id', tx.account_id);
-        if (errOrigin) throw errOrigin;
-        
-        const { error: errDest } = await state.supabase
-          .from('accounts')
-          .update({ balance: newDestBalance })
-          .eq('id', tx.destination_account_id);
-        if (errDest) throw errDest;
-      }
+      await adjustAccountBalanceAtomic(originIdNum, -amount);
+      await adjustAccountBalanceAtomic(destIdNum, amount);
       
       alert('Transferência efetivada e saldos atualizados!');
       loadAllData();
@@ -2639,7 +2675,7 @@ async function reconcileTransaction(id) {
     // Efetivação com escolha de conta e confirmação/edição do valor
     promptAccountSelection(`Efetivar Lançamento: ${cleanDescription(tx.description)}`, tx.account_id, async (selectedAccountId, finalAmount) => {
       try {
-        const amount = (finalAmount !== null && !isNaN(finalAmount)) ? finalAmount : parseFloat(tx.amount);
+        const amount = Math.abs((finalAmount !== null && !isNaN(finalAmount)) ? finalAmount : parseFloat(tx.amount));
 
         const { error: updateTxError } = await state.supabase
           .from('transactions')
@@ -2648,19 +2684,7 @@ async function reconcileTransaction(id) {
         if (updateTxError) throw updateTxError;
         
         const isIncome = tx.type === 'income';
-        
-        const acc = state.accounts.find(a => a.id == selectedAccountId);
-        if (acc) {
-          const newBalance = isIncome
-            ? parseFloat(acc.balance) + amount
-            : parseFloat(acc.balance) - amount;
-            
-          const { error: updateAccError } = await state.supabase
-            .from('accounts')
-            .update({ balance: newBalance })
-            .eq('id', selectedAccountId);
-          if (updateAccError) throw updateAccError;
-        }
+        await adjustAccountBalanceAtomic(selectedAccountId, isIncome ? amount : -amount);
 
         // Se for transação recorrente [R:id] e o valor foi alterado, atualizar também o item fixo correspondente
         const matchRecurrence = tx.description ? tx.description.match(/\[R:(\d+)\]/) : null;
@@ -2680,39 +2704,24 @@ async function reconcileTransaction(id) {
 
 async function revertTransactionBalance(tx) {
   const isAccount = tx.payment_method === 'account' || tx.paymentMethod === 'account';
-  const isTransfer = tx.payment_method === 'transfer' || tx.paymentMethod === 'transfer';
+  const isTransfer = tx.payment_method === 'transfer' || tx.paymentMethod === 'transfer' || tx.type === 'transfer';
   const isEffective = tx.is_effective !== false;
-  const amount = parseFloat(tx.amount);
-  const type = tx.type || (tx.payment_method === 'transfer' ? 'transfer' : 'expense');
+  const amount = Math.abs(parseFloat(tx.amount || 0));
+  const type = resolveTransactionType(tx);
 
-  if (!isEffective) return;
+  if (!isEffective || amount <= 0) return;
 
-  if (isAccount) {
-    const accIdNum = tx.account_id || tx.accountId;
-    if (accIdNum) {
-      const acc = state.accounts.find(a => a.id == accIdNum);
-      if (acc) {
-        const newBalance = type === 'income'
-          ? parseFloat(acc.balance) - amount
-          : parseFloat(acc.balance) + amount;
-        await state.supabase.from('accounts').update({ balance: newBalance }).eq('id', acc.id);
-        acc.balance = newBalance; // Atualiza a memória local
-      }
+  if (isTransfer) {
+    const originIdNum = parseInt(tx.account_id || tx.accountId, 10);
+    const destIdNum = parseInt(tx.destination_account_id || tx.destinationAccountId, 10);
+    if (originIdNum && destIdNum && originIdNum !== destIdNum) {
+      await adjustAccountBalanceAtomic(originIdNum, amount);
+      await adjustAccountBalanceAtomic(destIdNum, -amount);
     }
-  } else if (isTransfer) {
-    const originIdNum = tx.account_id || tx.accountId;
-    const destIdNum = tx.destination_account_id || tx.destinationAccountId;
-    if (originIdNum && destIdNum) {
-      const originAcc = state.accounts.find(a => a.id == originIdNum);
-      const destAcc = state.accounts.find(a => a.id == destIdNum);
-      if (originAcc && destAcc) {
-        const newOriginBalance = parseFloat(originAcc.balance) + amount;
-        const newDestBalance = parseFloat(destAcc.balance) - amount;
-        await state.supabase.from('accounts').update({ balance: newOriginBalance }).eq('id', originAcc.id);
-        await state.supabase.from('accounts').update({ balance: newDestBalance }).eq('id', destAcc.id);
-        originAcc.balance = newOriginBalance;
-        destAcc.balance = newDestBalance;
-      }
+  } else if (isAccount) {
+    const accIdNum = parseInt(tx.account_id || tx.accountId, 10);
+    if (accIdNum) {
+      await adjustAccountBalanceAtomic(accIdNum, type === 'income' ? -amount : amount);
     }
   }
 }
@@ -2817,10 +2826,21 @@ function clearTransactionForm() {
   document.getElementById('new-transaction-form').reset();
   document.querySelectorAll('#new-transaction-form .toggle-option').forEach(opt => opt.classList.remove('active'));
   
+  const recurringCb = document.getElementById('tx-is-recurring');
+  if (recurringCb) recurringCb.checked = false;
+  const effectiveCb = document.getElementById('tx-is-effective');
+  if (effectiveCb) effectiveCb.checked = true;
+  const instSelect = document.getElementById('tx-installments');
+  if (instSelect) instSelect.value = '1';
+  const previewBox = document.getElementById('installment-preview-text');
+  if (previewBox) previewBox.classList.add('hide');
+
   const defaultType = document.querySelector('input[name="tx-type"][value="expense"]');
   if (defaultType) {
     defaultType.checked = true;
     defaultType.parentElement.classList.add('active');
+    const typeToggleGroup = defaultType.closest('.form-group');
+    if (typeToggleGroup) typeToggleGroup.classList.remove('hide');
   }
   const defaultMethod = document.querySelector('input[name="tx-payment-method"][value="card"]');
   if (defaultMethod) {
@@ -3573,8 +3593,11 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
 
     const effectiveGroup = document.getElementById('tx-effective-group');
     const recurringGroup = document.getElementById('tx-recurring-group');
+    const typeInputEl = document.querySelector('input[name="tx-type"]');
+    const typeToggleGroup = typeInputEl ? typeInputEl.closest('.form-group') : null;
 
     if (method === 'card') {
+      if (typeToggleGroup) typeToggleGroup.classList.remove('hide');
       cardGroup.classList.remove('hide');
       instRow.classList.remove('hide');
       accGroup.classList.add('hide');
@@ -3589,6 +3612,7 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
       document.getElementById('tx-category').setAttribute('required', true);
       accLabel.textContent = 'Qual Conta Bancária?';
     } else if (method === 'account') {
+      if (typeToggleGroup) typeToggleGroup.classList.remove('hide');
       cardGroup.classList.add('hide');
       instRow.classList.add('hide');
       accGroup.classList.remove('hide');
@@ -3596,6 +3620,8 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
       catGroup.classList.remove('hide');
       if (effectiveGroup) effectiveGroup.classList.remove('hide'); // Mostra para contas
       if (recurringGroup) recurringGroup.classList.add('hide'); // Esconde o checkbox de recorrência
+      const recCb = document.getElementById('tx-is-recurring');
+      if (recCb) recCb.checked = false;
       
       document.getElementById('tx-account').setAttribute('required', true);
       document.getElementById('tx-card').removeAttribute('required');
@@ -3603,6 +3629,7 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
       document.getElementById('tx-category').setAttribute('required', true);
       accLabel.textContent = 'Qual Conta Bancária?';
     } else if (method === 'transfer') {
+      if (typeToggleGroup) typeToggleGroup.classList.add('hide'); // Oculta Despesa/Receita em transferências para evitar confusão
       cardGroup.classList.add('hide');
       instRow.classList.add('hide');
       accGroup.classList.remove('hide');
@@ -3610,6 +3637,8 @@ document.querySelectorAll('input[name="tx-payment-method"]').forEach(radio => {
       catGroup.classList.add('hide'); // Ocultar categorias em transferências
       if (effectiveGroup) effectiveGroup.classList.remove('hide'); // Mostra para transferências
       if (recurringGroup) recurringGroup.classList.add('hide'); // Esconde o checkbox de recorrência
+      const recCb = document.getElementById('tx-is-recurring');
+      if (recCb) recCb.checked = false;
       
       document.getElementById('tx-account').setAttribute('required', true);
       document.getElementById('tx-destination-account').setAttribute('required', true);
@@ -3729,6 +3758,13 @@ if (receiptTrigger && receiptInput) {
   });
 }
 
+// Bloquear alteração acidental de valores em inputs numéricos pelo scroll do mouse / trackpad
+document.addEventListener('wheel', (e) => {
+  if (document.activeElement && document.activeElement.type === 'number') {
+    document.activeElement.blur();
+  }
+}, { passive: true });
+
 // Preview de parcelamento
 function updateInstallmentPreview() {
   const amount = parseFloat(document.getElementById('tx-amount').value || 0);
@@ -3749,17 +3785,39 @@ document.getElementById('tx-installments').addEventListener('change', updateInst
 // Cancelar Edição do Lançamento
 document.getElementById('clear-tx-form-btn').addEventListener('click', clearTransactionForm);
 
+// Helper para alternar aba sem disparar loadAllData concorrente durante submit
+function switchTabWithoutReload(tabName) {
+  document.querySelectorAll('.nav-link').forEach(b => {
+    if (b.getAttribute('data-tab') === tabName) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+  document.querySelectorAll('.tab-view').forEach(v => {
+    if (v.id === `view-${tabName}`) {
+      v.classList.add('active-view');
+    } else {
+      v.classList.remove('active-view');
+    }
+  });
+  state.activeTab = tabName;
+  updateSidebarVisibility();
+}
+
 // Submit Novo Lançamento
 document.getElementById('new-transaction-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (isSubmittingTx) return;
 
-  const description = document.getElementById('tx-description').value;
-  const amount = parseFloat(document.getElementById('tx-amount').value);
+  const description = (document.getElementById('tx-description').value || '').trim();
+  const rawAmount = parseFloat(document.getElementById('tx-amount').value);
+  const amount = Number(Math.abs(rawAmount).toFixed(2));
   const date = document.getElementById('tx-date').value;
   const categoryIdVal = document.getElementById('tx-category').value;
-  const categoryId = categoryIdVal ? parseInt(categoryIdVal) : null;
+  const categoryId = categoryIdVal ? parseInt(categoryIdVal, 10) : null;
   const tagIdVal = document.getElementById('tx-tag').value;
-  const tagId = tagIdVal ? parseInt(tagIdVal) : null;
+  const tagId = tagIdVal ? parseInt(tagIdVal, 10) : null;
   const paymentMethod = document.querySelector('input[name="tx-payment-method"]:checked').value;
   const cardId = document.getElementById('tx-card').value;
   const installments = document.getElementById('tx-installments').value;
@@ -3767,6 +3825,38 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
   const destinationAccountId = document.getElementById('tx-destination-account').value;
   const receiptUrlVal = document.getElementById('tx-receipt-base64').value || null;
   const isEffectiveVal = document.getElementById('tx-is-effective').checked;
+
+  if (!amount || isNaN(amount) || amount <= 0) {
+    alert('Informe um valor válido maior que zero para o lançamento.');
+    return;
+  }
+
+  if (paymentMethod === 'transfer') {
+    const originIdNum = parseInt(accountId, 10);
+    const destIdNum = parseInt(destinationAccountId, 10);
+    if (!originIdNum || !destIdNum) {
+      alert('Selecione a conta de origem e a conta de destino para realizar a transferência.');
+      return;
+    }
+    if (originIdNum === destIdNum) {
+      alert('A conta de origem e a conta de destino da transferência devem ser diferentes!');
+      return;
+    }
+  } else if (paymentMethod === 'account') {
+    if (!parseInt(accountId, 10)) {
+      alert('Selecione a conta bancária do lançamento.');
+      return;
+    }
+  } else if (paymentMethod === 'card') {
+    if (!parseInt(cardId, 10)) {
+      alert('Selecione o cartão de crédito do lançamento.');
+      return;
+    }
+  }
+
+  const submitBtn = document.getElementById('tx-submit-btn');
+  isSubmittingTx = true;
+  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const typeVal = document.querySelector('input[name="tx-type"]:checked').value;
@@ -3787,7 +3877,7 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
         amount,
         day_of_month: dayOfMonth,
         type: 'expense',
-        card_id: parseInt(cardId),
+        card_id: parseInt(cardId, 10),
         category_id: categoryId,
         tag_id: tagId
       };
@@ -3813,10 +3903,10 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       payment_method: paymentMethod,
       type: finalType,
       is_effective: isEffective,
-      card_id: paymentMethod === 'card' ? parseInt(cardId) : null,
-      installments: paymentMethod === 'card' ? parseInt(installments) : 1,
-      account_id: (paymentMethod === 'account' || paymentMethod === 'transfer') ? parseInt(accountId) : null,
-      destination_account_id: paymentMethod === 'transfer' ? parseInt(destinationAccountId) : null,
+      card_id: paymentMethod === 'card' ? parseInt(cardId, 10) : null,
+      installments: paymentMethod === 'card' ? (parseInt(installments, 10) || 1) : 1,
+      account_id: (paymentMethod === 'account' || paymentMethod === 'transfer') ? parseInt(accountId, 10) : null,
+      destination_account_id: paymentMethod === 'transfer' ? parseInt(destinationAccountId, 10) : null,
       user_id: state.user ? (state.users.find(u => u.email === state.user.email)?.id || null) : null,
       receipt_url: receiptUrlVal
     };
@@ -3824,7 +3914,7 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
     const txId = document.getElementById('tx-id').value;
 
     if (txId) {
-      // MODO EDIÇÃO: Atualização com estorno seguro
+      // MODO EDIÇÃO: Atualização com estorno seguro e saldo atômico no servidor
       showBgJobToast('Atualizando lançamento...');
       const oldTx = state.transactions.find(tx => tx.id == txId);
       if (oldTx) {
@@ -3834,48 +3924,29 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       const { error: updateError } = await state.supabase
         .from('transactions')
         .update(newTx)
-        .eq('id', parseInt(txId));
+        .eq('id', parseInt(txId, 10));
       if (updateError) throw updateError;
 
-      // APLICAR NOVO SALDO (APENAS SE EFETIVADO)
+      // APLICAR NOVO SALDO DE FORMA ATÔMICA (APENAS SE EFETIVADO)
       if (paymentMethod === 'account' && accountId && isEffective) {
-        const accIdNum = parseInt(accountId);
-        const acc = state.accounts.find(a => a.id == accIdNum);
-        if (acc) {
-          const newBalance = finalType === 'income' 
-            ? parseFloat(acc.balance) + amount 
-            : parseFloat(acc.balance) - amount;
-
-          const { error: updateError } = await state.supabase
-            .from('accounts')
-            .update({ balance: newBalance })
-            .eq('id', accIdNum);
-          if (updateError) throw updateError;
-        }
+        const accIdNum = parseInt(accountId, 10);
+        const delta = finalType === 'income' ? amount : -amount;
+        await adjustAccountBalanceAtomic(accIdNum, delta);
       } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
-        const originIdNum = parseInt(accountId);
-        const destIdNum = parseInt(destinationAccountId);
-        if (originIdNum === destIdNum) {
-          throw new Error('A conta de origem e destino da transferência devem ser diferentes!');
-        }
-
-        const originAcc = state.accounts.find(a => a.id == originIdNum);
-        const destAcc = state.accounts.find(a => a.id == destIdNum);
-        if (originAcc && destAcc) {
-          const newOriginBalance = parseFloat(originAcc.balance) - amount;
-          await state.supabase.from('accounts').update({ balance: newOriginBalance }).eq('id', originIdNum);
-          const newDestBalance = parseFloat(destAcc.balance) + amount;
-          await state.supabase.from('accounts').update({ balance: newDestBalance }).eq('id', destIdNum);
-        }
+        const originIdNum = parseInt(accountId, 10);
+        const destIdNum = parseInt(destinationAccountId, 10);
+        await adjustAccountBalanceAtomic(originIdNum, -amount);
+        await adjustAccountBalanceAtomic(destIdNum, amount);
       }
 
+      isSubmittingTx = false;
+      if (submitBtn) submitBtn.disabled = false;
       await loadAllData();
       clearTransactionForm();
-      document.getElementById('installment-preview-text').classList.add('hide');
-      document.querySelector('.nav-link[data-tab="dashboard"]').click();
+      switchTabWithoutReload('dashboard');
       showBgJobToast('Lançamento atualizado com sucesso!', 2500, true);
     } else {
-      // MODO NOVO LANÇAMENTO: UI Otimista Instantânea (< 15ms) para uso rápido na rua
+      // MODO NOVO LANÇAMENTO: Persistência atômica sem dupla dedução de saldo
       const tempId = 'tmp_' + Date.now();
       const optimisticTx = {
         ...newTx,
@@ -3883,26 +3954,24 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
         created_at: new Date().toISOString()
       };
       
-      // Inserção otimista em memória
+      // Inserção otimista da transação em memória
       state.transactions.unshift(optimisticTx);
 
-      // Ajuste de saldo otimista em memória
+      // Guardar saldos originais para exibição otimista (sem contaminar o cálculo do servidor!)
       if (paymentMethod === 'account' && accountId && isEffective) {
-        const accIdNum = parseInt(accountId);
-        const acc = state.accounts.find(a => a.id == accIdNum);
+        const accIdNum = parseInt(accountId, 10);
+        const acc = state.accounts.find(a => parseInt(a.id, 10) === accIdNum);
         if (acc) {
-          acc.balance = finalType === 'income'
-            ? parseFloat(acc.balance) + amount
-            : parseFloat(acc.balance) - amount;
+          acc.balance = Number((parseFloat(acc.balance) + (finalType === 'income' ? amount : -amount)).toFixed(2));
         }
       } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
-        const originIdNum = parseInt(accountId);
-        const destIdNum = parseInt(destinationAccountId);
-        const originAcc = state.accounts.find(a => a.id == originIdNum);
-        const destAcc = state.accounts.find(a => a.id == destIdNum);
-        if (originAcc && destAcc) {
-          originAcc.balance = parseFloat(originAcc.balance) - amount;
-          destAcc.balance = parseFloat(destAcc.balance) + amount;
+        const originIdNum = parseInt(accountId, 10);
+        const destIdNum = parseInt(destinationAccountId, 10);
+        const originAcc = state.accounts.find(a => parseInt(a.id, 10) === originIdNum);
+        const destAcc = state.accounts.find(a => parseInt(a.id, 10) === destIdNum);
+        if (originAcc && destAcc && originIdNum !== destIdNum) {
+          originAcc.balance = Number((parseFloat(originAcc.balance) - amount).toFixed(2));
+          destAcc.balance = Number((parseFloat(destAcc.balance) + amount).toFixed(2));
         }
       }
 
@@ -3920,40 +3989,29 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
       }
       saveLocalSnapshot();
 
-      // Limpar formulário e navegar imediatamente para o Dashboard
+      // Limpar formulário e alternar para o Dashboard SEM disparar loadAllData concorrente
       clearTransactionForm();
-      document.getElementById('installment-preview-text').classList.add('hide');
-      document.querySelector('.nav-link[data-tab="dashboard"]').click();
+      switchTabWithoutReload('dashboard');
       showBgJobToast('Lançamento registrado com sucesso!', 2500, true);
 
-      // Envio assíncrono para o servidor em segundo plano (com tolerância a falhas na rua)
+      // Persistência assíncrona atômica no servidor (lê saldo real do banco antes de aplicar o delta, evitando dupla dedução)
       (async () => {
         try {
           const { error: insertError } = await state.supabase.from('transactions').insert([newTx]);
           if (insertError) throw insertError;
 
           if (paymentMethod === 'account' && accountId && isEffective) {
-            const accIdNum = parseInt(accountId);
-            const acc = state.accounts.find(a => a.id == accIdNum);
-            if (acc) {
-              const newBalance = finalType === 'income' 
-                ? parseFloat(acc.balance) + amount 
-                : parseFloat(acc.balance) - amount;
-              await state.supabase.from('accounts').update({ balance: newBalance }).eq('id', accIdNum);
-            }
+            const accIdNum = parseInt(accountId, 10);
+            const delta = finalType === 'income' ? amount : -amount;
+            await adjustAccountBalanceAtomic(accIdNum, delta);
           } else if (paymentMethod === 'transfer' && accountId && destinationAccountId && isEffective) {
-            const originIdNum = parseInt(accountId);
-            const destIdNum = parseInt(destinationAccountId);
-            const originAcc = state.accounts.find(a => a.id == originIdNum);
-            const destAcc = state.accounts.find(a => a.id == destIdNum);
-            if (originAcc && destAcc) {
-              await state.supabase.from('accounts').update({ balance: parseFloat(originAcc.balance) - amount }).eq('id', originIdNum);
-              await state.supabase.from('accounts').update({ balance: parseFloat(destAcc.balance) + amount }).eq('id', destIdNum);
+            const originIdNum = parseInt(accountId, 10);
+            const destIdNum = parseInt(destinationAccountId, 10);
+            if (originIdNum !== destIdNum) {
+              await adjustAccountBalanceAtomic(originIdNum, -amount);
+              await adjustAccountBalanceAtomic(destIdNum, amount);
             }
           }
-
-          // Atualizar silenciosamente para consolidar o ID permanente gerado pelo PostgreSQL
-          scheduleSilentSync(150);
         } catch (netErr) {
           console.warn('[NETWORK] Falha ao enviar lançamento para o servidor, salvando na fila offline:', netErr);
           enqueueOfflineAction({
@@ -3973,10 +4031,16 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
             finalType
           });
           showBgJobToast('Salvo no dispositivo. Sincronizará assim que houver sinal.', 3500);
+        } finally {
+          isSubmittingTx = false;
+          if (submitBtn) submitBtn.disabled = false;
+          scheduleSilentSync(120);
         }
       })();
     }
   } catch (err) {
+    isSubmittingTx = false;
+    if (submitBtn) submitBtn.disabled = false;
     alert('Erro ao salvar lançamento: ' + err.message);
   }
 });
@@ -4318,7 +4382,7 @@ function renderReportsTable() {
   if (typeVal) {
     filtered = filtered.filter(t => {
       const cat = state.categories.find(c => c.id === t.category_id || c.id === t.categoryId);
-      const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+      const finalType = resolveTransactionType(t, cat);
       return finalType === typeVal;
     });
   }
@@ -4360,7 +4424,7 @@ function renderReportsTable() {
 
   filtered.forEach(t => {
     const cat = state.lookupMaps.categories.get(t.category_id || t.categoryId);
-    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+    const finalType = resolveTransactionType(t, cat);
 
     if (finalType === 'transfer') return;
 
@@ -4436,7 +4500,7 @@ function renderReportsTable() {
         pmLabel = `<i data-lucide="wallet" style="width: 14px; height: 14px; color: var(--neon-green);"></i> ${acc ? acc.name : 'Conta'}`;
       }
 
-      const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+      const finalType = resolveTransactionType(t, cat);
 
       let valueHtml = '';
       const isEffective = t.is_effective !== false;
@@ -4931,7 +4995,7 @@ window.exportSelectedTransactionsPDF = function() {
       pm = `Conta (${acc ? acc.name : 'N/A'})`;
     }
 
-    const finalType = t.type || (t.payment_method === 'transfer' ? 'transfer' : ((t.amount > 0 || (cat && cat.name.toLowerCase().includes('receita'))) ? 'income' : 'expense'));
+    const finalType = resolveTransactionType(t, cat);
     let valColor = '#000';
     let valPrefix = '';
     
@@ -5956,7 +6020,7 @@ ${prompt}`;
     }
   };
 
-  const stableModels = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'];
+  const stableModels = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.8-flash'];
   let activeModel = localStorage.getItem('fm_gemini_active_model');
   let modelsToTry = [];
 
@@ -6057,7 +6121,7 @@ async function testGeminiApiKey(apiKey) {
   }
 
   if (!candidateModels || candidateModels.length === 0) {
-    candidateModels = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'];
+    candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.8-flash'];
   }
 
   let lastError = null;

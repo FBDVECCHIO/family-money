@@ -578,6 +578,24 @@ async function insertRows(table, data) {
       }
     }
 
+    // Prevenção de duplicação de lançamentos recorrentes [R:ID] no mesmo mês/ano
+    if (table === 'transactions' && rec.description && rec.date) {
+      const rMatch = String(rec.description).match(/\[R:\d+\]/);
+      if (rMatch) {
+        const rTag = rMatch[0];
+        const ym = String(rec.date).slice(0, 7);
+        const dup = (localDb.transactions || []).find(t =>
+          t.payment_method === rec.payment_method &&
+          String(t.date || '').slice(0, 7) === ym &&
+          String(t.description || '').includes(rTag)
+        );
+        if (dup) {
+          inserted.push(dup);
+          continue;
+        }
+      }
+    }
+
     const newId = rec.id || (localDb[table].reduce((max, r) => Math.max(max, Number(r.id || 0)), 0) + 1);
     const newRecord = {
       ...rec,
@@ -779,6 +797,10 @@ let memoryMorganSettingsCache = null;
  * Recupera ou inicializa as configurações e memória persistente do Agente Morgan
  */
 async function getMorganSettings() {
+  const defaultAllowedChats = process.env.TELEGRAM_ALLOWED_CHAT_IDS
+    ? process.env.TELEGRAM_ALLOWED_CHAT_IDS.split(',').map(s => s.trim()).filter(Boolean)
+    : ['1171799112', '-1004412978792'];
+
   const defaultSettings = {
     id: 1,
     family_goal: 'Construir reserva de liquidez de R$ 50.000 até o final de 2026',
@@ -786,11 +808,9 @@ async function getMorganSettings() {
     risk_profile: 'Moderado (Reserva Segura + Float Inteligente no CDI)',
     facts_json: [],
     gemini_api_key: process.env.GEMINI_API_KEY || '',
-    gemini_model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    gemini_model: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
     telegram_bot_token: process.env.TELEGRAM_BOT_TOKEN || '',
-    telegram_allowed_chat_ids: process.env.TELEGRAM_ALLOWED_CHAT_IDS
-      ? process.env.TELEGRAM_ALLOWED_CHAT_IDS.split(',').map(s => s.trim()).filter(Boolean)
-      : [],
+    telegram_allowed_chat_ids: defaultAllowedChats,
     whatsapp_access_token: process.env.WHATSAPP_ACCESS_TOKEN || '',
     whatsapp_phone_number_id: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
     whatsapp_verify_token: process.env.WHATSAPP_VERIFY_TOKEN || 'familymoney_morgan_secret',
@@ -809,24 +829,33 @@ async function getMorganSettings() {
     const rows = await selectRows('morgan_settings');
     if (rows && rows.length > 0) {
       const row = rows[0];
+      const parsedChatIds = Array.isArray(row.telegram_allowed_chat_ids)
+        ? row.telegram_allowed_chat_ids
+        : (typeof row.telegram_allowed_chat_ids === 'string' ? JSON.parse(row.telegram_allowed_chat_ids || '[]') : (memoryMorganSettingsCache?.telegram_allowed_chat_ids || []));
+      const mergedChatIds = Array.from(new Set([...defaultAllowedChats, ...parsedChatIds.map(String)]));
+
+      const rawModel = row.gemini_model || defaultSettings.gemini_model;
+      const activeModel = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'].includes(rawModel)
+        ? 'gemini-3.5-flash-lite'
+        : rawModel;
+
       const normalized = {
         ...defaultSettings,
         ...(memoryMorganSettingsCache || {}),
         ...row,
+        gemini_model: activeModel,
         facts_json: Array.isArray(row.facts_json)
           ? row.facts_json
           : (typeof row.facts_json === 'string' ? JSON.parse(row.facts_json || '[]') : (memoryMorganSettingsCache?.facts_json || [])),
-        telegram_allowed_chat_ids: Array.isArray(row.telegram_allowed_chat_ids)
-          ? row.telegram_allowed_chat_ids
-          : (typeof row.telegram_allowed_chat_ids === 'string' ? JSON.parse(row.telegram_allowed_chat_ids || '[]') : (memoryMorganSettingsCache?.telegram_allowed_chat_ids || [])),
+        telegram_allowed_chat_ids: mergedChatIds,
         whatsapp_access_token: row.whatsapp_access_token || memoryMorganSettingsCache?.whatsapp_access_token || process.env.WHATSAPP_ACCESS_TOKEN || '',
         whatsapp_phone_number_id: row.whatsapp_phone_number_id || memoryMorganSettingsCache?.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || '',
         whatsapp_verify_token: row.whatsapp_verify_token || memoryMorganSettingsCache?.whatsapp_verify_token || process.env.WHATSAPP_VERIFY_TOKEN || 'familymoney_morgan_secret',
         whatsapp_allowed_numbers: Array.isArray(row.whatsapp_allowed_numbers)
           ? row.whatsapp_allowed_numbers
           : (typeof row.whatsapp_allowed_numbers === 'string' ? JSON.parse(row.whatsapp_allowed_numbers || '[]') : (memoryMorganSettingsCache?.whatsapp_allowed_numbers || [])),
-        gemini_api_key: row.gemini_api_key || memoryMorganSettingsCache?.gemini_api_key || process.env.GEMINI_API_KEY || '',
-        telegram_bot_token: row.telegram_bot_token || memoryMorganSettingsCache?.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || '',
+        gemini_api_key: row.gemini_api_key || memoryMorganSettingsCache?.gemini_api_key || defaultSettings.gemini_api_key,
+        telegram_bot_token: row.telegram_bot_token || memoryMorganSettingsCache?.telegram_bot_token || defaultSettings.telegram_bot_token,
         approval_threshold: Number(row.approval_threshold ?? defaultSettings.approval_threshold)
       };
       memoryMorganSettingsCache = normalized;

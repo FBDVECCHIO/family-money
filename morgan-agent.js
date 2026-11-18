@@ -231,42 +231,153 @@ DIRETRIZES E MEMÓRIA PERMANENTE DA FAMÍLIA:
 ${(mem.fatosMemorizados && mem.fatosMemorizados.length > 0) ? mem.fatosMemorizados.map(f => `  * ${f}`).join('\n') : '  * (Nenhum fato extra cadastrado)'}
 
 COMO VOCÊ OPERA (CAPACIDADES ATIVAS E REATIVAS):
-1. VOCÊ TEM MÃOS OPERACIONAIS (TOOLS): Sempre que o usuário pedir para lançar uma despesa, registrar uma receita, fazer uma transferência entre contas, efetivar/conciliar um lançamento, excluir um item, ajustar saldo, pagar fatura, simular compra ou memorizar um fato, CHAME IMEDIATAMENTE A FERRAMENTA CORRESPONDENTE. Não diga apenas que vai fazer — execute a ferramenta!
-2. ÁUDIO E FOTOS DE COMPROVANTES: Se o usuário enviar um áudio (nota de voz) dizendo o que gastou ou enviar a foto de um comprovante PIX/nota fiscal/cupom de cartão, extraia o valor, estabelecimento/descrição, categoria, conta ou cartão e chame \`create_transaction\` (ou \`transfer_between_accounts\`) imediatamente.
-3. GOVERNANÇA HÍBRIDA:
-   - Quando uma ferramenta retornar \`status: "executed"\`, confirme ao usuário os detalhes exatos gravados (valor, conta/cartão, novo saldo atualizado) e informe que ele pode desfazer com 1 clique no botão abaixo se desejar.
-   - Quando uma ferramenta retornar \`status: "pending_confirmation"\`, explique claramente que você preparou a operação e aguarda o clique dele no botão [Confirmar] por segurança.
-4. INTELIGÊNCIA DE CARTÕES & CDI:
-   - Sempre que relevante, oriente sobre o melhor cartão do dia (maior float sem juros) e o rendimento do caixa a 100% do CDI (${richContext.cenarioMacroBrasil.cdi}).
-5. COMUNICAÇÃO: Responda em português do Brasil com elegância executiva, clareza, formatação Markdown limpa (negrito e listas objetivas) e números precisos baseados exclusivamente no snapshot real abaixo.
+1. VOCÊ TEM MÃOS OPERACIONAIS (TOOLS): Sempre que o usuário pedir para lançar uma despesa, registrar uma receita, fazer uma transferência entre contas, efetivar/conciliar um lançamento, excluir um item, ajustar saldo, pagar fatura, simular compra ou memorizar um fato, CHAME IMEDIATAMENTE A FERRAMENTA CORRESPONDENTE.
+2. PRECISÃO DE VALORES E CONTAS:
+   - O campo \`amount\` em \`create_transaction\` e \`transfer_between_accounts\` deve ser EXATAMENTE o valor informado pelo usuário (ex: se o usuário disser "lance 10,00", \`amount\` é \`10\`). NUNCA multiplique nem altere o valor informado.
+   - Diferencie com atenção as contas da família: "Itaú PJ" (conta empresa/PJ), "Itaú Personalite" (conta pessoal/PF), "ML - COFRE" (Mercado Livre / Cofre) e "Bradesco".
+3. ÁUDIO E FOTOS DE COMPROVANTES: Se o usuário enviar um áudio (nota de voz) dizendo o que gastou ou enviar a foto de um comprovante PIX/nota fiscal/cupom de cartão, extraia o valor exato, estabelecimento/descrição, categoria, conta ou cartão e chame \`create_transaction\` (ou \`transfer_between_accounts\`) imediatamente.
+4. SAUDAÇÕES E CONVERSAS DE GRUPO: Se alguém no grupo ou chat privado mandar apenas "oi", "oi?", "olá", "tudo bem?", responda de forma cordial, breve, prestativa e humana (sem despejar relatórios longos não solicitados).
+5. COMUNICAÇÃO: Responda em português do Brasil com elegância executiva, clareza, formatação Markdown limpa e números precisos baseados exclusivamente no snapshot real abaixo.
 
 [SNAPSHOT FINANCEIRO EM TEMPO REAL DA BASE DE DADOS]
-${JSON.stringify(richContext, null, 2)}`;
+${JSON.stringify(richContext)}`;
 }
 
 // ============================================================================
-// 4. PARSER NATURAL-LANGUAGE & MOTOR NATIVO (CONTINGÊNCIA / MODO SEM CHAVE)
+// 4. PARSER NATURAL-LANGUAGE & MOTOR NATIVO (CONTINGÊNCIA / FAST-PATH)
 // ============================================================================
 
-async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
-  const { channel = 'web', chatId = 'default' } = options;
-  const text = String(userText || '').trim();
-  const q = engine.normalizeStr(text);
-  const executedActions = [];
+/**
+ * Extrai valor monetário em PT-BR com precisão cirúrgica, ignorando datas, horas, parcelas (6x) e IDs (#12)
+ */
+function extractMoneyAmount(str) {
+  if (!str) return null;
+  let cleaned = String(str)
+    .replace(/\[R:\d+\]/gi, ' ')
+    .replace(/#\d+\b/g, ' ')
+    .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g, ' ') // datas 18/11
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ') // datas ISO
+    .replace(/\b\d{1,2}:\d{2}\b/g, ' ') // horas 16:00
+    .replace(/\b\d{1,2}\s*h(?:oras?)?\b/gi, ' ') // 16h
+    .replace(/\b\d+\s*x\b/gi, ' ') // 6x
+    .replace(/\bem\s+\d+\s*parcelas?\b/gi, ' ') // em 6 parcelas
+    .replace(/\bdia\s+\d{1,2}\b/gi, ' '); // dia 10
 
-  // Helper para extrair valor monetário em PT-BR (ex: "150", "150,50", "R$ 1.200,00", "1200.50")
-  function extractMoneyAmount(str) {
-    const cleaned = str.replace(/r\$\s*/gi, '');
-    const match = cleaned.match(/(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)/);
-    if (!match) return null;
-    let raw = match[1];
+  function parsePtBrNumber(rawStr) {
+    let raw = String(rawStr).trim();
     if (raw.includes('.') && raw.includes(',')) {
       raw = raw.replace(/\./g, '').replace(',', '.');
     } else if (raw.includes(',')) {
       raw = raw.replace(',', '.');
     }
     const val = parseFloat(raw);
-    return (!isNaN(val) && val > 0) ? val : null;
+    return (!isNaN(val) && val > 0) ? Number(val.toFixed(2)) : null;
+  }
+
+  // 1. Prioridade máxima: Valor precedido por R$ ou seguido por "reais"
+  const currencyMatch = cleaned.match(/r\$\s*(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)/i)
+    || cleaned.match(/(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)\s*reais\b/i);
+  if (currencyMatch) {
+    const val = parsePtBrNumber(currencyMatch[1]);
+    if (val !== null) return val;
+  }
+
+  // 2. Prioridade alta: Número formatado com casas decimais explícitas (ex: 10,00 ou 1.250,50)
+  const decimalMatch = cleaned.match(/\b(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{2})\b/);
+  if (decimalMatch) {
+    const val = parsePtBrNumber(decimalMatch[1]);
+    if (val !== null) return val;
+  }
+
+  // 3. Prioridade média: Número logo após verbo de lançamento ou preposição de valor ("de 10", "por 10", "lance 10", "transfira 10")
+  const contextualMatch = cleaned.match(/\b(?:de|por|valor|lance|lancar|gastei|paguei|comprei|passei|recebi|transfira|transferir)\s+(\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d{1,2})?)\b/i);
+  if (contextualMatch) {
+    const val = parsePtBrNumber(contextualMatch[1]);
+    if (val !== null) return val;
+  }
+
+  // 4. Fallback: primeiro número positivo restante
+  const fallbackMatch = cleaned.match(/\b(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)\b/);
+  if (fallbackMatch) {
+    return parsePtBrNumber(fallbackMatch[1]);
+  }
+  return null;
+}
+
+/**
+ * Formata uma resposta executiva imediata a partir do resultado de uma ferramenta já executada
+ */
+function formatImmediateToolReply(toolName, toolResult) {
+  if (!toolResult) return '';
+  if (toolResult.requiresConfirmation) {
+    return toolResult.summary;
+  }
+  if (!toolResult.ok) {
+    return `⚠️ **Não foi possível concluir a operação:** ${toolResult.error || 'Verifique os dados informados.'}`;
+  }
+
+  if (toolName === 'create_transaction' && toolResult.transaction) {
+    const tx = toolResult.transaction;
+    const isInc = tx.type === 'income';
+    return `✅ **Lançamento Registrado com Sucesso!**\n\n• **Descrição:** ${tx.description}\n• **Valor:** **${engine.formatBRL(tx.amount)}** (${isInc ? 'Receita' : 'Despesa'})\n• **Detalhes:** ${toolResult.summary}\n\n*O painel Family Money já foi atualizado em tempo real.*`;
+  }
+
+  if (toolName === 'transfer_between_accounts') {
+    return `✅ **Transferência Entre Contas Concluída!**\n\n${toolResult.summary}\n\n*Os saldos de origem e destino já foram atualizados em tempo real.*`;
+  }
+
+  if (toolName === 'generate_executive_briefing' && toolResult.briefingText) {
+    return toolResult.briefingText;
+  }
+
+  if (toolName === 'recommend_best_card' && Array.isArray(toolResult.ranking)) {
+    const best = toolResult.bestCard;
+    const list = toolResult.ranking.map(c =>
+      `• **${c.name}**: Fecha dia ${c.closingDay}, vence dia ${c.dueDay} ➔ **${c.floatDays} dias** sem juros (${c.dueDateFormatted})\n  *${c.statusTip}*`
+    ).join('\n');
+    return `💳 **Matriz Tática de Cartões & Float Hoje — CFO Morgan**\n\n🏆 **Recomendação #1 para Compras Hoje:** **${best ? best.name : 'Nenhum'}** (**${best ? best.floatDays : 0} dias** de prazo sem juros).\n\n${list}`;
+  }
+
+  if (toolName === 'simulate_purchase_impact' && Array.isArray(toolResult.monthlyImpact)) {
+    const monthsLines = toolResult.monthlyImpact.map(m =>
+      `• **${m.mes}**: Superávit atual ${engine.formatBRL(m.superavitAtual)} ➔ Com a compra: **${engine.formatBRL(m.superavitComCompra)}** ${m.comprometeFluxo ? '🔴 *(Atenção: Déficit)*' : '🟢'}`
+    ).join('\n');
+    return `🧮 **Simulação Estratégica de Compra — CFO Morgan**\n\n• **Valor Simulado:** ${engine.formatBRL(toolResult.purchaseAmount)} em **${toolResult.installments}x de ${engine.formatBRL(toolResult.installmentValue)}**\n• **Melhor Cartão Hoje:** **${toolResult.recommendedCard}**\n• **Ganho de Arbitragem no CDI (100%):** **+${engine.formatBRL(toolResult.cdiArbitrageGain)}** em juros líquidos!\n\n📊 **Impacto no Fluxo de Caixa (Próximos 6 Meses):**\n${monthsLines}`;
+  }
+
+  return `✅ **Operação Concluída pelo Morgan!**\n\n${toolResult.summary || 'Atualizado com sucesso.'}`;
+}
+
+/**
+ * Detecta se a mensagem é uma saudação simples ("oi?", "olá", "tudo bem?", "morgan?")
+ */
+function isSimpleGreetingMessage(rawText = '') {
+  const clean = engine.normalizeStr(rawText)
+    .replace(/^@?\w*morgan\w*[,:\s]*/i, '')
+    .replace(/[?!.,;]+$/g, '')
+    .trim();
+  if (!clean) return true;
+  return /^(oi+|ola+|opa+|e\s*ai+|hey+|hi+|hello+|bom\s+dia|boa\s+tarde|boa\s+noite|tudo\s+bem|tudo\s+bom|como\s+vai|ta\s+ai|esta\s+ai|testando|teste|alou+|alo+)$/i.test(clean);
+}
+
+function buildQuickGreetingReply(senderName = 'Família') {
+  const firstName = String(senderName || 'Família').split(' ')[0];
+  return `👋 **Olá, ${firstName}! Tudo ótimo por aqui.**\nEstou online e conectado em tempo real ao **Family Money**.\n\nComo posso ajudar agora?\n• 💸 **Lançar despesa/receita:** *"Lance 35,00 de padaria no Itaú Personalite"*\n• 🔄 **Transferir entre contas:** *"Transfira 200 do ML Cofre para o Itaú PJ"*\n• 💳 **Melhor cartão hoje:** *"Qual cartão usar hoje?"*\n• 📊 **Saldos e resumo:** *"Como estão nossos saldos?"*\n*(Você também pode enviar áudio de voz ou foto de comprovante!)*`;
+}
+
+async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
+  const { channel = 'web', chatId = 'default', senderName = 'Família' } = options;
+  const text = String(userText || '').trim();
+  const q = engine.normalizeStr(text);
+  const executedActions = [];
+
+  // 0. Saudação simples rápida ("oi?", "olá", "tudo bem?") -> Resposta humana instantânea
+  if (isSimpleGreetingMessage(text)) {
+    return {
+      reply: buildQuickGreetingReply(senderName),
+      actions: [],
+      engineUsed: 'fast-greeting'
+    };
   }
 
   const ctx = await engine.buildMorganRichContext();
@@ -288,28 +399,50 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
     }
   }
 
-  // 2. Comando de Transferência ("transfira 500 do itau para a xp", "transferir 1500 de itau pra nubank")
+  // 2. Comando de Transferência ("transfira 500 do itau pj para o itau personalite", "transferir 1500 do ml cofre pra itau pj")
   if (q.includes('transf')) {
     const amount = extractMoneyAmount(text);
     if (amount) {
       let fromAcc = null;
       let toAcc = null;
-      for (const acc of accounts) {
-        const accNorm = engine.normalizeStr(acc.name);
-        const firstWord = accNorm.split(' ')[0];
-        const fromRegex = new RegExp(`(?:de|do|da)\\s+${firstWord}`, 'i');
-        const toRegex = new RegExp(`(?:para|pra|pro|no|na)\\s+${firstWord}`, 'i');
-        if (fromRegex.test(q)) fromAcc = acc;
-        if (toRegex.test(q)) toAcc = acc;
+
+      // Extrair trechos explícitos de origem ("de/do/da X") e destino ("para/pra/pro/no/na Y")
+      const fromToMatch = q.match(/\b(?:de|do|da)\s+(?:conta\s+)?(?:do\s+|da\s+)?(.+?)\s+\b(?:para|pra|pro|no|na)\s+(?:a\s+|o\s+)?(?:conta\s+)?(?:do\s+|da\s+)?(.+?)(?:$|\s+no\s+valor|\s+de\s+r\$|\s+hoje)/i);
+      if (fromToMatch) {
+        fromAcc = engine.resolveEntityByNameOrId(accounts, fromToMatch[1].trim(), false);
+        toAcc = engine.resolveEntityByNameOrId(accounts, fromToMatch[2].trim(), false);
       }
-      if (!fromAcc || !toAcc) {
-        const mentioned = accounts.filter(acc => q.includes(engine.normalizeStr(acc.name).split(' ')[0]));
-        if (mentioned.length >= 2) {
-          fromAcc = fromAcc || mentioned[0];
-          toAcc = toAcc || mentioned[1];
+
+      if (!fromAcc || !toAcc || fromAcc.id === toAcc.id) {
+        // Buscar menções ordenadas pela posição no texto
+        const mentions = [];
+        for (const acc of accounts) {
+          const accNorm = engine.normalizeStr(acc.name);
+          const aliases = [accNorm];
+          if (accNorm.includes('pj')) aliases.push('itau pj', 'pj');
+          if (accNorm.includes('personalite')) aliases.push('itau personalite', 'personalite', 'itau pf', 'pf');
+          if (accNorm.includes('cofre')) aliases.push('ml cofre', 'mercado livre', 'cofre', 'ml');
+          if (accNorm.includes('bradesco')) aliases.push('bradesco');
+
+          let bestPos = -1;
+          for (const al of aliases) {
+            const pos = q.indexOf(al);
+            if (pos !== -1 && (bestPos === -1 || pos < bestPos)) {
+              bestPos = pos;
+            }
+          }
+          if (bestPos !== -1) {
+            mentions.push({ acc, pos: bestPos });
+          }
+        }
+        mentions.sort((a, b) => a.pos - b.pos);
+        if (mentions.length >= 2) {
+          fromAcc = fromAcc || mentions[0].acc;
+          toAcc = (toAcc && toAcc.id !== fromAcc.id) ? toAcc : mentions[1].acc;
         }
       }
-      if (fromAcc && toAcc && fromAcc.id !== toAcc.id) {
+
+      if (fromAcc && toAcc && Number(fromAcc.id) !== Number(toAcc.id)) {
         const res = await engine.executeToolAction('transfer_between_accounts', {
           amount,
           from_account: fromAcc.id,
@@ -360,35 +493,45 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
   }
 
   // 5. Comando de Lançamento de Despesa ou Receita
-  // Ex: "Lance 150 de supermercado no cartão Nubank", "Gastei 85 de combustível no Itaú", "Recebi 2000 de dividendos na XP"
+  // Ex: "Lance 150 de supermercado no cartão Nubank", "Lance uma despesa de 10,00 na conta do Itaú PJ"
   const isLaunchIntent = /^(morgan[,\s]*)?(lanc(?:e|ar)|gastei|paguei|comprei|passei|adicione|registra|registre|recebi|entrou|depositaram)\b/i.test(q);
   if (isLaunchIntent) {
     const amount = extractMoneyAmount(text);
     if (amount) {
       const isIncome = /\b(recebi|entrou|receita|depositaram|ganhei|salario)\b/i.test(q);
       const matchedCard = cards.find(c => {
-        const tokens = engine.normalizeStr(c.name).split(' ');
-        return (q.includes('cartao') || q.includes('credito') || tokens.length > 1) && tokens.some(t => t.length >= 2 && q.includes(t));
-      });
-      const matchedAcc = accounts.find(a => {
-        const first = engine.normalizeStr(a.name).split(' ')[0];
-        return q.includes(first);
+        const cNorm = engine.normalizeStr(c.name);
+        if (cNorm.includes('nuban') && /\bnubanc?k\b/.test(q)) return true;
+        const tokens = cNorm.split(' ');
+        return (q.includes('cartao') || q.includes('credito') || tokens.length > 1) && tokens.some(t => t.length >= 3 && t !== 'infinite' && q.includes(t));
       });
 
-      const useCard = !isIncome && (q.includes('cartao') || q.includes('credito') || (matchedCard && !q.includes('conta')));
+      // Resolver conta bancária com precisão (diferenciando Itaú PJ vs Itaú Personalite vs ML Cofre vs Bradesco)
+      const accHintMatch = q.match(/\b(?:na\s+conta|no\s+banco|conta|banco|no|na|pelo|pela)\s+(?:do\s+|da\s+)?(itau\s+pj|itau\s+personalite|itau\s+pf|personalite|pj|ml\s*-?\s*cofre|mercado\s+livre|cofre|bradesco|itau)\b/i);
+      const matchedAcc = accHintMatch
+        ? engine.resolveEntityByNameOrId(accounts, accHintMatch[1], true)
+        : engine.resolveEntityByNameOrId(accounts, q, true);
+
+      const useCard = !isIncome && !q.includes('conta') && (q.includes('cartao') || q.includes('credito') || Boolean(matchedCard));
       const installmentsMatch = q.match(/(\d+)\s*x\b|em\s+(\d+)\s*parcelas?/i);
       const installments = installmentsMatch ? parseInt(installmentsMatch[1] || installmentsMatch[2], 10) : 1;
 
-      // Limpar descrição
+      // Limpar descrição removendo verbos de comando, valores e menções à conta/cartão
       let cleanDesc = text
-        .replace(/^(morgan[,\s]*)?(lanc(?:e|ar)|gastei|paguei|comprei|passei|adicione|registra|registre|recebi|entrou|depositaram)\s*/i, '')
-        .replace(/r\$\s*[\d.,]+|[\d.,]+\s*reais|[\d.,]+/i, '')
-        .replace(/\b(no cartao|na conta|no credito|em \d+x|\d+x)\b.*/i, '')
-        .replace(/^(de|em|com|por)\s+/i, '')
+        .replace(/^(morgan[,\s]*)?(por favor[,\s]*)?(lanc(?:e|ar)|gastei|paguei|comprei|passei|adicione|registra|registre|recebi|entrou|depositaram)\s*/i, '')
+        .replace(/^(uma?\s+)?(despesa|gasto|compra|receita|entrada|lancamento|pagamento|valor)\s+(de\s+)?/i, '')
+        .replace(/r\$\s*(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)/gi, '')
+        .replace(/(\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{1,2}|\d+)\s*(reais)?/i, '')
+        .replace(/\b(no\s+cartao|na\s+conta|no\s+credito|em\s+\d+\s*x|\d+\s*x|em\s+\d+\s*parcelas?)\b.*/i, '')
+        .replace(/\b(no|na|pelo|pela|do|da)\s+(itau\s*pj|itau\s*personalite|personalite|ml\s*-?\s*cofre|mercado\s*livre|cofre|bradesco|nubanc?k|black\s*infinite|azul\s*infinite|riachuelo|renner)\b.*/i, '')
+        .replace(/^(de|em|com|por|para)\s+/i, '')
+        .replace(/\s+/g, ' ')
         .trim();
 
       if (!cleanDesc || cleanDesc.length < 2) {
-        cleanDesc = isIncome ? 'Receita Lançada via Morgan' : 'Despesa Lançada via Morgan';
+        cleanDesc = isIncome
+          ? `Receita ${matchedAcc ? matchedAcc.name : ''}`.trim()
+          : `Despesa ${useCard && matchedCard ? matchedCard.name : (matchedAcc ? matchedAcc.name : '')}`.trim();
       }
       cleanDesc = cleanDesc.charAt(0).toUpperCase() + cleanDesc.slice(1);
 
@@ -405,7 +548,7 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
       if (res.ok) {
         executedActions.push(res);
         return {
-          reply: `✅ **Lançamento Registrado com Sucesso!**\n\n• **Descrição:** ${res.transaction.description}\n• **Valor:** **${engine.formatBRL(amount)}** (${isIncome ? 'Receita' : 'Despesa'})\n• **Meio:** ${res.summary}\n\n*O painel Family Money já foi atualizado em tempo real.*`,
+          reply: formatImmediateToolReply('create_transaction', res),
           actions: executedActions,
           engineUsed: 'native-autonomous'
         };
@@ -420,19 +563,15 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
     const installments = instMatch ? parseInt(instMatch[1] || instMatch[2], 10) : 6;
     const sim = await engine.executeToolAction('simulate_purchase_impact', { amount, installments }, { channel, chatId });
 
-    const monthsLines = sim.monthlyImpact.map(m =>
-      `• **${m.mes}**: Superávit atual ${engine.formatBRL(m.superavitAtual)} ➔ Com a compra: **${engine.formatBRL(m.superavitComCompra)}** ${m.comprometeFluxo ? '🔴 *(Atenção: Déficit)*' : '🟢'}`
-    ).join('\n');
-
     return {
-      reply: `🧮 **Simulação Estratégica de Compra — CFO Morgan**\n\n• **Valor Simulado:** ${engine.formatBRL(amount)} em **${installments}x de ${engine.formatBRL(sim.installmentValue)}**\n• **Melhor Cartão Hoje:** **${sim.recommendedCard}**\n• **Ganho de Arbitragem no CDI (100%):** Deixando o valor aplicado enquanto paga as parcelas, você ganha **+${engine.formatBRL(sim.cdiArbitrageGain)}** em juros líquidos!\n\n📊 **Impacto no Fluxo de Caixa (Próximos 6 Meses):**\n${monthsLines}\n\n💡 **Veredito de Morgan:** ${sim.causesDeficitInAnyMonth ? '⚠️ Esta compra gera déficit em pelo menos um mês projetado. Recomendo aumentar o número de parcelas sem juros ou postergar.' : '✅ O fluxo de caixa absorve perfeitamente as parcelas mantendo superávit positivo em todos os meses!'}`,
+      reply: formatImmediateToolReply('simulate_purchase_impact', sim),
       actions: [],
       engineUsed: 'native-autonomous'
     };
   }
 
   // 7. Briefing / Resumo do dia
-  if (q.includes('briefing') || q.includes('bom dia') || q.includes('resumo do dia') || q.includes('auditoria')) {
+  if (q.includes('briefing') || q.includes('resumo do dia') || q.includes('auditoria')) {
     const briefing = await engine.buildExecutiveBriefingText(ctx);
     return {
       reply: briefing.text,
@@ -455,8 +594,8 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
     };
   }
 
-  // 9. Projeção / Futuro / Sobra do mês
-  if (q.includes('sobr') || q.includes('proje') || q.includes('futuro') || q.includes('mes') || q.includes('saldo')) {
+  // 9. Projeção / Futuro / Sobra do mês / Saldos
+  if (q.includes('sobr') || q.includes('proje') || q.includes('futuro') || q.includes('mes') || q.includes('saldo') || q.includes('conta')) {
     const h = ctx.health;
     const accs = ctx.raw.accounts.map(a => `• **${a.name}**: ${engine.formatBRL(a.balance)}`).join('\n');
     const fLines = ctx.raw.forecast.map(f =>
@@ -470,7 +609,15 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
     };
   }
 
-  // Fallback geral rico
+  // Fallback cordial e objetivo (em vez de despejar relatório gigante quando a mensagem é curta)
+  if (text.length <= 35) {
+    return {
+      reply: buildQuickGreetingReply(senderName),
+      actions: [],
+      engineUsed: 'native-autonomous'
+    };
+  }
+
   const briefing = await engine.buildExecutiveBriefingText(ctx);
   return {
     reply: briefing.text,
@@ -480,7 +627,7 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
 }
 
 // ============================================================================
-// 5. LOOP AGÊNTICO PRINCIPAL (GEMINI FUNCTION CALLING + MULTIMODAL)
+// 5. LOOP AGÊNTICO PRINCIPAL (GEMINI FUNCTION CALLING + MULTIMODAL ULTRA-RÁPIDO)
 // ============================================================================
 
 async function processMorganMessage({
@@ -488,8 +635,23 @@ async function processMorganMessage({
   media = null, // { mimeType: 'audio/ogg' | 'image/jpeg', base64Data: '...' }
   channel = 'web',
   chatId = 'default',
+  senderName = 'Família',
   apiKeyOverride = null
 }) {
+  const cleanInputText = String(text || '').trim();
+
+  // FAST-PATH INSTANTÂNEO (< 20ms): Saudações simples ("oi?", "olá", "tudo bem?", "morgan?")
+  if (!media && isSimpleGreetingMessage(cleanInputText)) {
+    const fastReply = buildQuickGreetingReply(senderName);
+    await appendConversationTurn(channel, chatId, 'user', cleanInputText || 'Olá');
+    await appendConversationTurn(channel, chatId, 'model', fastReply, []);
+    return {
+      reply: fastReply,
+      actions: [],
+      engineUsed: 'fast-greeting'
+    };
+  }
+
   const settings = await db.getMorganSettings();
   const apiKey = (apiKeyOverride || settings.gemini_api_key || process.env.GEMINI_API_KEY || '').trim();
 
@@ -498,27 +660,26 @@ async function processMorganMessage({
     await db.updateMorganSettings({ gemini_api_key: apiKeyOverride.trim() });
   }
 
-  const userPromptLabel = text || (media
+  const userPromptLabel = cleanInputText || (media
     ? (media.mimeType.startsWith('audio/')
-      ? '[Áudio de voz enviado pelo usuário: transcreva o pedido financeiro, execute a ferramenta de lançamento/consulta apropriada e responda]'
-      : '[Imagem de comprovante/recibo enviada pelo usuário: extraia valor, data, estabelecimento e categoria, registre o lançamento via create_transaction e responda]')
+      ? '[Áudio de voz enviado pelo usuário: transcreva o pedido financeiro, execute a ferramenta de lançamento/transferência/consulta apropriada com o valor exato e responda]'
+      : '[Imagem de comprovante/recibo enviada pelo usuário: extraia valor exato, data, estabelecimento e categoria, registre o lançamento via create_transaction e responda]')
     : 'Olá Morgan');
 
   await appendConversationTurn(channel, chatId, 'user', userPromptLabel);
 
   // Se não houver chave Gemini configurada, usar o Motor Autônomo Local imediatamente
   if (!apiKey) {
-    const localResult = await runLocalAutonomousParserAndReasoning(userPromptLabel, { channel, chatId });
+    const localResult = await runLocalAutonomousParserAndReasoning(userPromptLabel, { channel, chatId, senderName });
     await appendConversationTurn(channel, chatId, 'model', localResult.reply, localResult.actions);
     return localResult;
   }
 
   const ctxObj = await engine.buildMorganRichContext();
   const systemInstruction = buildMorganSystemInstruction(ctxObj);
-  const recentHistory = await getRecentConversationHistory(channel, chatId, 8);
+  const recentHistory = await getRecentConversationHistory(channel, chatId, 6);
 
   const contents = [];
-  // Adicionar histórico anterior (excluindo a mensagem atual que acabou de ser inserida)
   const historyToInclude = recentHistory.slice(0, -1);
   for (const h of historyToInclude) {
     if (!h.content) continue;
@@ -528,7 +689,6 @@ async function processMorganMessage({
     });
   }
 
-  // Montar a mensagem atual (texto + mídia multimodal se houver)
   const currentUserParts = [];
   if (media && media.base64Data && media.mimeType) {
     currentUserParts.push({
@@ -538,19 +698,22 @@ async function processMorganMessage({
       }
     });
   }
-  currentUserParts.push({ text: userPromptLabel });
+  currentUserParts.push({ text: `[Remetente: ${senderName}] ${userPromptLabel}` });
 
   contents.push({
     role: 'user',
     parts: currentUserParts
   });
 
+  // Priorizar modelos Flash-Lite de baixa latência (~700ms) e excluir modelos 2.x descontinuados (HTTP 404)
+  const deprecatedModels = new Set(['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite']);
   const candidateModels = [
-    settings.gemini_model || 'gemini-2.5-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-flash-latest'
-  ].filter((v, i, a) => v && a.indexOf(v) === i);
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-flash-lite-latest',
+    settings.gemini_model,
+    'gemini-3.8-flash'
+  ].filter((v, i, a) => v && !deprecatedModels.has(v) && a.indexOf(v) === i);
 
   const executedActions = [];
   let activeModel = candidateModels[0];
@@ -559,8 +722,7 @@ async function processMorganMessage({
     let workingContents = [...contents];
     let finalReplyText = '';
 
-    // Loop Agêntico Multi-Step (suporta até 4 encadeamentos de Tool Calls)
-    for (let step = 0; step < 4; step++) {
+    for (let step = 0; step < 3; step++) {
       let responseData = null;
       let lastErr = null;
 
@@ -570,6 +732,7 @@ async function processMorganMessage({
           const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(6500),
             body: JSON.stringify({
               systemInstruction: {
                 parts: [{ text: systemInstruction }]
@@ -577,8 +740,8 @@ async function processMorganMessage({
               contents: workingContents,
               tools: [{ functionDeclarations: MORGAN_TOOLS_DECLARATIONS }],
               generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 4096
+                temperature: 0.2,
+                maxOutputTokens: 2048
               }
             })
           });
@@ -608,19 +771,22 @@ async function processMorganMessage({
       workingContents.push(candidate);
 
       const functionCalls = candidate.parts.filter(p => p.functionCall);
-      const textParts = candidate.parts.filter(p => p.text).map(p => p.text);
+      // Filtrar partes de texto ignorando pensamentos internos (p.thought === true)
+      const textParts = candidate.parts.filter(p => p.text && !p.thought).map(p => p.text);
 
       if (textParts.length > 0) {
         finalReplyText = textParts.join('\n').trim();
       }
 
-      // Se o modelo não pediu nenhuma Tool Call, encerramos o turno com a resposta final!
       if (functionCalls.length === 0) {
         break;
       }
 
       // Executar todas as Tool Calls solicitadas pelo modelo neste passo
       const functionResponseParts = [];
+      let needsSecondTurnForSynthesis = false;
+      const immediateReplies = [];
+
       for (const part of functionCalls) {
         const { name, args } = part.functionCall;
         console.log(`[MORGAN-AGENT] Executando Tool: ${name}`, JSON.stringify(args));
@@ -633,12 +799,25 @@ async function processMorganMessage({
           });
         }
 
+        if (name === 'query_financial_data') {
+          needsSecondTurnForSynthesis = true;
+        } else {
+          immediateReplies.push(formatImmediateToolReply(name, toolResult));
+        }
+
         functionResponseParts.push({
           functionResponse: {
             name,
             response: { result: toolResult }
           }
         });
+      }
+
+      // FAST-COMMIT: Se todas as ferramentas chamadas forem operacionais (lançamento, transferência, conciliação, briefing, etc.),
+      // retornamos a confirmação executiva imediatamente em 0ms sem fazer uma 2ª chamada HTTP ao Gemini!
+      if (!needsSecondTurnForSynthesis && immediateReplies.length > 0) {
+        finalReplyText = immediateReplies.filter(Boolean).join('\n\n');
+        break;
       }
 
       workingContents.push({
@@ -648,11 +827,11 @@ async function processMorganMessage({
     }
 
     if (!finalReplyText && executedActions.length > 0) {
-      finalReplyText = executedActions.map(a => `✅ ${a.summary}`).join('\n\n');
+      finalReplyText = executedActions.map(a => formatImmediateToolReply(a.toolName, a)).join('\n\n');
     }
 
     if (!finalReplyText) {
-      const fallback = await runLocalAutonomousParserAndReasoning(userPromptLabel, { channel, chatId });
+      const fallback = await runLocalAutonomousParserAndReasoning(userPromptLabel, { channel, chatId, senderName });
       finalReplyText = fallback.reply;
     }
 
@@ -665,7 +844,20 @@ async function processMorganMessage({
     };
   } catch (err) {
     console.warn('[MORGAN-AGENT] Contingência ativada (Erro Gemini):', err.message);
-    const fallbackResult = await runLocalAutonomousParserAndReasoning(userPromptLabel, { channel, chatId });
+
+    // GUARD ANTI-DUPLICIDADE: Se uma ferramenta operacional JÁ FOI EXECUTADA no passo 1,
+    // JAMAIS rodar o parser local de contingência (evita lançar ou transferir em duplicidade)!
+    if (executedActions.length > 0) {
+      const safeReply = executedActions.map(a => formatImmediateToolReply(a.toolName, a)).join('\n\n');
+      await appendConversationTurn(channel, chatId, 'model', safeReply, executedActions);
+      return {
+        reply: safeReply,
+        actions: executedActions,
+        engineUsed: `gemini-partial (${activeModel})`
+      };
+    }
+
+    const fallbackResult = await runLocalAutonomousParserAndReasoning(userPromptLabel, { channel, chatId, senderName });
     await appendConversationTurn(channel, chatId, 'model', fallbackResult.reply, fallbackResult.actions);
     return {
       ...fallbackResult,
@@ -678,5 +870,7 @@ module.exports = {
   MORGAN_TOOLS_DECLARATIONS,
   processMorganMessage,
   runLocalAutonomousParserAndReasoning,
-  getRecentConversationHistory
+  getRecentConversationHistory,
+  extractMoneyAmount,
+  isSimpleGreetingMessage
 };

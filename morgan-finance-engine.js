@@ -621,45 +621,134 @@ async function buildMorganRichContext() {
 function resolveEntityByNameOrId(list = [], queryVal, fallbackFirst = true) {
   if (!list.length) return null;
   if (queryVal !== undefined && queryVal !== null && queryVal !== '') {
-    // 1. Tentar por ID numérico exato
-    if (!isNaN(Number(queryVal))) {
-      const byId = list.find(item => Number(item.id) === Number(queryVal));
+    // 1. Tentar por ID numérico exato (apenas se a string inteira for um número)
+    const trimmedVal = String(queryVal).trim();
+    if (/^\d+$/.test(trimmedVal)) {
+      const byId = list.find(item => Number(item.id) === Number(trimmedVal));
       if (byId) return byId;
     }
+
     const q = normalizeStr(queryVal);
-    // 2. Match exato normalizado
-    const exact = list.find(item => normalizeStr(item.name || item.description) === q);
-    if (exact) return exact;
-    // 3. Match por inclusão parcial
-    const partial = list.find(item => {
-      const target = normalizeStr(item.name || item.description);
-      return target.includes(q) || q.includes(target);
-    });
-    if (partial) return partial;
-    // 4. Match por primeira palavra-chave (ex: "Itaú" -> "Itaú Corrente", "Nubank" -> "Nubank Roxinho")
-    const tokens = q.split(/\s+/).filter(t => t.length >= 2);
-    for (const tok of tokens) {
-      const tokenMatch = list.find(item => normalizeStr(item.name || item.description).includes(tok));
-      if (tokenMatch) return tokenMatch;
+    if (q) {
+      // 2. Match exato normalizado
+      const exact = list.find(item => normalizeStr(item.name || item.description) === q);
+      if (exact) return exact;
+
+      // 3. Aliases semânticos específicos para contas e cartões da família
+      const isAccountList = list.some(item => item.balance !== undefined);
+      if (isAccountList) {
+        if (/\b(pj|empresa|juridic)\b/.test(q)) {
+          const pjAcc = list.find(item => normalizeStr(item.name).includes('pj'));
+          if (pjAcc) return pjAcc;
+        }
+        if (/\b(personalite|personnalite|pf|fisica|pessoal)\b/.test(q) || q === 'itau') {
+          const pfAcc = list.find(item => normalizeStr(item.name).includes('personalite'));
+          if (pfAcc) return pfAcc;
+        }
+        if (/\b(ml|cofre|mercado\s*livre)\b/.test(q)) {
+          const mlAcc = list.find(item => {
+            const n = normalizeStr(item.name);
+            return n.includes('cofre') || n.includes('ml') || n.includes('mercado');
+          });
+          if (mlAcc) return mlAcc;
+        }
+        if (/\bbradesco\b/.test(q)) {
+          const bradAcc = list.find(item => normalizeStr(item.name).includes('bradesco'));
+          if (bradAcc) return bradAcc;
+        }
+      } else {
+        // Aliases para cartões (ex: "nubank" -> "Nubanck")
+        if (/\bnubanc?k\b/.test(q)) {
+          const nuCard = list.find(item => normalizeStr(item.name || '').includes('nuban'));
+          if (nuCard) return nuCard;
+        }
+      }
+
+      // 4. Match por inclusão parcial completa
+      const partial = list.find(item => {
+        const target = normalizeStr(item.name || item.description);
+        return target && (target.includes(q) || q.includes(target));
+      });
+      if (partial) return partial;
+
+      // 5. Match pontuado por múltiplos tokens (prioriza quem acerta mais palavras específicas)
+      const tokens = q.split(/[\s/\-_]+/).filter(t => t.length >= 2);
+      if (tokens.length > 0) {
+        let bestItem = null;
+        let bestScore = 0;
+        for (const item of list) {
+          const target = normalizeStr(item.name || item.description);
+          const targetTokens = target.split(/[\s/\-_]+/);
+          let score = 0;
+          for (const tok of tokens) {
+            if (targetTokens.includes(tok)) {
+              score += (tok === 'itau' ? 1 : 3); // Tokens específicos (pj, personalite, cofre) valem mais que prefixo compartilhado
+            } else if (target.includes(tok)) {
+              score += 1;
+            }
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            bestItem = item;
+          }
+        }
+        if (bestItem && bestScore > 0) return bestItem;
+      }
     }
   }
-  return fallbackFirst ? list[0] : null;
+  if (!fallbackFirst) return null;
+  // Se for lista de contas, preferir Itaú Personalite ou primeira conta com saldo > 0 em vez de conta zerada
+  if (list.some(item => item.balance !== undefined)) {
+    const activeAcc = list.find(item => normalizeStr(item.name).includes('personalite'))
+      || list.find(item => parseFloat(item.balance || 0) > 0);
+    if (activeAcc) return activeAcc;
+  }
+  return list[0];
 }
 
-function inferCategoryFromDescription(categories = [], description = '', explicitCategory = null) {
+function inferCategoryFromDescription(categories = [], description = '', explicitCategory = null, txType = 'expense') {
   if (explicitCategory) {
     const matched = resolveEntityByNameOrId(categories, explicitCategory, false);
-    if (matched) return matched;
+    if (matched && !(txType === 'expense' && normalizeStr(matched.name) === 'salario')) {
+      return matched;
+    }
   }
-  const d = normalizeStr(description);
+  const d = normalizeStr(`${description || ''} ${explicitCategory || ''}`);
+
+  if (txType === 'income') {
+    if (d.includes('reembolso') || d.includes('estorno')) {
+      const c = resolveEntityByNameOrId(categories, 'Reembolso', false);
+      if (c) return c;
+    }
+    if (d.includes('extra') || d.includes('freela') || d.includes('bonus')) {
+      const c = resolveEntityByNameOrId(categories, 'Trabalho Extra', false);
+      if (c) return c;
+    }
+    const sal = resolveEntityByNameOrId(categories, 'Salário', false);
+    if (sal) return sal;
+  }
+
   const keywordMap = [
-    { kw: ['mercado', 'supermercado', 'padaria', 'restaurante', 'ifood', 'lanche', 'almoco', 'jantar', 'cafe', 'pizza', 'acougue', 'feira', 'comida', 'alimentacao'], cat: 'Alimentação' },
-    { kw: ['uber', '99', 'combustivel', 'gasolina', 'etanol', 'posto', 'estacionamento', 'pedagio', 'ipva', 'seguro auto', 'oficina', 'carro', 'transporte'], cat: 'Transporte' },
-    { kw: ['aluguel', 'condominio', 'energia', 'luz', 'agua', 'gas', 'internet', 'iptu', 'reforma', 'casa', 'moradia'], cat: 'Moradia' },
-    { kw: ['farmacia', 'remedio', 'medico', 'consulta', 'exame', 'hospital', 'dentista', 'plano de saude', 'terapia', 'saude'], cat: 'Saúde' },
-    { kw: ['escola', 'faculdade', 'curso', 'livro', 'material escolar', 'mensalidade', 'educacao'], cat: 'Educação' },
-    { kw: ['cinema', 'viagem', 'hotel', 'passeio', 'bar', 'festa', 'show', ' brinquedo', 'jogo', 'lazer'], cat: 'Lazer' },
-    { kw: ['netflix', 'spotify', 'amazon', 'prime', 'assinatura', 'icloud', 'google', 'chatgpt', 'streaming', 'servico'], cat: 'Assinaturas' }
+    { kw: ['mercado', 'supermercado', 'oba', 'swift', 'acougue', 'varejao', 'feira', 'hortifruti', 'atacadao', 'assai', 'pao de acucar', 'carrefour', 'alimentacao'], cat: 'Mercado/ varejão/ açougue' },
+    { kw: ['padaria', 'cafe', 'lanche', 'restaurante', 'ifood', 'almoco', 'jantar', 'pizza', 'pizzaria', 'hamburguer', 'burger', 'fast food', 'fest food', 'bolo', 'outback', 'sorvete', 'comida'], cat: 'Café/ fest food' },
+    { kw: ['combustivel', 'gasolina', 'etanol', 'posto', 'ipiranga', 'shell', 'estacionamento', 'pedagio', 'guincho', 'oficina', 'pneu', 'ipva', 'seguro auto', 'carro', 'automovel', 'lavagem'], cat: 'Automovel' },
+    { kw: ['uber', '99', 'taxi', 'onibus', 'metro', 'passagem', 'transporte'], cat: 'Transporte' },
+    { kw: ['aluguel', 'condominio', 'energia', 'luz', 'agua', 'gas', 'iptu', 'reforma', 'manutencao', 'portao', 'limpeza', 'pilha', 'casa', 'moradia'], cat: 'Casa' },
+    { kw: ['farmacia', 'remedio', 'drogaria', 'drogasil', 'medico', 'consulta', 'exame', 'hospital', 'dentista', 'dental', 'convenio', 'plano de saude', 'terapia', 'psicologo', 'saude'], cat: 'Saúde' },
+    { kw: ['escola', 'colegio', 'faculdade', 'curso', 'livro', 'material escolar', 'mensalidade', 'educacao'], cat: 'Educação' },
+    { kw: ['academia', 'pano bianco', 'smartfit', 'treino', 'crossfit', 'pilates', 'natacao'], cat: 'Academia' },
+    { kw: ['suplemento', 'whey', 'creatina', 'vitamina'], cat: 'Suplementos' },
+    { kw: ['pet', 'racao', 'veterinario', 'banho e tosa', 'cachorro', 'gato'], cat: 'Pet' },
+    { kw: ['clube', 'cerveja', 'bar', 'churrasco', 'lazer'], cat: 'Clube/ Lazer' },
+    { kw: ['cinema', 'viagem', 'hotel', 'passeio', 'festa', 'show', 'diversao', 'ingresso'], cat: 'Passeio/ diversão' },
+    { kw: ['presente', 'aniversario', 'brinquedo', 'lembranca'], cat: 'Presente' },
+    { kw: ['roupa', 'vestuario', 'calcado', 'sapato', 'tenis', 'renner', 'riachuelo', 'cea', 'zara', 'pratas', 'acessorio'], cat: 'Vestuario/ acessorios' },
+    { kw: ['escova', 'cabelo', 'salao', 'barbearia', 'estetica', 'perfume', 'cosmetico', 'cuidado'], cat: 'Cuidados pessoais' },
+    { kw: ['netflix', 'spotify', 'amazon', 'prime', 'globo', 'assinatura', 'icloud', 'google', 'openai', 'chatgpt', 'paddle', 'botconvers', 'melimais', 'vivo', 'internet', 'celular', 'streaming'], cat: 'Assinaturas' },
+    { kw: ['das', 'inss', 'imposto', 'taxa', 'anuidade', 'darf', 'tarifa', 'juros', 'iof'], cat: 'Taxas / imposto' },
+    { kw: ['emprestimo', 'consorcio', 'financiamento', 'parcela', 'divida'], cat: 'Divida' },
+    { kw: ['investimento', 'cdb', 'tesouro', 'reserva', 'aporte', 'acao', 'fundo'], cat: 'Investimento' },
+    { kw: ['contadora', 'contador', 'rosana', 'pj', 'empresa', 'fornecedor', 'nota fiscal'], cat: 'Empresa' }
   ];
 
   for (const rule of keywordMap) {
@@ -668,7 +757,13 @@ function inferCategoryFromDescription(categories = [], description = '', explici
       if (found) return found;
     }
   }
-  return resolveEntityByNameOrId(categories, 'Outros', true);
+
+  // Fallback seguro para despesa: NUNCA retornar 'Salário' para uma despesa!
+  const safeExpenseFallback = resolveEntityByNameOrId(categories, 'Casa', false)
+    || resolveEntityByNameOrId(categories, 'Empresa', false)
+    || categories.find(c => !['salario', 'trabalho extra', 'reembolso'].includes(normalizeStr(c.name)))
+    || categories[0];
+  return safeExpenseFallback;
 }
 
 // ============================================================================
@@ -702,7 +797,7 @@ async function executeToolAction(toolName, args = {}, options = {}) {
     const date = args.date || getTodayStr();
     const isEffective = args.is_effective !== undefined ? Boolean(args.is_effective) : true;
     const installments = paymentMethod === 'card' ? Math.max(1, parseInt(args.installments || 1, 10)) : 1;
-    const category = inferCategoryFromDescription(categories, args.description, args.category_name || args.category_id);
+    const category = inferCategoryFromDescription(categories, args.description, args.category_name || args.category_id, type);
 
     let targetAccount = null;
     let targetCard = null;
