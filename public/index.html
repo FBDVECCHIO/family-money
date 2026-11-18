@@ -1938,6 +1938,44 @@ Dados: ${JSON.stringify(familyData)}`;
           </div>
         </div>
 
+        <!-- SEÇÃO 3: INTEGRAÇÃO WHATSAPP CLOUD API (META OFICIAL) -->
+        <div style="margin-top: 18px; background: rgba(37, 211, 102, 0.05); padding: 16px; border-radius: 12px; border: 1px solid rgba(37, 211, 102, 0.25); display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #25d366; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+              💬 3. WhatsApp Cloud API Oficial (Meta / Facebook Developers)
+            </strong>
+            <span id="morgan-wa-status-badge" style="font-size: 0.75rem; padding: 3px 8px; border-radius: 20px; background: rgba(255,255,255,0.08); color: #a1a1aa;">
+              Verificando...
+            </span>
+          </div>
+
+          <div style="font-size: 0.76rem; color: #cbd5e1; background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <strong>URL do Webhook para colar no Meta Developers:</strong><br>
+            <code style="color: #38bdf8; word-break: break-all;" id="wa-webhook-url-display">https://seu-dominio/api/morgan/webhook/whatsapp</code><br>
+            <span style="color: var(--text-muted); margin-top: 4px; display: inline-block;">Token de Verificação: <code style="color: #a78bfa;" id="wa-verify-token-display">familymoney_morgan_secret</code></span>
+          </div>
+
+          <div>
+            <label for="ai-wa-token-input" style="display: block; font-size: 0.82rem; color: #cbd5e1; margin-bottom: 4px;">Access Token Permanente (Meta Cloud API):</label>
+            <input type="password" id="ai-wa-token-input" placeholder="EAAB..." style="width: 100%; padding: 9px 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); color: #fff; font-family: monospace; font-size: 0.86rem;">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label for="ai-wa-phone-id-input" style="display: block; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 4px;">Phone Number ID:</label>
+              <input type="text" id="ai-wa-phone-id-input" placeholder="Ex: 1092837465..." style="width: 100%; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); color: #fff; font-family: monospace; font-size: 0.86rem;">
+            </div>
+            <div>
+              <label for="ai-wa-verify-token-input" style="display: block; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 4px;">Verify Token (Segredo):</label>
+              <input type="text" id="ai-wa-verify-token-input" value="familymoney_morgan_secret" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); color: #fff; font-family: monospace; font-size: 0.86rem;">
+            </div>
+          </div>
+
+          <small id="morgan-wa-paired-numbers" style="color: #94a3b8; font-size: 0.76rem;">
+            WhatsApp pareados: Nenhum (envie /parear 1202 na conversa do WhatsApp)
+          </small>
+        </div>
+
         <div style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;">
           <button type="button" id="save-ai-settings-btn" class="btn btn-primary" style="border-radius: 10px; padding: 10px 20px;">
             Salvar &amp; Ativar no Servidor 24/7

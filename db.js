@@ -791,6 +791,12 @@ async function getMorganSettings() {
     telegram_allowed_chat_ids: process.env.TELEGRAM_ALLOWED_CHAT_IDS
       ? process.env.TELEGRAM_ALLOWED_CHAT_IDS.split(',').map(s => s.trim()).filter(Boolean)
       : [],
+    whatsapp_access_token: process.env.WHATSAPP_ACCESS_TOKEN || '',
+    whatsapp_phone_number_id: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+    whatsapp_verify_token: process.env.WHATSAPP_VERIFY_TOKEN || 'familymoney_morgan_secret',
+    whatsapp_allowed_numbers: process.env.WHATSAPP_ALLOWED_NUMBERS
+      ? process.env.WHATSAPP_ALLOWED_NUMBERS.split(',').map(s => s.trim()).filter(Boolean)
+      : [],
     briefing_time: process.env.MORGAN_BRIEFING_TIME || '08:00',
     approval_threshold: Number(process.env.MORGAN_APPROVAL_THRESHOLD || 1000),
     proactive_enabled: true,
@@ -813,6 +819,12 @@ async function getMorganSettings() {
         telegram_allowed_chat_ids: Array.isArray(row.telegram_allowed_chat_ids)
           ? row.telegram_allowed_chat_ids
           : (typeof row.telegram_allowed_chat_ids === 'string' ? JSON.parse(row.telegram_allowed_chat_ids || '[]') : (memoryMorganSettingsCache?.telegram_allowed_chat_ids || [])),
+        whatsapp_access_token: row.whatsapp_access_token || memoryMorganSettingsCache?.whatsapp_access_token || process.env.WHATSAPP_ACCESS_TOKEN || '',
+        whatsapp_phone_number_id: row.whatsapp_phone_number_id || memoryMorganSettingsCache?.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+        whatsapp_verify_token: row.whatsapp_verify_token || memoryMorganSettingsCache?.whatsapp_verify_token || process.env.WHATSAPP_VERIFY_TOKEN || 'familymoney_morgan_secret',
+        whatsapp_allowed_numbers: Array.isArray(row.whatsapp_allowed_numbers)
+          ? row.whatsapp_allowed_numbers
+          : (typeof row.whatsapp_allowed_numbers === 'string' ? JSON.parse(row.whatsapp_allowed_numbers || '[]') : (memoryMorganSettingsCache?.whatsapp_allowed_numbers || [])),
         gemini_api_key: row.gemini_api_key || memoryMorganSettingsCache?.gemini_api_key || process.env.GEMINI_API_KEY || '',
         telegram_bot_token: row.telegram_bot_token || memoryMorganSettingsCache?.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || '',
         approval_threshold: Number(row.approval_threshold ?? defaultSettings.approval_threshold)

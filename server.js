@@ -6,6 +6,7 @@ const db = require('./db');
 const morganEngine = require('./morgan-finance-engine');
 const morganAgent = require('./morgan-agent');
 const morganTelegram = require('./morgan-telegram');
+const morganWhatsApp = require('./morgan-whatsapp');
 const morganScheduler = require('./morgan-scheduler');
 
 const app = express();
@@ -308,13 +309,24 @@ app.get('/api/morgan/logs', async (req, res) => {
   }
 });
 
-// 6. Webhook Gateway para WhatsApp (Evolution API / Cloud API)
+// 6. Webhook Gateway para WhatsApp (Meta Cloud API Oficial & Evolution API)
+app.get('/api/morgan/webhook/whatsapp', async (req, res) => {
+  return morganWhatsApp.verifyMetaWebhook(req, res);
+});
+
 app.post('/api/morgan/webhook/whatsapp', async (req, res) => {
   try {
-    const out = await morganTelegram.handleWhatsAppWebhookPayload(req.body || {});
-    res.json(out);
+    const isMeta = req.body && req.body.object === 'whatsapp_business_account';
+    if (isMeta) {
+      res.sendStatus(200); // Responder 200 OK imediatamente para a Meta
+      await morganWhatsApp.handleMetaWhatsAppWebhook(req.body);
+    } else {
+      const out = await morganTelegram.handleWhatsAppWebhookPayload(req.body || {});
+      res.json(out);
+    }
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error('[WHATSAPP WEBHOOK ERROR]', err.message);
+    if (!res.headersSent) res.status(500).json({ ok: false, error: err.message });
   }
 });
 

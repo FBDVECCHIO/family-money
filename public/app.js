@@ -6171,6 +6171,13 @@ function initAiAgent() {
   const tgStatusBadge = document.getElementById('morgan-tg-status-badge');
   const tgPairedChats = document.getElementById('morgan-tg-paired-chats');
   const testTgBriefingBtn = document.getElementById('ai-test-telegram-briefing-btn');
+  const waTokenInput = document.getElementById('ai-wa-token-input');
+  const waPhoneIdInput = document.getElementById('ai-wa-phone-id-input');
+  const waVerifyTokenInput = document.getElementById('ai-wa-verify-token-input');
+  const waStatusBadge = document.getElementById('morgan-wa-status-badge');
+  const waPairedNumbers = document.getElementById('morgan-wa-paired-numbers');
+  const waWebhookUrlDisplay = document.getElementById('wa-webhook-url-display');
+  const waVerifyTokenDisplay = document.getElementById('wa-verify-token-display');
 
   async function refreshMorganBackendStatusUI() {
     try {
@@ -6188,6 +6195,35 @@ function initAiAgent() {
       }
       if (briefingTimeInput && s.briefing_time) briefingTimeInput.value = s.briefing_time;
       if (approvalThresholdInput && s.approval_threshold !== undefined) approvalThresholdInput.value = s.approval_threshold;
+
+      if (waTokenInput && s.whatsapp_access_token) waTokenInput.value = s.whatsapp_access_token;
+      if (waPhoneIdInput && s.whatsapp_phone_number_id) waPhoneIdInput.value = s.whatsapp_phone_number_id;
+      if (waVerifyTokenInput && s.whatsapp_verify_token) {
+        waVerifyTokenInput.value = s.whatsapp_verify_token;
+        if (waVerifyTokenDisplay) waVerifyTokenDisplay.textContent = s.whatsapp_verify_token;
+      }
+      if (waWebhookUrlDisplay) {
+        waWebhookUrlDisplay.textContent = `${window.location.origin}/api/morgan/webhook/whatsapp`;
+      }
+
+      if (waStatusBadge) {
+        if (s.whatsapp_access_token && s.whatsapp_phone_number_id) {
+          waStatusBadge.style.background = 'rgba(37, 211, 102, 0.2)';
+          waStatusBadge.style.color = '#25d366';
+          waStatusBadge.textContent = '🟢 Meta Cloud API Ativa';
+        } else {
+          waStatusBadge.style.background = 'rgba(255, 255, 255, 0.08)';
+          waStatusBadge.style.color = '#a1a1aa';
+          waStatusBadge.textContent = '⚪ Não configurado';
+        }
+      }
+
+      if (waPairedNumbers) {
+        const nums = s.whatsapp_allowed_numbers || [];
+        waPairedNumbers.textContent = nums.length > 0
+          ? `✅ WhatsApp pareados (${nums.length}): ${nums.join(', ')}`
+          : '🔒 WhatsApp pareados: Nenhum (envie /parear 1202 na conversa)';
+      }
 
       // Auto-resincronizar com o servidor se o navegador tinha o token salvo e o servidor ainda não estava online
       const localTgToken = localStorage.getItem('fm_telegram_bot_token');
@@ -6362,6 +6398,9 @@ function initAiAgent() {
           body: JSON.stringify({
             gemini_api_key: geminiVal || undefined,
             telegram_bot_token: tgVal || undefined,
+            whatsapp_access_token: waTokenInput ? waTokenInput.value.trim() : undefined,
+            whatsapp_phone_number_id: waPhoneIdInput ? waPhoneIdInput.value.trim() : undefined,
+            whatsapp_verify_token: waVerifyTokenInput ? waVerifyTokenInput.value.trim() : undefined,
             briefing_time: briefingTimeInput ? briefingTimeInput.value : '08:00',
             approval_threshold: approvalThresholdInput ? Number(approvalThresholdInput.value || 1000) : 1000
           })
