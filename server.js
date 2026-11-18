@@ -3,10 +3,14 @@ const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 const db = require('./db');
+const morganEngine = require('./morgan-finance-engine');
+const morganAgent = require('./morgan-agent');
+const morganTelegram = require('./morgan-telegram');
+const morganScheduler = require('./morgan-scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const APP_VERSION = '8.5';
+const APP_VERSION = '9.0';
 const BUILD_TIME = Date.now();
 
 // Habilitar CORS e Parse de JSON
@@ -170,6 +174,150 @@ app.delete('/api/db/:table', async (req, res) => {
   }
 });
 
+// ================= ROTAS DO AGENTE AUTÔNOMO MORGAN 24/7 =================
+
+// Conectar o motor transacional do Morgan ao barramento SSE em tempo real
+morganEngine.setMutationNotifier(broadcastDbChange);
+
+// 1. Status e Configurações do Agente Morgan + Bot do Telegram
+app.get('/api/morgan/status', async (req, res) => {
+  try {
+    const settings = await db.getMorganSettings();
+    const tgStatus = morganTelegram.getTelegramStatus();
+    const logs = await db.selectRows('morgan_action_logs', { order: 'id.desc', limit: '20' });
+    res.json({
+      ok: true,
+      telegram: tgStatus,
+      hasGeminiKey: Boolean(settings.gemini_api_key),
+      hasTelegramToken: Boolean(settings.telegram_bot_token),
+      settings: {
+        ...settings,
+        gemini_api_key_masked: settings.gemini_api_key ? `${settings.gemini_api_key.slice(0, 6)}...${settings.gemini_api_key.slice(-4)}` : '',
+        telegram_bot_token_masked: settings.telegram_bot_token ? `${settings.telegram_bot_token.slice(0, 8)}...` : ''
+      },
+      recentActions: logs
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/morgan/settings', async (req, res) => {
+  try {
+    const settings = await db.getMorganSettings();
+    res.json({ ok: true, settings });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/morgan/settings', async (req, res) => {
+  try {
+    const patch = req.body || {};
+    const updated = await db.updateMorganSettings(patch);
+    broadcastDbChange('morgan_settings', 'update', updated);
+    const tgResult = await morganTelegram.startOrReloadTelegramBot();
+    res.json({
+      ok: true,
+      settings: updated,
+      telegram: tgResult
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// 2. Endpoint Unificado de Conversação e Execução Agêntica (Texto + Voz + Imagem)
+app.post('/api/morgan/chat', async (req, res) => {
+  try {
+    const { message, text, media, channel, chatId, apiKey } = req.body || {};
+    const userText = (message || text || '').trim();
+    const result = await morganAgent.processMorganMessage({
+      text: userText,
+      media: media || null,
+      channel: channel || 'web',
+      chatId: chatId || 'web_family',
+      apiKeyOverride: apiKey || null
+    });
+    res.json({
+      ok: true,
+      ...result
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 3. Governança Híbrida: Confirmar, Cancelar ou Desfazer (Undo) qualquer ação do Morgan
+app.post('/api/morgan/action/:id/:op', async (req, res) => {
+  try {
+    const actionId = parseInt(req.params.id, 10);
+    const op = String(req.params.op || '').toLowerCase();
+    let result;
+
+    if (op === 'confirm') {
+      result = await morganEngine.confirmPendingAction(actionId);
+    } else if (op === 'cancel') {
+      result = await morganEngine.cancelPendingAction(actionId);
+    } else if (op === 'undo') {
+      result = await morganEngine.undoExecutedAction(actionId);
+    } else {
+      return res.status(400).json({ ok: false, error: `Operação inválida: ${op}` });
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 4. Disparo Manual ou Sob Demanda do Briefing Executivo no Telegram / Web
+app.post('/api/morgan/briefing/send', async (req, res) => {
+  try {
+    const { chatId } = req.body || {};
+    const tgStatus = morganTelegram.getTelegramStatus();
+    if (tgStatus.active) {
+      const sent = await morganTelegram.broadcastTelegramBriefing(chatId || null);
+      return res.json(sent);
+    }
+    const briefing = await morganEngine.buildExecutiveBriefingText();
+    res.json({
+      ok: true,
+      telegramSent: false,
+      briefingText: briefing.text
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 5. Histórico de Conversas e Logs de Auditoria de Ações do Morgan
+app.get('/api/morgan/logs', async (req, res) => {
+  try {
+    const [actions, conversations] = await Promise.all([
+      db.selectRows('morgan_action_logs', { order: 'id.desc', limit: '30' }),
+      db.selectRows('morgan_conversations', { order: 'id.desc', limit: '40' })
+    ]);
+    res.json({
+      ok: true,
+      actions,
+      conversations: conversations.reverse()
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 6. Webhook Gateway para WhatsApp (Evolution API / Cloud API)
+app.post('/api/morgan/webhook/whatsapp', async (req, res) => {
+  try {
+    const out = await morganTelegram.handleWhatsAppWebhookPayload(req.body || {});
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Endpoint de telemetria para diagnóstico em tempo real de dispositivos móveis
 app.post('/api/telemetry', (req, res) => {
   try {
@@ -245,10 +393,12 @@ app.use((err, req, res, next) => {
   }
 });
 
-// Inicialização com auto-detecção de banco
-db.initDb().then(() => {
+// Inicialização com auto-detecção de banco e ativação do Agente Autônomo Morgan 24/7
+db.initDb().then(async () => {
+  await morganTelegram.startOrReloadTelegramBot();
+  morganScheduler.startMorganScheduler();
   app.listen(PORT, () => {
-    console.log(`[FAMILY MONEY] Servidor ativo e operando na porta ${PORT}`);
+    console.log(`[FAMILY MONEY] Servidor + Agente Autônomo Morgan 24/7 ativos na porta ${PORT}`);
   });
 }).catch(err => {
   console.error('[FAMILY MONEY] Erro crítico ao iniciar banco de dados:', err);

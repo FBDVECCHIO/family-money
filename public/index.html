@@ -1454,8 +1454,11 @@
                   <button id="ai-guide-open-btn" class="ai-header-icon-btn" title="Como Criar Agente Grátis" aria-label="Como Criar Agente Grátis">
                     <i data-lucide="book-open"></i>
                   </button>
-                  <button id="ai-settings-open-btn" class="ai-header-icon-btn" title="Configurar IA" aria-label="Configurar IA">
+                  <button id="ai-settings-open-btn" class="ai-header-icon-btn" title="Configurar IA & Telegram" aria-label="Configurar IA & Telegram">
                     <i data-lucide="key"></i>
+                  </button>
+                  <button id="ai-telegram-quick-btn" type="button" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 20px; padding: 5px 12px; font-size: 0.76rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                    📲 Configurar Telegram 24/7
                   </button>
                 </div>
                 <span class="ai-status-pill">
@@ -1848,40 +1851,40 @@ Dados: ${JSON.stringify(familyData)}`;
     </div>
   </div>
 
-  <!-- MODAL: CONFIGURAÇÃO DE IA (MOTOR HÍBRIDO) -->
+  <!-- MODAL: CONFIGURAÇÃO DE IA & AUTONOMIA TELEGRAM 24/7 (MOTOR HÍBRIDO) -->
   <div id="ai-settings-modal" class="ai-modal-backdrop hide">
-    <div class="ai-modal-box" style="max-width: 550px;">
+    <div class="ai-modal-box" style="max-width: 620px; width: 95%;">
       <div class="ai-modal-header">
         <div style="display: flex; align-items: center; gap: 10px;">
           <div class="ai-avatar" style="width: 32px; height: 32px;">
             <i data-lucide="key" style="width: 18px; height: 18px; color: #10b981;"></i>
           </div>
           <div>
-            <h3 style="margin: 0; font-size: 1.15rem; color: #fff;">Configuração do Especialista IA</h3>
-            <small style="color: var(--text-muted);">Defina o motor de raciocínio generativo <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 600; font-size: 0.72rem; margin-left: 4px;">v6.8 - Permanent Family Memory & CFO Autonomy</span></small>
+            <h3 style="margin: 0; font-size: 1.15rem; color: #fff;">Configuração do Agente Autônomo Morgan 24/7</h3>
+            <small style="color: var(--text-muted);">Motor Cognitivo, Bot Telegram Oficial &amp; Governança Híbrida <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 600; font-size: 0.72rem; margin-left: 4px;">v9.0 - Full Autonomous Engine</span></small>
           </div>
         </div>
         <button id="close-ai-settings-btn" style="background: rgba(255,255,255,0.08); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #fff;">
           <i data-lucide="x" style="width: 18px; height: 18px;"></i>
         </button>
       </div>
-      <div class="ai-modal-body">
+      <div class="ai-modal-body" style="max-height: 75vh; overflow-y: auto;">
         
-        <div style="margin-bottom: 18px;">
-          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 6px;">Motor Atual Selecionado:</label>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 6px;">1. Motor Cognitivo do Morgan (Backend Hetzner &amp; Web):</label>
           <div style="display: flex; gap: 10px;">
             <button type="button" class="btn btn-outline active-engine-btn" id="btn-engine-native" style="flex: 1; border-radius: 10px; font-size: 0.85rem; background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #34d399;">
-              ⚡ Nativo (Grátis & Offline)
+              ⚡ Autônomo Nativo (Grátis &amp; Offline)
             </button>
             <button type="button" class="btn btn-outline" id="btn-engine-gemini" style="flex: 1; border-radius: 10px; font-size: 0.85rem;">
-              🧠 Gemini Flash AI (Free Tier)
+              🧠 Gemini AI + Tool Calling (Voz/Foto/Texto)
             </button>
           </div>
         </div>
 
-        <div id="gemini-key-container" style="display: none; flex-direction: column; gap: 12px; margin-top: 14px; background: rgba(255,255,255,0.03); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color);">
+        <div id="gemini-key-container" style="display: none; flex-direction: column; gap: 12px; margin-top: 12px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color);">
           <div>
-            <label for="ai-gemini-key-input" style="display: block; font-size: 0.85rem; color: #fff; margin-bottom: 6px;">Chave de API do Google Gemini (Free):</label>
+            <label for="ai-gemini-key-input" style="display: block; font-size: 0.84rem; color: #fff; margin-bottom: 6px;">Chave de API do Google Gemini (Sincronizada 24/7 no Servidor):</label>
             <input type="password" id="ai-gemini-key-input" placeholder="AIzaSy..." style="width: 100%; padding: 10px 14px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); color: #fff; font-family: monospace; font-size: 0.9rem;">
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1889,15 +1892,55 @@ Dados: ${JSON.stringify(familyData)}`;
               Criar chave grátis no Google AI Studio &rarr;
             </a>
             <button type="button" id="ai-test-key-btn" class="btn btn-outline" style="font-size: 0.8rem; padding: 6px 12px; border-radius: 8px;">
-              Testar Conexão
+              Testar Chave Gemini
             </button>
           </div>
           <div id="ai-key-status-msg" style="font-size: 0.8rem; display: none;"></div>
         </div>
 
-        <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+        <!-- SEÇÃO 2: INTEGRAÇÃO TELEGRAM BOT OFICIAL 24/7 -->
+        <div style="margin-top: 18px; background: rgba(56, 189, 248, 0.05); padding: 16px; border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.2); display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #38bdf8; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+              📲 2. Canal Autônomo Telegram Bot Oficial (Ativo &amp; Reativo)
+            </strong>
+            <span id="morgan-tg-status-badge" style="font-size: 0.75rem; padding: 3px 8px; border-radius: 20px; background: rgba(255,255,255,0.08); color: #a1a1aa;">
+              Verificando...
+            </span>
+          </div>
+
+          <div>
+            <label for="ai-telegram-token-input" style="display: block; font-size: 0.82rem; color: #cbd5e1; margin-bottom: 4px;">Token do Bot (@BotFather no Telegram):</label>
+            <input type="password" id="ai-telegram-token-input" placeholder="Ex: 7482910421:AAH..." style="width: 100%; padding: 9px 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); color: #fff; font-family: monospace; font-size: 0.86rem;">
+            <small style="color: var(--text-muted); font-size: 0.74rem; display: block; margin-top: 4px;">
+              Após salvar o token, abra seu bot no Telegram e envie <code>/parear 1202</code> para vincular seu celular com segurança.
+            </small>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label for="ai-briefing-time-input" style="display: block; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 4px;">☀️ Horário Briefing Matinal:</label>
+              <input type="time" id="ai-briefing-time-input" value="08:00" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); color: #fff; font-size: 0.86rem;">
+            </div>
+            <div>
+              <label for="ai-approval-threshold-input" style="display: block; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 4px;">🛡️ Limite Confirmação Híbrida (R$):</label>
+              <input type="number" id="ai-approval-threshold-input" value="1000" min="0" step="100" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); color: #fff; font-size: 0.86rem;">
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-top: 4px;">
+            <small id="morgan-tg-paired-chats" style="color: #94a3b8; font-size: 0.76rem;">
+              Chats pareados: Nenhum
+            </small>
+            <button type="button" id="ai-test-telegram-briefing-btn" class="btn btn-outline" style="font-size: 0.78rem; padding: 6px 12px; border-radius: 8px; border-color: #38bdf8; color: #38bdf8;">
+              📲 Disparar Briefing Agora
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;">
           <button type="button" id="save-ai-settings-btn" class="btn btn-primary" style="border-radius: 10px; padding: 10px 20px;">
-            Salvar Preferências
+            Salvar &amp; Ativar no Servidor 24/7
           </button>
         </div>
       </div>

@@ -5466,6 +5466,17 @@ function saveFamilyMemory(fromModal = false) {
 
   localStorage.setItem('fm_family_memory', JSON.stringify(memory));
 
+  // Persistir também no servidor 24/7 (/api/morgan/settings)
+  fetch('/api/morgan/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      family_goal: memory.metaPrincipal,
+      untouchable_expenses: memory.despesasInegociaveis,
+      risk_profile: memory.perfilRisco
+    })
+  }).catch(() => {});
+
   // Sincronizar ambos os conjuntos de campos
   const otherGoal = fromModal ? document.getElementById('memory-family-goal') : document.getElementById('modal-memory-goal');
   const otherUntouchable = fromModal ? document.getElementById('memory-family-untouchable') : document.getElementById('modal-memory-untouchable');
@@ -5506,8 +5517,8 @@ Como posso te orientar hoje? Escolha um dos atalhos estratégicos acima ou envie
   }
 }
 
-// 6. Mensagens do Chat e Renderização
-function appendAiChatMessage(sender, text) {
+// 6. Mensagens do Chat e Renderização (com Botões Interativos de Governança Híbrida & Undo)
+function appendAiChatMessage(sender, text, actions = []) {
   const chatMessages = document.getElementById('ai-chat-messages');
   if (!chatMessages) return;
 
@@ -5521,6 +5532,34 @@ function appendAiChatMessage(sender, text) {
     .replace(/\n\n/g, '<br><br>')
     .replace(/\n/g, '<br>');
 
+  let actionButtonsHtml = '';
+  if (Array.isArray(actions) && actions.length > 0) {
+    const btns = actions.map(act => {
+      if (act.requiresConfirmation && act.actionLogId) {
+        return `
+          <div class="morgan-action-bar" data-action-log-id="${act.actionLogId}" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12); display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary morgan-gov-btn" data-op="confirm" data-id="${act.actionLogId}" style="font-size: 0.78rem; padding: 5px 12px; border-radius: 8px; background: #10b981; border: none; color: #fff; cursor: pointer;">
+              ✅ Confirmar Operação #${act.actionLogId}
+            </button>
+            <button type="button" class="btn btn-outline morgan-gov-btn" data-op="cancel" data-id="${act.actionLogId}" style="font-size: 0.78rem; padding: 5px 12px; border-radius: 8px; border-color: #ef4444; color: #ef4444; cursor: pointer;">
+              ❌ Cancelar
+            </button>
+          </div>
+        `;
+      } else if (act.canUndo && act.actionLogId) {
+        return `
+          <div class="morgan-action-bar" data-action-log-id="${act.actionLogId}" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12); display: flex; gap: 8px;">
+            <button type="button" class="btn btn-outline morgan-gov-btn" data-op="undo" data-id="${act.actionLogId}" style="font-size: 0.76rem; padding: 4px 10px; border-radius: 8px; border-color: #f59e0b; color: #fbbf24; cursor: pointer;">
+              ↩️ Desfazer Lançamento (#${act.actionLogId})
+            </button>
+          </div>
+        `;
+      }
+      return '';
+    }).join('');
+    actionButtonsHtml = btns;
+  }
+
   msgDiv.innerHTML = `
     ${sender === 'agent' ? `
       <div class="ai-avatar" style="width: 28px; height: 28px; flex-shrink: 0; margin-top: 4px;">
@@ -5529,8 +5568,30 @@ function appendAiChatMessage(sender, text) {
     ` : ''}
     <div class="ai-chat-bubble">
       ${formattedText}
+      ${actionButtonsHtml}
     </div>
   `;
+
+  msgDiv.querySelectorAll('.morgan-gov-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const op = btn.getAttribute('data-op');
+      btn.disabled = true;
+      btn.textContent = 'Processando...';
+      try {
+        const res = await fetch(`/api/morgan/action/${id}/${op}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          appendAiChatMessage('agent', data.summary, data.canUndo ? [data] : []);
+          await loadAllData();
+        } else {
+          appendAiChatMessage('agent', `⚠️ ${data.error || 'Não foi possível concluir a operação.'}`);
+        }
+      } catch (err) {
+        appendAiChatMessage('agent', `⚠️ Erro de comunicação: ${err.message}`);
+      }
+    });
+  });
 
   chatMessages.appendChild(msgDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -5540,7 +5601,7 @@ function appendAiChatMessage(sender, text) {
 // Memória Conversacional do Morgan (Histórico multi-turn da sessão)
 let aiConversationHistory = [];
 
-// 7. Envio e Processamento de Pergunta
+// 7. Envio e Processamento de Pergunta ou Comando de Ação (Integrado ao Backend 24/7)
 async function handleAiChatSubmit(userQuery) {
   if (!userQuery || !userQuery.trim()) return;
 
@@ -5556,7 +5617,7 @@ async function handleAiChatSubmit(userQuery) {
       <i data-lucide="bot" style="width: 16px; height: 16px; color: #10b981;"></i>
     </div>
     <div class="ai-chat-bubble" style="color: var(--text-muted); font-style: italic;">
-      Morgan está analisando suas finanças e cruzando dados de mercado...
+      Morgan está processando sua instrução e sincronizando com o banco de dados...
     </div>
   `;
   chatMessages.appendChild(typingDiv);
@@ -5565,8 +5626,38 @@ async function handleAiChatSubmit(userQuery) {
   const geminiKey = localStorage.getItem('fm_gemini_api_key');
 
   try {
-    let responseText = '';
+    // 1. Priorizar o Motor Agêntico 24/7 no Backend (/api/morgan/chat) com Tool Calling
+    const backendRes = await fetch('/api/morgan/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: trimmedQuery,
+        channel: 'web',
+        chatId: 'web_family',
+        apiKey: geminiKey || undefined
+      })
+    });
 
+    if (backendRes.ok) {
+      const backendData = await backendRes.json();
+      const typingEl = document.getElementById('ai-typing-indicator');
+      if (typingEl) typingEl.remove();
+
+      const replyText = backendData.reply || '';
+      const actions = backendData.actions || [];
+      aiConversationHistory.push({ role: 'user', text: trimmedQuery });
+      aiConversationHistory.push({ role: 'model', text: replyText });
+
+      appendAiChatMessage('agent', replyText, actions);
+
+      if (actions.length > 0) {
+        await loadAllData();
+      }
+      return;
+    }
+
+    // 2. Fallback para chamada direta no cliente caso offline
+    let responseText = '';
     if (geminiKey) {
       responseText = await callGeminiAgentApi(trimmedQuery, geminiKey);
     } else {
@@ -5580,14 +5671,14 @@ async function handleAiChatSubmit(userQuery) {
 
     appendAiChatMessage('agent', responseText);
   } catch (err) {
-    console.error('Erro na chamada ao Google Gemini:', err);
+    console.error('Erro na chamada ao Agente Morgan:', err);
     const typingEl = document.getElementById('ai-typing-indicator');
     if (typingEl) typingEl.remove();
 
     const fallbackText = runNativeMorganReasoning(trimmedQuery);
     aiConversationHistory.push({ role: 'user', text: trimmedQuery });
     aiConversationHistory.push({ role: 'model', text: fallbackText });
-    appendAiChatMessage('agent', `⚠️ *(Aviso: a API do Google Gemini retornou uma falha temporária: "${escapeHtml(err.message)}". Apresentando análise pelo motor analítico local:)*\n\n${fallbackText}`);
+    appendAiChatMessage('agent', fallbackText);
   }
 }
 
@@ -6074,13 +6165,83 @@ function initAiAgent() {
 
   let tempEngine = localStorage.getItem('fm_ai_engine') || 'native';
 
+  const tgTokenInput = document.getElementById('ai-telegram-token-input');
+  const briefingTimeInput = document.getElementById('ai-briefing-time-input');
+  const approvalThresholdInput = document.getElementById('ai-approval-threshold-input');
+  const tgStatusBadge = document.getElementById('morgan-tg-status-badge');
+  const tgPairedChats = document.getElementById('morgan-tg-paired-chats');
+  const testTgBriefingBtn = document.getElementById('ai-test-telegram-briefing-btn');
+
+  async function refreshMorganBackendStatusUI() {
+    try {
+      const res = await fetch('/api/morgan/status');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.ok) return;
+
+      const s = data.settings || {};
+      if (keyInput && s.gemini_api_key) keyInput.value = s.gemini_api_key;
+      if (tgTokenInput && s.telegram_bot_token) tgTokenInput.value = s.telegram_bot_token;
+      if (briefingTimeInput && s.briefing_time) briefingTimeInput.value = s.briefing_time;
+      if (approvalThresholdInput && s.approval_threshold !== undefined) approvalThresholdInput.value = s.approval_threshold;
+
+      if (tgStatusBadge) {
+        if (data.telegram && data.telegram.active) {
+          tgStatusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+          tgStatusBadge.style.color = '#34d399';
+          tgStatusBadge.textContent = `🟢 Online (@${data.telegram.botUsername})`;
+        } else {
+          tgStatusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+          tgStatusBadge.style.color = '#fbbf24';
+          tgStatusBadge.textContent = '⚪ Aguardando Token @BotFather';
+        }
+      }
+
+      if (tgPairedChats) {
+        const chats = s.telegram_allowed_chat_ids || [];
+        tgPairedChats.textContent = chats.length > 0
+          ? `✅ Celulares pareados (${chats.length}): ${chats.join(', ')}`
+          : '🔒 Nenhum celular pareado ainda (envie /parear 1202 no Bot)';
+      }
+    } catch (e) {}
+  }
+
   if (openSettingsBtn && settingsModal) {
-    openSettingsBtn.addEventListener('click', () => {
+    const openSettingsModalFn = () => {
       tempEngine = localStorage.getItem('fm_ai_engine') || 'native';
       if (keyInput) keyInput.value = localStorage.getItem('fm_gemini_api_key') || '';
       updateEngineUI(tempEngine);
       if (keyStatusMsg) keyStatusMsg.style.display = 'none';
+      refreshMorganBackendStatusUI();
       settingsModal.classList.remove('hide');
+    };
+    openSettingsBtn.addEventListener('click', openSettingsModalFn);
+    const tgQuickBtn = document.getElementById('ai-telegram-quick-btn');
+    if (tgQuickBtn) tgQuickBtn.addEventListener('click', openSettingsModalFn);
+  }
+
+  if (testTgBriefingBtn) {
+    testTgBriefingBtn.addEventListener('click', async () => {
+      testTgBriefingBtn.disabled = true;
+      testTgBriefingBtn.textContent = 'Enviando...';
+      try {
+        const res = await fetch('/api/morgan/briefing/send', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok && data.sentTo) {
+          showToast('Briefing enviado com sucesso para o seu Telegram!');
+        } else if (data.ok && data.briefingText) {
+          appendAiChatMessage('agent', data.briefingText);
+          if (settingsModal) settingsModal.classList.add('hide');
+          showToast('Briefing gerado no chat do Morgan (configure o Telegram para receber no celular).');
+        } else {
+          showToast(data.error || 'Configure e pareie o Telegram antes de disparar.');
+        }
+      } catch (e) {
+        showToast('Erro ao disparar briefing: ' + e.message);
+      } finally {
+        testTgBriefingBtn.disabled = false;
+        testTgBriefingBtn.textContent = '📲 Disparar Briefing Agora';
+      }
     });
   }
 
@@ -6157,13 +6318,35 @@ function initAiAgent() {
   }
 
   if (saveSettingsBtn) {
-    saveSettingsBtn.addEventListener('click', () => {
+    saveSettingsBtn.addEventListener('click', async () => {
       localStorage.setItem('fm_ai_engine', tempEngine);
-      if (tempEngine === 'gemini' && keyInput) {
-        localStorage.setItem('fm_gemini_api_key', keyInput.value.trim());
+      const geminiVal = keyInput ? keyInput.value.trim() : '';
+      if (geminiVal) {
+        localStorage.setItem('fm_gemini_api_key', geminiVal);
       }
+
+      try {
+        const res = await fetch('/api/morgan/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gemini_api_key: geminiVal,
+            telegram_bot_token: tgTokenInput ? tgTokenInput.value.trim() : undefined,
+            briefing_time: briefingTimeInput ? briefingTimeInput.value : '08:00',
+            approval_threshold: approvalThresholdInput ? Number(approvalThresholdInput.value || 1000) : 1000
+          })
+        });
+        const data = await res.json();
+        if (data.telegram && data.telegram.active) {
+          showToast(`Agente 24/7 salvo! Bot @${data.telegram.bot.username} conectado no Telegram!`);
+        } else {
+          showToast('Configurações do Agente Morgan 24/7 salvas no servidor!');
+        }
+      } catch (e) {
+        showToast('Configurações salvas localmente.');
+      }
+
       if (settingsModal) settingsModal.classList.add('hide');
-      showToast('Configurações do Especialista IA salvas com sucesso!');
       renderAiAgentTab();
     });
   }
@@ -6244,6 +6427,11 @@ function loadMorganFacts() {
 
 function saveMorganFacts(facts) {
   localStorage.setItem('family_morgan_facts', JSON.stringify(facts));
+  fetch('/api/morgan/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ facts_json: facts })
+  }).catch(() => {});
   updateMorganFactsUI();
 }
 

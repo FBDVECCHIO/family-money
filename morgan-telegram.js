@@ -1,0 +1,501 @@
+/**
+ * ============================================================================
+ * MORGAN TELEGRAM BOT GATEWAY & WHATSAPP WEBHOOK ADAPTER
+ * ============================================================================
+ * Conecta o cérebro do Morgan ao Telegram Bot Oficial (Long Polling resiliente)
+ * e expõe adaptador para WhatsApp (Evolution API / Cloud API).
+ * Suporta:
+ *  - Mensagens de Texto em linguagem natural e comandos rápidos (/briefing, /cartoes, /saldos)
+ *  - Notas de Voz / Áudio (.ogg) para lançamentos falando
+ *  - Fotos de Comprovantes / Notas Fiscais (.jpg/.png)
+ *  - Botões Interativos Inline ([✅ Confirmar], [❌ Cancelar], [↩️ Desfazer], [✅ Efetivar])
+ *  - Pareamento seguro por PIN (/parear 1202)
+ */
+
+const db = require('./db');
+const engine = require('./morgan-finance-engine');
+const agent = require('./morgan-agent');
+
+let pollingActive = false;
+let currentToken = '';
+let lastUpdateId = 0;
+let pollingTimer = null;
+let botProfile = null;
+
+/**
+ * Converte Markdown simples do Morgan para HTML seguro do Telegram
+ */
+function markdownToTelegramHtml(mdText = '') {
+  let html = String(mdText || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Negrito **texto**
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  // Código inline `texto`
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Itálico *texto*
+  html = html.replace(/(^|\s)\*([^*\n]+)\*/g, '$1<i>$2</i>');
+
+  return html;
+}
+
+/**
+ * Chamada HTTP genérica para a API do Telegram Bot
+ */
+async function callTelegramApi(token, method, body = null) {
+  const url = `https://api.telegram.org/bot${token}/${method}`;
+  const opts = {
+    method: body ? 'POST' : 'GET',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  };
+  const res = await fetch(url, opts);
+  const data = await res.json().catch(() => ({ ok: false }));
+  return data;
+}
+
+/**
+ * Baixa um arquivo (voz ou foto) dos servidores do Telegram e retorna Base64
+ */
+async function downloadTelegramFileAsBase64(token, fileId, defaultMime = 'audio/ogg') {
+  const fileInfo = await callTelegramApi(token, 'getFile', { file_id: fileId });
+  if (!fileInfo.ok || !fileInfo.result?.file_path) {
+    throw new Error('Não foi possível obter o caminho do arquivo no Telegram.');
+  }
+  const filePath = fileInfo.result.file_path;
+  const fileUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
+  const res = await fetch(fileUrl);
+  if (!res.ok) throw new Error(`Falha ao baixar mídia do Telegram: HTTP ${res.status}`);
+
+  const arrayBuffer = await res.arrayBuffer();
+  const base64Data = Buffer.from(arrayBuffer).toString('base64');
+
+  let mimeType = defaultMime;
+  if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) mimeType = 'image/jpeg';
+  else if (filePath.endsWith('.png')) mimeType = 'image/png';
+  else if (filePath.endsWith('.ogg') || filePath.endsWith('.oga')) mimeType = 'audio/ogg';
+  else if (filePath.endsWith('.mp3')) mimeType = 'audio/mp3';
+  else if (filePath.endsWith('.mp4') || filePath.endsWith('.m4a')) mimeType = 'audio/mp4';
+
+  return { mimeType, base64Data };
+}
+
+/**
+ * Constrói o teclado inline (botões interativos) para as ações retornadas pelo Morgan
+ */
+function buildInlineKeyboardForActions(actions = [], extraButtons = []) {
+  const keyboard = [];
+
+  for (const act of actions) {
+    if (act.requiresConfirmation && act.actionLogId) {
+      keyboard.push([
+        { text: `✅ Confirmar #${act.actionLogId}`, callback_data: `confirm:${act.actionLogId}` },
+        { text: `❌ Cancelar`, callback_data: `cancel:${act.actionLogId}` }
+      ]);
+    } else if (act.canUndo && act.actionLogId) {
+      keyboard.push([
+        { text: `↩️ Desfazer Ação #${act.actionLogId}`, callback_data: `undo:${act.actionLogId}` }
+      ]);
+    }
+  }
+
+  for (const row of extraButtons) {
+    keyboard.push(row);
+  }
+
+  return keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined;
+}
+
+/**
+ * Envia mensagem formatada para um Chat ID do Telegram
+ */
+async function sendTelegramMessage(chatId, text, replyMarkup = undefined, tokenOverride = null) {
+  const settings = await db.getMorganSettings();
+  const token = (tokenOverride || settings.telegram_bot_token || currentToken || '').trim();
+  if (!token) {
+    return { ok: false, error: 'Token do Bot do Telegram não configurado.' };
+  }
+
+  const htmlText = markdownToTelegramHtml(text);
+  const payload = {
+    chat_id: chatId,
+    text: htmlText,
+    parse_mode: 'HTML'
+  };
+  if (replyMarkup) {
+    payload.reply_markup = replyMarkup;
+  }
+
+  let res = await callTelegramApi(token, 'sendMessage', payload);
+  // Fallback para texto puro caso haja algum caractere HTML não fechado
+  if (!res.ok) {
+    res = await callTelegramApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: String(text || ''),
+      reply_markup: replyMarkup
+    });
+  }
+  return res;
+}
+
+/**
+ * Envia o Briefing Executivo para todos os Chat IDs autorizados no Telegram
+ */
+async function broadcastTelegramBriefing(customChatId = null) {
+  const settings = await db.getMorganSettings();
+  const token = (settings.telegram_bot_token || currentToken || '').trim();
+  if (!token) {
+    return { ok: false, error: 'Token do Telegram não configurado.' };
+  }
+
+  const targetChats = customChatId
+    ? [String(customChatId)]
+    : (settings.telegram_allowed_chat_ids || []).map(String);
+
+  if (targetChats.length === 0) {
+    return {
+      ok: false,
+      error: 'Nenhum Chat ID autorizado ainda. Abra seu bot no Telegram e envie /parear 1202.'
+    };
+  }
+
+  const briefing = await engine.buildExecutiveBriefingText();
+  const extraRows = [];
+
+  // Adicionar botões para efetivar pendências de hoje com 1 clique
+  for (const pt of (briefing.pendingTransactions || []).slice(0, 3)) {
+    extraRows.push([
+      {
+        text: `✅ Efetivar: ${pt.description.slice(0, 22)} (${engine.formatBRL(pt.amount)})`,
+        callback_data: `conciliate:${pt.id}`
+      }
+    ]);
+  }
+
+  extraRows.push([
+    { text: '💳 Melhor Cartão Hoje', callback_data: 'quick:cards' },
+    { text: '💰 Saldos & Projeção', callback_data: 'quick:balances' }
+  ]);
+
+  const replyMarkup = buildInlineKeyboardForActions([], extraRows);
+  const results = [];
+
+  for (const cid of targetChats) {
+    const r = await sendTelegramMessage(cid, briefing.text, replyMarkup, token);
+    results.push({ chatId: cid, ok: r.ok });
+  }
+
+  return { ok: true, sentTo: results, briefingText: briefing.text };
+}
+
+/**
+ * Processa cliques nos botões inline do Telegram (callback_query)
+ */
+async function handleTelegramCallbackQuery(token, cbQuery) {
+  const chatId = String(cbQuery.message?.chat?.id || cbQuery.from?.id);
+  const data = String(cbQuery.data || '');
+
+  await callTelegramApi(token, 'answerCallbackQuery', {
+    callback_query_id: cbQuery.id,
+    text: 'Processando comando no Family Money...'
+  });
+
+  if (data.startsWith('undo:')) {
+    const logId = parseInt(data.split(':')[1], 10);
+    const res = await engine.undoExecutedAction(logId);
+    await sendTelegramMessage(chatId, res.ok ? res.summary : `⚠️ ${res.error}`, undefined, token);
+    return;
+  }
+
+  if (data.startsWith('confirm:')) {
+    const logId = parseInt(data.split(':')[1], 10);
+    const res = await engine.confirmPendingAction(logId);
+    const markup = res.ok && res.canUndo
+      ? buildInlineKeyboardForActions([res])
+      : undefined;
+    await sendTelegramMessage(
+      chatId,
+      res.ok ? `✅ **Operação Confirmada e Executada!**\n\n${res.summary}` : `⚠️ ${res.error}`,
+      markup,
+      token
+    );
+    return;
+  }
+
+  if (data.startsWith('cancel:')) {
+    const logId = parseInt(data.split(':')[1], 10);
+    const res = await engine.cancelPendingAction(logId);
+    await sendTelegramMessage(chatId, res.ok ? res.summary : `⚠️ ${res.error}`, undefined, token);
+    return;
+  }
+
+  if (data.startsWith('conciliate:')) {
+    const txId = parseInt(data.split(':')[1], 10);
+    const res = await engine.executeToolAction('conciliate_transaction', {
+      transaction_id: txId,
+      is_effective: true
+    }, { channel: 'telegram', chatId });
+    const markup = res.ok && res.canUndo ? buildInlineKeyboardForActions([res]) : undefined;
+    await sendTelegramMessage(chatId, res.ok ? `✅ ${res.summary}` : `⚠️ ${res.error}`, markup, token);
+    return;
+  }
+
+  if (data === 'quick:briefing') {
+    await broadcastTelegramBriefing(chatId);
+    return;
+  }
+
+  if (data === 'quick:cards') {
+    const out = await agent.runLocalAutonomousParserAndReasoning('Qual o melhor cartão para usar hoje?', { channel: 'telegram', chatId });
+    await sendTelegramMessage(chatId, out.reply, undefined, token);
+    return;
+  }
+
+  if (data === 'quick:balances') {
+    const out = await agent.runLocalAutonomousParserAndReasoning('Me mostre os saldos e a projeção de 6 meses', { channel: 'telegram', chatId });
+    await sendTelegramMessage(chatId, out.reply, undefined, token);
+    return;
+  }
+}
+
+/**
+ * Processa uma mensagem recebida no Telegram (Texto, Voz ou Foto)
+ */
+async function handleTelegramMessage(token, msg) {
+  const chatId = String(msg.chat.id);
+  const senderName = msg.from?.first_name || 'Senhor';
+  const rawText = String(msg.text || msg.caption || '').trim();
+  const settings = await db.getMorganSettings();
+  const allowedIds = (settings.telegram_allowed_chat_ids || []).map(String);
+
+  // 1. Comando de Pareamento Seguro por PIN (/parear 1202)
+  if (rawText.toLowerCase().startsWith('/parear')) {
+    const pinArg = rawText.replace(/^\/parear\s*/i, '').trim();
+    const user = await db.authenticatePin(pinArg);
+    if (user) {
+      if (!allowedIds.includes(chatId)) {
+        allowedIds.push(chatId);
+        await db.updateMorganSettings({ telegram_allowed_chat_ids: allowedIds });
+      }
+      const welcomeMarkup = buildInlineKeyboardForActions([], [
+        [
+          { text: '☀️ Briefing do Dia', callback_data: 'quick:briefing' },
+          { text: '💳 Melhor Cartão Hoje', callback_data: 'quick:cards' }
+        ],
+        [
+          { text: '💰 Saldos & Projeção 6m', callback_data: 'quick:balances' }
+        ]
+      ]);
+      await sendTelegramMessage(
+        chatId,
+        `🛡️ **Acesso Autorizado, ${user.name}!**\n\nSeu Telegram (Chat ID: \`${chatId}\`) está oficialmente vinculado ao **CFO Morgan 24/7** no servidor Family Money.\n\n**O que você pode fazer agora:**\n• 🎙️ **Enviar Áudio:** *"Morgan, passei 140 reais de mercado no cartão Nubank"*\n• 📸 **Enviar Foto de Comprovante:** Eu leio o valor e já lanço na conta\n• 💸 **Transferir e Conciliar:** *"Transfira 500 do Itaú para a XP"*\n• 📊 **Consultar e Simular:** *"Posso comprar um notebook de 4500 em 10x?"*`,
+        welcomeMarkup,
+        token
+      );
+      return;
+    } else {
+      await sendTelegramMessage(
+        chatId,
+        `❌ **PIN incorreto.** Para vincular sua conta ao Family Money, envie:\n\`/parear <SEU_PIN>\` *(ex: /parear 1202)*`,
+        undefined,
+        token
+      );
+      return;
+    }
+  }
+
+  // 2. Comando /start
+  if (rawText.toLowerCase() === '/start') {
+    const isAllowed = allowedIds.includes(chatId);
+    if (!isAllowed) {
+      await sendTelegramMessage(
+        chatId,
+        `👋 Olá, **${senderName}**! Eu sou o **Morgan**, Chief Financial Officer Autônomo do **Family Money**.\n\n🔒 Por segurança bancária, este canal exige autenticação única.\nSeu Chat ID é: \`${chatId}\`\n\nEnvie agora o comando abaixo com o seu PIN do aplicativo para liberar seu acesso:\n👉 \`/parear 1202\``,
+        undefined,
+        token
+      );
+      return;
+    }
+    await broadcastTelegramBriefing(chatId);
+    return;
+  }
+
+  // 3. Verificação de Whitelist (Segurança)
+  if (!allowedIds.includes(chatId)) {
+    await sendTelegramMessage(
+      chatId,
+      `🔒 **Acesso Restrito.** Seu Chat ID (\`${chatId}\`) ainda não está pareado.\nEnvie \`/parear <SEU_PIN>\` para autenticar com o Family Money.`,
+      undefined,
+      token
+    );
+    return;
+  }
+
+  // 4. Atalhos de comandos diretos (/briefing, /cartoes, /saldos)
+  if (rawText.toLowerCase() === '/briefing') {
+    await broadcastTelegramBriefing(chatId);
+    return;
+  }
+
+  // Indicar "digitando..." no Telegram
+  await callTelegramApi(token, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+  // 5. Verificar se há mídia anexada (Nota de Voz, Áudio ou Foto de Comprovante)
+  let media = null;
+  try {
+    if (msg.voice) {
+      media = await downloadTelegramFileAsBase64(token, msg.voice.file_id, msg.voice.mime_type || 'audio/ogg');
+    } else if (msg.audio) {
+      media = await downloadTelegramFileAsBase64(token, msg.audio.file_id, msg.audio.mime_type || 'audio/mp3');
+    } else if (msg.photo && msg.photo.length > 0) {
+      const largestPhoto = msg.photo[msg.photo.length - 1];
+      media = await downloadTelegramFileAsBase64(token, largestPhoto.file_id, 'image/jpeg');
+    }
+  } catch (mediaErr) {
+    console.warn('[MORGAN-TELEGRAM] Erro ao baixar mídia:', mediaErr.message);
+  }
+
+  // 6. Enviar para o Núcleo Cognitivo do Morgan
+  const agentResponse = await agent.processMorganMessage({
+    text: rawText,
+    media,
+    channel: 'telegram',
+    chatId
+  });
+
+  const replyMarkup = buildInlineKeyboardForActions(agentResponse.actions || []);
+  await sendTelegramMessage(chatId, agentResponse.reply, replyMarkup, token);
+}
+
+/**
+ * Loop de Long Polling do Telegram Bot
+ */
+async function pollTelegramUpdates() {
+  if (!pollingActive || !currentToken) return;
+
+  try {
+    const res = await callTelegramApi(currentToken, 'getUpdates', {
+      offset: lastUpdateId + 1,
+      timeout: 15,
+      allowed_updates: ['message', 'callback_query']
+    });
+
+    if (res && res.ok && Array.isArray(res.result)) {
+      for (const update of res.result) {
+        if (update.update_id > lastUpdateId) {
+          lastUpdateId = update.update_id;
+        }
+        try {
+          if (update.message) {
+            await handleTelegramMessage(currentToken, update.message);
+          } else if (update.callback_query) {
+            await handleTelegramCallbackQuery(currentToken, update.callback_query);
+          }
+        } catch (handlerErr) {
+          console.error('[MORGAN-TELEGRAM] Erro ao processar update:', handlerErr.message);
+        }
+      }
+    }
+  } catch (err) {
+    // Silenciar timeouts normais de rede e re-tentar no próximo ciclo
+  } finally {
+    if (pollingActive) {
+      pollingTimer = setTimeout(pollTelegramUpdates, 1500);
+    }
+  }
+}
+
+/**
+ * Inicializa ou reinicia o Bot do Telegram com o token configurado no banco
+ */
+async function startOrReloadTelegramBot() {
+  const settings = await db.getMorganSettings();
+  const token = (settings.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || '').trim();
+
+  if (!token) {
+    pollingActive = false;
+    currentToken = '';
+    botProfile = null;
+    if (pollingTimer) clearTimeout(pollingTimer);
+    return { active: false, reason: 'Token não configurado' };
+  }
+
+  if (pollingActive && currentToken === token && botProfile) {
+    return { active: true, bot: botProfile };
+  }
+
+  // Testar o token com getMe
+  try {
+    const me = await callTelegramApi(token, 'getMe');
+    if (!me.ok) {
+      pollingActive = false;
+      botProfile = null;
+      return { active: false, error: me.description || 'Token inválido no Telegram' };
+    }
+
+    // Remover eventual webhook antigo para liberar getUpdates
+    await callTelegramApi(token, 'deleteWebhook');
+
+    currentToken = token;
+    botProfile = me.result;
+    pollingActive = true;
+    if (pollingTimer) clearTimeout(pollingTimer);
+    console.log(`[MORGAN-TELEGRAM] Bot ativo e conectado como @${botProfile.username} (${botProfile.first_name})`);
+    pollTelegramUpdates();
+
+    return { active: true, bot: botProfile };
+  } catch (err) {
+    console.error('[MORGAN-TELEGRAM] Falha ao iniciar bot:', err.message);
+    return { active: false, error: err.message };
+  }
+}
+
+function getTelegramStatus() {
+  return {
+    active: pollingActive && !!botProfile,
+    botUsername: botProfile ? botProfile.username : null,
+    botName: botProfile ? botProfile.first_name : null
+  };
+}
+
+/**
+ * Adaptador Webhook para WhatsApp (Evolution API / Cloud API)
+ */
+async function handleWhatsAppWebhookPayload(payload = {}) {
+  // Compatível com Evolution API (messages.upsert) ou payload simplificado { from, text }
+  const data = payload.data || payload;
+  const from = data.key?.remoteJid || payload.from || 'whatsapp_user';
+  const text = data.message?.conversation
+    || data.message?.extendedTextMessage?.text
+    || payload.text
+    || '';
+
+  if (!text) {
+    return { ok: false, ignored: true, reason: 'Mensagem sem texto' };
+  }
+
+  const response = await agent.processMorganMessage({
+    text,
+    channel: 'whatsapp',
+    chatId: String(from)
+  });
+
+  return {
+    ok: true,
+    channel: 'whatsapp',
+    to: from,
+    reply: response.reply,
+    actions: response.actions
+  };
+}
+
+module.exports = {
+  startOrReloadTelegramBot,
+  getTelegramStatus,
+  sendTelegramMessage,
+  broadcastTelegramBriefing,
+  handleWhatsAppWebhookPayload,
+  markdownToTelegramHtml
+};
