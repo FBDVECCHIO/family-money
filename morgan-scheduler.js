@@ -9,6 +9,7 @@
 
 const db = require('./db');
 const telegram = require('./morgan-telegram');
+const whatsapp = require('./morgan-whatsapp');
 const engine = require('./morgan-finance-engine');
 
 let schedulerInterval = null;
@@ -57,8 +58,12 @@ async function runProactiveCycle() {
     if (!settings.proactive_enabled) return;
 
     const tgStatus = telegram.getTelegramStatus();
+    const waStatus = whatsapp.getWhatsAppStatus();
     const allowedChats = settings.telegram_allowed_chat_ids || [];
-    if (!tgStatus.active || allowedChats.length === 0) return;
+    const allowedWaJids = settings.whatsapp_allowed_numbers || [];
+    const hasTg = tgStatus.active && allowedChats.length > 0;
+    const hasWa = waStatus.active && allowedWaJids.length > 0;
+    if (!hasTg && !hasWa) return;
 
     const brTime = getBrazilDateAndTime();
 
@@ -69,7 +74,8 @@ async function runProactiveCycle() {
     ) {
       console.log(`[MORGAN-SCHEDULER] Disparando Briefing Diário Matinal (${brTime.dateKey} às ${brTime.timeHHMM})...`);
       await db.updateMorganSettings({ last_briefing_date: brTime.dateKey });
-      await telegram.broadcastTelegramBriefing();
+      if (hasTg) await telegram.broadcastTelegramBriefing();
+      if (hasWa) await whatsapp.broadcastWhatsAppBriefing();
     }
 
     // 2. Verificar Alerta Vespertino de Fechamento / Vencimento de Cartão (às 14:00)
@@ -98,8 +104,15 @@ async function runProactiveCycle() {
             `\n💡 **Recomendação:** Direcione as compras de hoje para o **${best ? best.name : 'cartão de maior float'}** (${best ? best.floatDays + ' dias sem juros' : ''}).`;
         }
 
-        for (const cid of allowedChats) {
-          await telegram.sendTelegramMessage(String(cid), alertMsg);
+        if (hasTg) {
+          for (const cid of allowedChats) {
+            await telegram.sendTelegramMessage(String(cid), alertMsg);
+          }
+        }
+        if (hasWa) {
+          for (const jid of allowedWaJids) {
+            await whatsapp.sendBaileysMessage(String(jid), alertMsg, []);
+          }
         }
       }
     }

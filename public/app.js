@@ -6235,13 +6235,78 @@ function initAiAgent() {
   const tgStatusBadge = document.getElementById('morgan-tg-status-badge');
   const tgPairedChats = document.getElementById('morgan-tg-paired-chats');
   const testTgBriefingBtn = document.getElementById('ai-test-telegram-briefing-btn');
-  const waTokenInput = document.getElementById('ai-wa-token-input');
-  const waPhoneIdInput = document.getElementById('ai-wa-phone-id-input');
-  const waVerifyTokenInput = document.getElementById('ai-wa-verify-token-input');
   const waStatusBadge = document.getElementById('morgan-wa-status-badge');
   const waPairedNumbers = document.getElementById('morgan-wa-paired-numbers');
-  const waWebhookUrlDisplay = document.getElementById('wa-webhook-url-display');
-  const waVerifyTokenDisplay = document.getElementById('wa-verify-token-display');
+  const waQrContainer = document.getElementById('morgan-wa-qr-container');
+  const waQrImg = document.getElementById('morgan-wa-qr-img');
+  const waConnectQrBtn = document.getElementById('ai-wa-connect-qr-btn');
+  const waDisconnectBtn = document.getElementById('ai-wa-disconnect-btn');
+  const waTestBriefingBtn = document.getElementById('ai-wa-test-briefing-btn');
+  let waQrPollTimer = null;
+
+  function updateWhatsAppQrUI(waStatus, settings = {}) {
+    const st = waStatus || { state: 'disconnected', active: false };
+    if (waStatusBadge) {
+      if (st.state === 'connected') {
+        waStatusBadge.style.background = 'rgba(37, 211, 102, 0.2)';
+        waStatusBadge.style.color = '#25d366';
+        const phoneStr = st.user && st.user.phone ? ` (+${st.user.phone})` : '';
+        waStatusBadge.textContent = `🟢 WhatsApp Conectado${phoneStr}`;
+      } else if (st.state === 'qr_ready') {
+        waStatusBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+        waStatusBadge.style.color = '#fbbf24';
+        waStatusBadge.textContent = '🟡 Aguardando Leitura do QR Code';
+      } else if (st.state === 'connecting') {
+        waStatusBadge.style.background = 'rgba(56, 189, 248, 0.2)';
+        waStatusBadge.style.color = '#38bdf8';
+        waStatusBadge.textContent = '🔄 Conectando ao WhatsApp...';
+      } else {
+        waStatusBadge.style.background = 'rgba(255, 255, 255, 0.08)';
+        waStatusBadge.style.color = '#a1a1aa';
+        waStatusBadge.textContent = '⚪ Desconectado';
+      }
+    }
+
+    if (waQrContainer && waQrImg) {
+      if (st.state === 'qr_ready' && st.qrDataUrl) {
+        waQrImg.src = st.qrDataUrl;
+        waQrContainer.style.display = 'flex';
+      } else {
+        waQrContainer.style.display = 'none';
+      }
+    }
+
+    if (waConnectQrBtn) {
+      waConnectQrBtn.textContent = st.state === 'connected'
+        ? '🔄 Trocar Aparelho (Novo QR)'
+        : (st.state === 'qr_ready' ? '🔄 Atualizar QR Code' : '📱 Gerar QR Code WhatsApp');
+    }
+    if (waDisconnectBtn) {
+      waDisconnectBtn.style.display = (st.state === 'connected' || st.state === 'qr_ready') ? 'inline-flex' : 'none';
+    }
+    if (waTestBriefingBtn) {
+      waTestBriefingBtn.style.display = st.state === 'connected' ? 'inline-flex' : 'none';
+    }
+
+    if (waPairedNumbers) {
+      const nums = settings.whatsapp_allowed_numbers || [];
+      waPairedNumbers.textContent = nums.length > 0
+        ? `✅ Canais WhatsApp pareados (${nums.length}): ${nums.join(', ')}`
+        : '🔒 Canais pareados no WhatsApp: Nenhum (envie /parear 1202 no grupo/chat)';
+    }
+  }
+
+  function startWaQrPolling() {
+    if (waQrPollTimer) clearInterval(waQrPollTimer);
+    waQrPollTimer = setInterval(async () => {
+      if (!settingsModal || settingsModal.classList.contains('hide')) {
+        clearInterval(waQrPollTimer);
+        waQrPollTimer = null;
+        return;
+      }
+      await refreshMorganBackendStatusUI();
+    }, 2500);
+  }
 
   async function refreshMorganBackendStatusUI() {
     try {
@@ -6260,34 +6325,7 @@ function initAiAgent() {
       if (briefingTimeInput && s.briefing_time) briefingTimeInput.value = s.briefing_time;
       if (approvalThresholdInput && s.approval_threshold !== undefined) approvalThresholdInput.value = s.approval_threshold;
 
-      if (waTokenInput && s.whatsapp_access_token) waTokenInput.value = s.whatsapp_access_token;
-      if (waPhoneIdInput && s.whatsapp_phone_number_id) waPhoneIdInput.value = s.whatsapp_phone_number_id;
-      if (waVerifyTokenInput && s.whatsapp_verify_token) {
-        waVerifyTokenInput.value = s.whatsapp_verify_token;
-        if (waVerifyTokenDisplay) waVerifyTokenDisplay.textContent = s.whatsapp_verify_token;
-      }
-      if (waWebhookUrlDisplay) {
-        waWebhookUrlDisplay.textContent = `${window.location.origin}/api/morgan/webhook/whatsapp`;
-      }
-
-      if (waStatusBadge) {
-        if (s.whatsapp_access_token && s.whatsapp_phone_number_id) {
-          waStatusBadge.style.background = 'rgba(37, 211, 102, 0.2)';
-          waStatusBadge.style.color = '#25d366';
-          waStatusBadge.textContent = '🟢 Meta Cloud API Ativa';
-        } else {
-          waStatusBadge.style.background = 'rgba(255, 255, 255, 0.08)';
-          waStatusBadge.style.color = '#a1a1aa';
-          waStatusBadge.textContent = '⚪ Não configurado';
-        }
-      }
-
-      if (waPairedNumbers) {
-        const nums = s.whatsapp_allowed_numbers || [];
-        waPairedNumbers.textContent = nums.length > 0
-          ? `✅ WhatsApp pareados (${nums.length}): ${nums.join(', ')}`
-          : '🔒 WhatsApp pareados: Nenhum (envie /parear 1202 na conversa)';
-      }
+      updateWhatsAppQrUI(data.whatsapp, s);
 
       // Auto-resincronizar com o servidor se o navegador tinha o token salvo e o servidor ainda não estava online
       const localTgToken = localStorage.getItem('fm_telegram_bot_token');
@@ -6338,10 +6376,74 @@ function initAiAgent() {
       if (keyStatusMsg) keyStatusMsg.style.display = 'none';
       refreshMorganBackendStatusUI();
       settingsModal.classList.remove('hide');
+      startWaQrPolling();
     };
     openSettingsBtn.addEventListener('click', openSettingsModalFn);
     const tgQuickBtn = document.getElementById('ai-telegram-quick-btn');
     if (tgQuickBtn) tgQuickBtn.addEventListener('click', openSettingsModalFn);
+  }
+
+  if (waConnectQrBtn) {
+    waConnectQrBtn.addEventListener('click', async () => {
+      waConnectQrBtn.disabled = true;
+      waConnectQrBtn.textContent = 'Gerando QR Code...';
+      try {
+        const res = await fetch('/api/morgan/whatsapp/connect', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok && data.whatsapp) {
+          updateWhatsAppQrUI(data.whatsapp);
+          startWaQrPolling();
+          if (data.whatsapp.state === 'qr_ready') {
+            showToast('QR Code gerado! Escaneie com o WhatsApp do seu celular.');
+          } else if (data.whatsapp.state === 'connected') {
+            showToast('🟢 WhatsApp conectado com sucesso!');
+          } else {
+            showToast('Iniciando conexão com o WhatsApp... aguarde 2 segundos.');
+          }
+        }
+      } catch (e) {
+        showToast('Erro ao gerar QR Code do WhatsApp: ' + e.message);
+      } finally {
+        waConnectQrBtn.disabled = false;
+      }
+    });
+  }
+
+  if (waDisconnectBtn) {
+    waDisconnectBtn.addEventListener('click', async () => {
+      waDisconnectBtn.disabled = true;
+      try {
+        const res = await fetch('/api/morgan/whatsapp/disconnect', { method: 'POST' });
+        const data = await res.json();
+        updateWhatsAppQrUI(data.whatsapp);
+        showToast('Sessão do WhatsApp desconectada.');
+      } catch (e) {
+        showToast('Erro ao desconectar WhatsApp: ' + e.message);
+      } finally {
+        waDisconnectBtn.disabled = false;
+      }
+    });
+  }
+
+  if (waTestBriefingBtn) {
+    waTestBriefingBtn.addEventListener('click', async () => {
+      waTestBriefingBtn.disabled = true;
+      waTestBriefingBtn.textContent = 'Enviando...';
+      try {
+        const res = await fetch('/api/morgan/whatsapp/briefing', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          showToast('Briefing enviado com sucesso para o seu WhatsApp!');
+        } else {
+          showToast(data.error || 'Envie /parear 1202 no grupo/chat do WhatsApp primeiro.');
+        }
+      } catch (e) {
+        showToast('Erro ao testar briefing no WhatsApp: ' + e.message);
+      } finally {
+        waTestBriefingBtn.disabled = false;
+        waTestBriefingBtn.textContent = '📤 Testar Briefing WhatsApp';
+      }
+    });
   }
 
   if (testTgBriefingBtn) {
@@ -6462,9 +6564,6 @@ function initAiAgent() {
           body: JSON.stringify({
             gemini_api_key: geminiVal || undefined,
             telegram_bot_token: tgVal || undefined,
-            whatsapp_access_token: waTokenInput ? waTokenInput.value.trim() : undefined,
-            whatsapp_phone_number_id: waPhoneIdInput ? waPhoneIdInput.value.trim() : undefined,
-            whatsapp_verify_token: waVerifyTokenInput ? waVerifyTokenInput.value.trim() : undefined,
             briefing_time: briefingTimeInput ? briefingTimeInput.value : '08:00',
             approval_threshold: approvalThresholdInput ? Number(approvalThresholdInput.value || 1000) : 1000
           })

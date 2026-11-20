@@ -180,19 +180,22 @@ app.delete('/api/db/:table', async (req, res) => {
 // Conectar o motor transacional do Morgan ao barramento SSE em tempo real
 morganEngine.setMutationNotifier(broadcastDbChange);
 
-// 1. Status e Configurações do Agente Morgan + Bot do Telegram
+// 1. Status e Configurações do Agente Morgan + Bot do Telegram & WhatsApp Direto
 app.get('/api/morgan/status', async (req, res) => {
   try {
     const settings = await db.getMorganSettings();
     const tgStatus = morganTelegram.getTelegramStatus();
+    const waStatus = morganWhatsApp.getWhatsAppStatus();
     const logs = await db.selectRows('morgan_action_logs', { order: 'id.desc', limit: '20' });
     res.json({
       ok: true,
       telegram: tgStatus,
+      whatsapp: waStatus,
       hasGeminiKey: Boolean(settings.gemini_api_key),
       hasTelegramToken: Boolean(settings.telegram_bot_token),
       settings: {
         ...settings,
+        whatsapp_session_json: undefined,
         gemini_api_key_masked: settings.gemini_api_key ? `${settings.gemini_api_key.slice(0, 6)}...${settings.gemini_api_key.slice(-4)}` : '',
         telegram_bot_token_masked: settings.telegram_bot_token ? `${settings.telegram_bot_token.slice(0, 8)}...` : ''
       },
@@ -309,7 +312,44 @@ app.get('/api/morgan/logs', async (req, res) => {
   }
 });
 
-// 6. Webhook Gateway para WhatsApp (Meta Cloud API Oficial & Evolution API)
+// 6. Conector Direto WhatsApp Web via QR Code (Baileys - Sem Meta) & Webhooks
+app.post('/api/morgan/whatsapp/connect', async (req, res) => {
+  try {
+    await morganWhatsApp.startWhatsAppSession(true);
+    // Aguardar até 4.5s para que o QR Code seja emitido pelo socket e retornado já na primeira chamada
+    const started = Date.now();
+    while ((Date.now() - started) < 4500) {
+      const st = morganWhatsApp.getWhatsAppStatus();
+      if (st.state === 'qr_ready' || st.state === 'connected') {
+        break;
+      }
+      await new Promise(r => setTimeout(r, 350));
+    }
+    res.json({ ok: true, whatsapp: morganWhatsApp.getWhatsAppStatus() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/morgan/whatsapp/disconnect', async (req, res) => {
+  try {
+    const status = await morganWhatsApp.disconnectWhatsAppSession();
+    res.json({ ok: true, whatsapp: status });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/morgan/whatsapp/briefing', async (req, res) => {
+  try {
+    const { jid } = req.body || {};
+    const sent = await morganWhatsApp.broadcastWhatsAppBriefing(jid || null);
+    res.json(sent);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/api/morgan/webhook/whatsapp', async (req, res) => {
   return morganWhatsApp.verifyMetaWebhook(req, res);
 });
@@ -318,7 +358,7 @@ app.post('/api/morgan/webhook/whatsapp', async (req, res) => {
   try {
     const isMeta = req.body && req.body.object === 'whatsapp_business_account';
     if (isMeta) {
-      res.sendStatus(200); // Responder 200 OK imediatamente para a Meta
+      res.sendStatus(200);
       await morganWhatsApp.handleMetaWhatsAppWebhook(req.body);
     } else {
       const out = await morganTelegram.handleWhatsAppWebhookPayload(req.body || {});
@@ -408,6 +448,9 @@ app.use((err, req, res, next) => {
 // Inicialização com auto-detecção de banco e ativação do Agente Autônomo Morgan 24/7
 db.initDb().then(async () => {
   await morganTelegram.startOrReloadTelegramBot();
+  morganWhatsApp.startWhatsAppSession(false).catch(err => {
+    console.warn('[MORGAN-WHATSAPP] Aviso na inicialização automática:', err.message);
+  });
   morganScheduler.startMorganScheduler();
   app.listen(PORT, () => {
     console.log(`[FAMILY MONEY] Servidor + Agente Autônomo Morgan 24/7 ativos na porta ${PORT}`);
