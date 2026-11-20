@@ -68138,12 +68138,30 @@
       "tool_calls_json": "[]",
       "id": 18,
       "created_at": "2026-11-20T16:07:23.785Z"
+    },
+    {
+      "channel": "test",
+      "chat_id": "test_real_time",
+      "role": "user",
+      "content": "deafazer",
+      "tool_calls_json": null,
+      "id": 19,
+      "created_at": "2026-11-20T16:07:31.243Z"
+    },
+    {
+      "channel": "test",
+      "chat_id": "test_real_time",
+      "role": "model",
+      "content": "↩️ **Ação Desfeita com Sucesso:** O lançamento/operação (Lançamento \"Teste Assinatura XYZ [R:46]\" (R$ 79,90) excluído com sucesso.) foi revertido e os saldos originais restaurados.",
+      "tool_calls_json": "[]",
+      "id": 20,
+      "created_at": "2026-11-20T16:07:31.639Z"
     }
   ],
   "morgan_action_logs": [
     {
       "action_type": "delete_transaction",
-      "status": "executed",
+      "status": "undone",
       "channel": "test",
       "chat_id": "test_123",
       "summary": "Lançamento \"Teste Assinatura XYZ [R:46]\" (R$ 79,90) excluído com sucesso.",
