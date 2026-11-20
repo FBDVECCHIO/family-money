@@ -216,16 +216,49 @@ function calculateForecast(accounts = [], cards = [], fixedItems = [], transacti
     const totalFixed = m.fixedExpenses.reduce((sum, item) => sum + item.amount, 0);
     const totalCards = m.cardBills.reduce((sum, item) => sum + item.amount, 0);
 
-    m.totalIncomes = totalInc;
-    m.totalExpenses = totalFixed + totalCards;
-    m.netSurplus = totalInc - m.totalExpenses;
+    // Contabilizar despesas e receitas variáveis em conta deste mês (débito, Pix, compras avulsas não fixas)
+    let variableAccountExpenses = 0;
+    let variableAccountIncomes = 0;
+    let pendingVariableAccountExpenses = 0;
+
+    transactions.forEach(t => {
+      const isCard = t.payment_method === 'card' || t.paymentMethod === 'card';
+      if (isCard) return; // Cartões de crédito já consolidados em cardBills
+      if (t.description && String(t.description).includes('[R:')) return; // Recorrências fixas já em fixedExpenses
+      if (t.type === 'transfer') return;
+
+      const txDate = new Date(t.date + 'T12:00:00');
+      if (txDate.getFullYear() === m.year && txDate.getMonth() === m.month) {
+        const amt = Math.abs(parseFloat(t.amount || 0));
+        const isEff = t.is_effective === true || t.isEffective === true;
+        if (t.type === 'income') {
+          variableAccountIncomes += amt;
+        } else {
+          variableAccountExpenses += amt;
+          if (!isEff) {
+            pendingVariableAccountExpenses += amt;
+          }
+        }
+      }
+    });
+
+    m.fixedExpensesTotal = totalFixed;
+    m.cardsTotal = totalCards;
+    m.variableExpenses = variableAccountExpenses;
+    m.variableIncomes = variableAccountIncomes;
+
+    m.totalIncomes = totalInc + variableAccountIncomes;
+    m.totalExpenses = totalFixed + totalCards + variableAccountExpenses;
+    m.netSurplus = m.totalIncomes - m.totalExpenses;
 
     const pendingFixedExpenses = m.fixedExpenses
       .filter(item => !item.alreadyDeductedFromBalance)
       .reduce((sum, item) => sum + item.amount, 0);
 
+    // No mês corrente (mês 0), saídas efetivadas já reduziram os saldos de partida (currentTotalBalance).
+    // Abatemos do fluxo restante apenas saídas pendentes + cartões a quitar.
     const cashImpact = (idx === 0)
-      ? (totalInc - (pendingFixedExpenses + totalCards))
+      ? (m.totalIncomes - (pendingFixedExpenses + totalCards + pendingVariableAccountExpenses))
       : m.netSurplus;
 
     runningBalance += cashImpact;
@@ -570,7 +603,7 @@ async function buildMorganRichContext() {
         account_id: f.account_id,
         card_id: f.card_id
       })),
-      ultimosLancamentos: transactions.slice(0, 45).map(t => ({
+      ultimosLancamentos: transactions.slice(0, 15).map(t => ({
         id: t.id,
         data: t.date,
         descricao: t.description,
@@ -584,7 +617,7 @@ async function buildMorganRichContext() {
       })),
       todosLancamentosPendentesNaoEfetivados: transactions
         .filter(t => t.is_effective === false && t.payment_method !== 'card')
-        .slice(0, 40)
+        .slice(0, 15)
         .map(t => ({
           id: t.id,
           data: t.date,
@@ -1376,13 +1409,28 @@ async function executeToolAction(toolName, args = {}, options = {}) {
     const destAcc = accounts.find(a => Number(a.id) === Number(targetTx.destination_account_id));
 
     let deletedFixedItem = null;
+    let dismissedRecurrence = null;
     const rMatch = String(targetTx.description || '').match(/\[R:(\d+)\]/);
-    if (args.also_delete_fixed_recurrence && rMatch) {
+    if (rMatch) {
       const rId = parseInt(rMatch[1], 10);
-      deletedFixedItem = fixedItems.find(f => Number(f.id) === rId) || null;
-      if (deletedFixedItem) {
-        await db.deleteRows('fixed_items', { id: `eq.${rId}` });
-        notifyMutation('fixed_items', 'delete', { id: rId });
+      if (args.also_delete_fixed_recurrence) {
+        deletedFixedItem = fixedItems.find(f => Number(f.id) === rId) || null;
+        if (deletedFixedItem) {
+          await db.deleteRows('fixed_items', { id: `eq.${rId}` });
+          notifyMutation('fixed_items', 'delete', { id: rId });
+        }
+      } else {
+        // Gravar em dismissed_recurrences para não reaparecer no F5 ou auto-geração
+        const txDate = new Date((targetTx.date || '') + 'T12:00:00');
+        const year = isNaN(txDate.getFullYear()) ? new Date().getFullYear() : txDate.getFullYear();
+        const month = isNaN(txDate.getMonth()) ? new Date().getMonth() : txDate.getMonth();
+        const ins = await db.insertRows('dismissed_recurrences', {
+          fixed_item_id: rId,
+          year,
+          month
+        });
+        dismissedRecurrence = ins[0] || null;
+        notifyMutation('dismissed_recurrences', 'insert', {});
       }
     }
 
@@ -1390,6 +1438,7 @@ async function executeToolAction(toolName, args = {}, options = {}) {
       type: 'delete_transaction',
       deletedTx: { ...targetTx },
       deletedFixedItem,
+      dismissedRecurrence,
       accountId: acc ? acc.id : null,
       accountBalanceBefore: acc ? Number(acc.balance) : null,
       destAccountId: destAcc ? destAcc.id : null,
@@ -2226,6 +2275,10 @@ async function undoExecutedAction(actionLogId) {
     }
     notifyMutation('accounts', 'update', {});
   } else if (snap.type === 'delete_transaction') {
+    if (snap.dismissedRecurrence && snap.dismissedRecurrence.id) {
+      await db.deleteRows('dismissed_recurrences', { id: `eq.${snap.dismissedRecurrence.id}` });
+      notifyMutation('dismissed_recurrences', 'delete', { id: snap.dismissedRecurrence.id });
+    }
     if (snap.deletedTx) {
       await db.insertRows('transactions', snap.deletedTx);
       notifyMutation('transactions', 'insert', snap.deletedTx);
@@ -2335,6 +2388,16 @@ async function buildExecutiveBriefingText(preloadedCtx = null) {
 
   const cdiYieldMonth = (health.totalLiquid * 0.1065) / 12;
 
+  const curForecast = ctx.raw && ctx.raw.forecast ? ctx.raw.forecast[0] : null;
+  const varExpenses = curForecast ? (curForecast.variableExpenses || 0) : 0;
+  const breakdownParts = [];
+  if (curForecast) {
+    if (curForecast.fixedExpensesTotal > 0) breakdownParts.push(`Fixas: ${formatBRL(curForecast.fixedExpensesTotal)}`);
+    if (curForecast.cardsTotal > 0) breakdownParts.push(`Cartões: ${formatBRL(curForecast.cardsTotal)}`);
+    if (varExpenses > 0) breakdownParts.push(`Débito/Pix no Mês: ${formatBRL(varExpenses)}`);
+  }
+  const breakdownStr = breakdownParts.length > 0 ? `\n  *(${breakdownParts.join(' | ')})*` : '';
+
   const text = `☀️ **Bom dia, senhor! Briefing Executivo Matinal — CFO Morgan**
 📅 *${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}*
 
@@ -2350,7 +2413,7 @@ ${pendingSection}
 
 📈 **Balanço Projetado do Mês:**
 • Receitas Previstas: ${formatBRL(health.monthlyIncome)}
-• Saídas Previstas (Fixas + Cartões): ${formatBRL(health.monthlyExpenses)}
+• Saídas Consolidadas: ${formatBRL(health.monthlyExpenses)}${breakdownStr}
 • Resultado Estimado: **${health.netSurplus >= 0 ? '🟢 +' + formatBRL(health.netSurplus) : '🔴 -' + formatBRL(Math.abs(health.netSurplus))}**
 • Rendimento Potencial em 100% CDI: **+${formatBRL(cdiYieldMonth)}/mês**
 

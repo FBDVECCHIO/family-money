@@ -318,6 +318,7 @@ COMO VOCÊ OPERA (ADMINISTRAÇÃO TOTAL, EFETIVAÇÃO, EDIÇÃO E EXECUÇÃO IME
    - **Criar/editar cartões, contas ou categorias:** \`manage_entity\`
 2. LIBERDADE DE EXECUÇÃO IMEDIATA (NÃO PEÇA CONFIRMAÇÃO EM TEXTO ANTES DE AGIR):
    - Quando o usuário pedir para lançar, editar, efetivar/pagar ou excluir algo, **EXECUTE A FERRAMENTA IMEDIATAMENTE NA MESMA RESPOSTA**! Não fique perguntando "Você quer que eu faça isso?" sem chamar a tool — o próprio sistema já anexa um botão \`[↩️ Desfazer]\` em todas as ações executadas caso o usuário queira reverter.
+   - NUNCA CRIE LANÇAMENTOS QUANDO O USUÁRIO ESTIVER APENAS PERGUNTANDO SE ALGO FOI REGISTRADO, RECLAMANDO OU PEDINDO VERIFICAÇÃO ("checa", "não registrou", "cadê", "registra direito", "confere"). Nesses casos, use \`query_financial_data\` para consultar o extrato no banco e mostrar os registros reais com ID, data e saldo, SEM criar duplicatas!
 3. PRECISÃO DE VALORES, DATAS DE VENCIMENTO E CONTAS:
    - O campo \`amount\` deve ser EXATAMENTE o valor informado pelo usuário.
    - Diferencie com atenção as contas da família: "Itaú PJ" (ID 7), "Itaú Personalite" (ID 6), "ML - COFRE" (ID 9) e "Bradesco" (ID 11).
@@ -488,6 +489,52 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
     };
   }
 
+  // 0B. Comando de Desfazer / Reverter ("desfaz", "desfazer", "desfaça", "reverte", "estorna", "cancela isso", "deafazer", "desfaz essa despesa")
+  const isUndoIntent = /\b(desfaz(?:er|a)?|deafazer|undo|estorn(?:ar|e)?|revert(?:er|a)?|volta atr[aá]s|cancela isso|desfaz\s+(?:essa|esse|o|a)?\s*(?:despesa|lancamento|operacao)?)\b/i.test(q);
+  if (isUndoIntent) {
+    const match = text.match(/#?(\d+)/);
+    let targetLogId = match ? parseInt(match[1], 10) : null;
+    if (!targetLogId) {
+      const recentLogs = await db.selectRows('morgan_action_logs', { order: 'id.desc', limit: '10' });
+      const lastExec = (recentLogs || []).find(l => l.status === 'executed');
+      if (lastExec) targetLogId = lastExec.id;
+    }
+    if (targetLogId) {
+      const res = await engine.undoExecutedAction(targetLogId);
+      return {
+        reply: res.ok ? res.summary : `⚠️ ${res.error}`,
+        actions: [],
+        engineUsed: 'native-autonomous'
+      };
+    } else {
+      return {
+        reply: '⚠️ **Nenhuma ação recente encontrada para desfazer.**',
+        actions: [],
+        engineUsed: 'native-autonomous'
+      };
+    }
+  }
+
+  // 0C. Checagem / Verificação de Lançamentos ("checa por favor", "não registrou", "não foi registrada", "cadê a despesa", "confere", "extrato", "verifique os lançamentos")
+  const isCheckIntent = /\b(checa|cheque|confere|verifiq|onde est[aá]|cad[eê]|n[aã]o registrou|n[aã]o foi registrad|n[aã]o constou|extrato|ultimos lancamentos)\b/i.test(q);
+  if (isCheckIntent && !q.includes('lance') && !q.includes('gastei') && !q.includes('comprei')) {
+    const recentTxs = await db.selectRows('transactions', { order: 'id.desc', limit: '5' });
+    const ctxSnapshot = await engine.buildMorganRichContext();
+    const allAccounts = ctxSnapshot.raw.accounts || [];
+    const lines = (recentTxs || []).map(t => {
+      const acc = allAccounts.find(a => Number(a.id) === Number(t.account_id));
+      const accName = acc ? acc.name : (t.card_id ? 'Cartão' : 'Conta');
+      const statusStr = t.is_effective ? '✅ Efetivado' : '⏳ Pendente';
+      return `• [ID #${t.id}] **${t.description}**: ${engine.formatBRL(t.amount)} em **${accName}** (${t.date}) — ${statusStr}`;
+    }).join('\n');
+
+    return {
+      reply: `📋 **Auditoria de Lançamentos Recentes — CFO Morgan**\n\nConsultei a base de dados em tempo real. Aqui estão os registros mais recentes processados:\n\n${lines || '• Nenhum lançamento encontrado.'}\n\n*Todos os lançamentos acima já estão sincronizados no sistema e refletidos nos saldos bancários.*`,
+      actions: [],
+      engineUsed: 'native-autonomous'
+    };
+  }
+
   const ctx = await engine.buildMorganRichContext();
   const { accounts, cards } = ctx.raw;
 
@@ -577,7 +624,10 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
       .replace(/\s+/g, ' ')
       .trim();
 
-    if (isFixedTarget) {
+    const matchedFixed = fixedItems.find(f => cleanTargetDesc.length >= 3 && engine.normalizeStr(f.description).includes(engine.normalizeStr(cleanTargetDesc)));
+    const asksPermanentCancel = q.includes('cancela') || q.includes('tira') || q.includes('permanent') || q.includes('nunca mais') || q.includes('nao tenho mais');
+
+    if (isFixedTarget || (matchedFixed && asksPermanentCancel)) {
       const args = idMatch
         ? { fixed_item_id: parseInt(idMatch[1], 10), also_delete_current_month_tx: true }
         : { description: cleanTargetDesc, delete_all_matching: true, also_delete_current_month_tx: true };
@@ -796,18 +846,9 @@ async function runLocalAutonomousParserAndReasoning(userText, options = {}) {
     };
   }
 
-  // Fallback cordial e objetivo (em vez de despejar relatório gigante quando a mensagem é curta)
-  if (text.length <= 35) {
-    return {
-      reply: buildQuickGreetingReply(senderName),
-      actions: [],
-      engineUsed: 'native-autonomous'
-    };
-  }
-
-  const briefing = await engine.buildExecutiveBriefingText(ctx);
+  // 10. Fallback contextual e elegante (evita despejar briefing inesperadamente)
   return {
-    reply: briefing.text,
+    reply: `Entendido, ${senderName}. Não identifiquei uma instrução direta de lançamento ou alteração financeira nesta mensagem.\n\n💡 **Comandos rápidos que posso executar:**\n• 📋 **Auditar lançamentos:** *"Checa meus últimos lançamentos"*\n• 💰 **Consultar saldos:** *"Como estão nossos saldos?"*\n• 💸 **Lançar gasto:** *"Lance 25,00 de padaria no Itaú Personalite"*\n• ↩️ **Desfazer última ação:** *"Desfaz"*`,
     actions: [],
     engineUsed: 'native-autonomous'
   };
@@ -827,16 +868,32 @@ async function processMorganMessage({
 }) {
   const cleanInputText = String(text || '').trim();
 
-  // FAST-PATH INSTANTÂNEO (< 20ms): Saudações simples ("oi?", "olá", "tudo bem?", "morgan?")
-  if (!media && isSimpleGreetingMessage(cleanInputText)) {
-    const fastReply = buildQuickGreetingReply(senderName);
-    await appendConversationTurn(channel, chatId, 'user', cleanInputText || 'Olá');
-    await appendConversationTurn(channel, chatId, 'model', fastReply, []);
-    return {
-      reply: fastReply,
-      actions: [],
-      engineUsed: 'fast-greeting'
-    };
+  // FAST-PATH INSTANTÂNEO (< 30ms): Saudações simples, Desfazer ou Auditoria de Lançamentos
+  if (!media) {
+    if (isSimpleGreetingMessage(cleanInputText)) {
+      const fastReply = buildQuickGreetingReply(senderName);
+      await appendConversationTurn(channel, chatId, 'user', cleanInputText || 'Olá');
+      await appendConversationTurn(channel, chatId, 'model', fastReply, []);
+      return {
+        reply: fastReply,
+        actions: [],
+        engineUsed: 'fast-greeting'
+      };
+    }
+
+    const normText = engine.normalizeStr(cleanInputText);
+    const isFastUndo = /\b(desfaz(?:er|a)?|deafazer|undo|estorn(?:ar|e)?|revert(?:er|a)?|volta atr[aá]s|cancela isso|desfaz\s+(?:essa|esse|o|a)?\s*(?:despesa|lancamento)?)\b/i.test(normText);
+    const isFastCheck = /\b(checa|cheque|confere|verifiq|onde est[aá]|cad[eê]|n[aã]o registrou|n[aã]o foi registrad|n[aã]o constou|extrato|ultimos lancamentos)\b/i.test(normText) && !normText.includes('lance') && !normText.includes('gastei');
+
+    if (isFastUndo || isFastCheck) {
+      await appendConversationTurn(channel, chatId, 'user', cleanInputText);
+      const fastResult = await runLocalAutonomousParserAndReasoning(cleanInputText, { channel, chatId, senderName });
+      await appendConversationTurn(channel, chatId, 'model', fastResult.reply, fastResult.actions);
+      return {
+        ...fastResult,
+        engineUsed: isFastUndo ? 'fast-undo' : 'fast-audit'
+      };
+    }
   }
 
   const settings = await db.getMorganSettings();
@@ -892,15 +949,11 @@ async function processMorganMessage({
     parts: currentUserParts
   });
 
-  // Priorizar modelos Flash de baixa latência (~700ms) com fallback resiliente para todas as versões suportadas
+  // Priorizar modelos Flash ativos de alta velocidade e alta quota (1500 req/dia)
   const candidateModels = [
-    settings.gemini_model,
     'gemini-3.5-flash-lite',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-flash-lite-latest',
-    'gemini-3.8-flash'
+    (settings.gemini_model && !settings.gemini_model.includes('3.8') && !settings.gemini_model.includes('2.')) ? settings.gemini_model : null,
+    'gemini-3.5-flash'
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 
   const executedActions = [];
@@ -914,13 +967,15 @@ async function processMorganMessage({
       let responseData = null;
       let lastErr = null;
 
-      for (const modelName of candidateModels) {
+      const modelsToTry = [activeModel, ...candidateModels].filter((v, i, a) => v && a.indexOf(v) === i);
+
+      for (const modelName of modelsToTry) {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
           const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(6500),
+            signal: AbortSignal.timeout(15000),
             body: JSON.stringify({
               systemInstruction: {
                 parts: [{ text: systemInstruction }]
@@ -941,6 +996,7 @@ async function processMorganMessage({
           } else {
             const errJson = await res.json().catch(() => ({}));
             lastErr = new Error(errJson.error?.message || `HTTP ${res.status}`);
+            console.warn(`[MORGAN-AGENT] Modelo ${modelName} retornou ${res.status} (${lastErr.message}). Alternando ladder...`);
           }
         } catch (fetchErr) {
           lastErr = fetchErr;

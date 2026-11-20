@@ -285,8 +285,8 @@ async function handleIncomingBaileysMessage(msg, baileysMod) {
 
     const lowerCmd = rawText.toLowerCase().trim().replace(/^\//, '');
 
-    // 4. Comandos Rápidos de Governança: "desfazer", "confirmar", "cancelar"
-    if (/^(desfazer|undo)(?:\s+#?(\d+))?$/i.test(lowerCmd)) {
+    // 4. Comandos Rápidos de Governança: "desfazer", "desfaz", "confirmar", "cancelar"
+    if (/^(desfaz(?:er|a)?|deafazer|undo|estorn(?:ar|e)?|revert(?:er|a)?|volta atr[aá]s|cancela isso|desfaz\s+(?:essa|esse|o|a)?\s*(?:despesa|lancamento|operacao)?)(?:\s+#?(\d+))?$/i.test(lowerCmd)) {
       const match = lowerCmd.match(/(\d+)/);
       let targetLogId = match ? parseInt(match[1], 10) : null;
       if (!targetLogId) {

@@ -178,6 +178,7 @@ function saveLocalSnapshot() {
       categories: state.categories || [],
       tags: state.tags || [],
       fixedItems: state.fixedItems || [],
+      dismissedRecurrences: state.dismissedRecurrences || [],
       transactions: (state.transactions || []).slice(0, 300),
       paidCardBills: state.paidCardBills || [],
       users: state.users || []
@@ -201,6 +202,7 @@ function loadLocalSnapshot() {
     state.categories = snapshot.categories || [];
     state.tags = snapshot.tags || [];
     state.fixedItems = snapshot.fixedItems || [];
+    state.dismissedRecurrences = snapshot.dismissedRecurrences || [];
     state.transactions = snapshot.transactions || [];
     state.paidCardBills = snapshot.paidCardBills || [];
     if (Array.isArray(snapshot.users) && snapshot.users.length > 0) {
@@ -883,20 +885,30 @@ async function autoGenerateRecurringTransactions() {
   const currentMonth = today.getMonth(); // 0-indexed
 
   const payloadsToInsert = [];
+  const dismissedList = Array.isArray(state.dismissedRecurrences) ? state.dismissedRecurrences : [];
 
   for (const item of state.fixedItems) {
     // Apenas despesas recorrentes
     if (item.type !== 'expense') continue;
 
-    // Verificar se já existe uma transação no mês/ano correspondente com o ID da recorrência [R:ID]
+    // 1. Verificar se esta recorrência foi explicitamente cancelada/excluída para o mês atual
+    const isDismissed = dismissedList.some(d =>
+      Number(d.fixed_item_id) === Number(item.id) &&
+      Number(d.year) === currentYear &&
+      Number(d.month) === currentMonth
+    );
+    if (isDismissed) continue;
+
+    // 2. Verificar se já existe uma transação no mês/ano correspondente com o ID da recorrência [R:ID]
     const recurrenceTag = `[R:${item.id}]`;
-    const alreadyExists = state.transactions.some(t => {
+    const alreadyExists = (state.transactions || []).some(t => {
+      if (!t.description || !t.description.includes(recurrenceTag)) return false;
+
       const isMethodMatch = item.card_id 
         ? (t.payment_method === 'card' || t.paymentMethod === 'card') 
-        : (t.payment_method === 'account' || t.paymentMethod === 'account');
+        : (t.payment_method === 'account' || t.paymentMethod === 'account' || t.payment_method === 'transfer');
       
       if (!isMethodMatch) return false;
-      if (!t.description || !t.description.includes(recurrenceTag)) return false;
 
       // Verificar se a transação é do mesmo mês e ano
       const txDate = new Date(t.date + 'T12:00:00');
@@ -964,7 +976,8 @@ async function loadAllData() {
       txRes,
       paidRes,
       userRes,
-      backupRes
+      backupRes,
+      dismissedRes
     ] = await Promise.allSettled([
       state.supabase.from('accounts').select('*').order('name'),
       state.supabase.from('cards').select('*').order('name'),
@@ -975,7 +988,8 @@ async function loadAllData() {
       state.supabase.from('paid_card_bills').select('*'),
       state.supabase.from('app_users').select('id, name, email, is_admin, only_self_data').order('name'),
       // Projeção seletiva: seleciona apenas metadados do backup (evita transferir megabytes de jsonb pela rede)
-      state.supabase.from('app_backups').select('id, created_at').order('created_at', { ascending: false })
+      state.supabase.from('app_backups').select('id, created_at').order('created_at', { ascending: false }),
+      state.supabase.from('dismissed_recurrences').select('*')
     ]);
 
     // Extração segura e tolerante a falhas dos dados (preserva estado anterior se houver falha de rede)
@@ -993,6 +1007,11 @@ async function loadAllData() {
     }
     if (fixedRes.status === 'fulfilled' && !fixedRes.value.error && Array.isArray(fixedRes.value.data)) {
       state.fixedItems = fixedRes.value.data;
+    }
+    if (dismissedRes.status === 'fulfilled' && !dismissedRes.value.error && Array.isArray(dismissedRes.value.data)) {
+      state.dismissedRecurrences = dismissedRes.value.data;
+    } else if (!state.dismissedRecurrences) {
+      state.dismissedRecurrences = [];
     }
     if (txRes.status === 'fulfilled' && !txRes.value.error && Array.isArray(txRes.value.data)) {
       state.transactions = txRes.value.data;
@@ -1232,19 +1251,50 @@ function calculateForecast(accounts, cards, fixedItems, transactions) {
     const totalFixed = m.fixedExpenses.reduce((sum, item) => sum + item.amount, 0);
     const totalCards = m.cardBills.reduce((sum, item) => sum + item.amount, 0);
 
-    m.totalIncomes = totalInc;
-    m.totalExpenses = totalFixed + totalCards;
-    m.netSurplus = totalInc - m.totalExpenses;
+    // Contabilizar despesas e receitas variáveis em conta deste mês (débito, Pix, avulsos em conta)
+    let variableAccountExpenses = 0;
+    let variableAccountIncomes = 0;
+    let pendingVariableAccountExpenses = 0;
+
+    transactions.forEach(t => {
+      const isCard = t.payment_method === 'card' || t.paymentMethod === 'card';
+      if (isCard) return; // Cartões de crédito já consolidados em cardBills
+      if (t.description && String(t.description).includes('[R:')) return; // Recorrências fixas já em fixedExpenses
+      if (t.type === 'transfer') return;
+
+      const txDate = new Date(t.date + 'T12:00:00');
+      if (txDate.getFullYear() === m.year && txDate.getMonth() === m.month) {
+        const amt = Math.abs(parseFloat(t.amount || 0));
+        const isEff = t.is_effective === true || t.isEffective === true;
+        if (t.type === 'income') {
+          variableAccountIncomes += amt;
+        } else {
+          variableAccountExpenses += amt;
+          if (!isEff) {
+            pendingVariableAccountExpenses += amt;
+          }
+        }
+      }
+    });
+
+    m.fixedExpensesTotal = totalFixed;
+    m.cardsTotal = totalCards;
+    m.variableExpenses = variableAccountExpenses;
+    m.variableIncomes = variableAccountIncomes;
+
+    m.totalIncomes = totalInc + variableAccountIncomes;
+    m.totalExpenses = totalFixed + totalCards + variableAccountExpenses;
+    m.netSurplus = m.totalIncomes - m.totalExpenses;
     
     // Na projeção de caixa (runningBalance):
-    // No mês corrente (mês 0), as despesas fixas já efetivadas já foram descontadas do currentTotalBalance.
-    // Portanto, descontamos apenas as despesas fixas pendentes (não abatidas do saldo de partida).
+    // No mês corrente (mês 0), as saídas já efetivadas já foram abatidas do currentTotalBalance.
+    // Portanto, descontamos apenas saídas pendentes + cartões a quitar.
     const pendingFixedExpenses = m.fixedExpenses
       .filter(item => !item.alreadyDeductedFromBalance)
       .reduce((sum, item) => sum + item.amount, 0);
 
     const cashImpact = (idx === 0)
-      ? (totalInc - (pendingFixedExpenses + totalCards))
+      ? (m.totalIncomes - (pendingFixedExpenses + totalCards + pendingVariableAccountExpenses))
       : m.netSurplus;
 
     runningBalance += cashImpact;
@@ -1360,6 +1410,11 @@ function renderDashboard() {
             <span>Cartões:</span>
             <span class="red-neon">-${formatCurrency(m.cardBills.reduce((sum, c) => sum + c.amount, 0))}</span>
           </div>
+          ${(m.variableExpenses || 0) > 0 ? `
+          <div class="forecast-val-row" style="margin-bottom: 2px;">
+            <span>Débito/Pix:</span>
+            <span class="red-neon">-${formatCurrency(m.variableExpenses)}</span>
+          </div>` : ''}
           ${subtotalsHtml}
         </div>
         <div class="forecast-card-sobra">
@@ -1475,6 +1530,12 @@ function renderTransactionsTable() {
     }
 
     return matchesPaymentMethod && matchesCategory && matchesMinVal && matchesDate;
+  });
+
+  // Ordenação prioritária por data desc e ID desc (novos lançamentos do mesmo dia sempre no topo)
+  filtered.sort((a, b) => {
+    if (a.date !== b.date) return (b.date || '').localeCompare(a.date || '');
+    return (b.id || 0) - (a.id || 0);
   });
 
   // Controlar Paginação com Limite Configurável
@@ -2890,19 +2951,79 @@ window.toggleBillDetails = function(cardIdWithMonth) {
 };
 
 async function deleteTransaction(id) {
-  if (!confirm('Deseja realmente remover esta transação? Isso reajustará os saldos.')) return;
-  try {
-    const txToDelete = state.transactions.find(t => t.id == id);
-    if (!txToDelete) return;
+  const txToDelete = (state.transactions || []).find(t => t.id == id);
+  if (!txToDelete) return;
 
+  const rMatch = String(txToDelete.description || '').match(/\[R:(\d+)\]/);
+  const isRecurring = Boolean(rMatch);
+  let deleteMode = 'single'; // 'single', 'single_recurring', 'permanent_fixed'
+
+  if (isRecurring) {
+    const fixedId = parseInt(rMatch[1], 10);
+    const fixedItem = (state.fixedItems || []).find(f => Number(f.id) === fixedId);
+    const fixedDesc = fixedItem ? fixedItem.description : cleanDescription(txToDelete.description);
+
+    const removeThisMonthOnly = confirm(
+      `Esta é uma despesa recorrente fixa ("${fixedDesc}").\n\n` +
+      `• Pressione [OK] para REMOVER APENAS DESTE MÊS (a conta continuará existindo nos próximos meses)\n` +
+      `• Pressione [CANCELAR] para opções de cancelamento permanente...`
+    );
+
+    if (removeThisMonthOnly) {
+      deleteMode = 'single_recurring';
+    } else {
+      const cancelPermanently = confirm(
+        `Deseja CANCELAR PERMANENTEMENTE a conta fixa "${fixedDesc}" de todos os meses futuros?\n\n` +
+        `• Pressione [OK] para EXCLUIR PERMANENTEMENTE das contas fixas\n` +
+        `• Pressione [CANCELAR] para NÃO FAZER NADA (abortar exclusão)`
+      );
+      if (cancelPermanently) {
+        deleteMode = 'permanent_fixed';
+      } else {
+        return; // Operação abortada
+      }
+    }
+  } else {
+    if (!confirm('Deseja realmente remover esta transação? Isso reajustará os saldos se estiver efetivada.')) return;
+  }
+
+  try {
+    showBgJobToast('Excluindo lançamento...');
+
+    // 1. Se o usuário optou por cancelar permanentemente a conta fixa
+    if (deleteMode === 'permanent_fixed' && rMatch) {
+      const fixedId = parseInt(rMatch[1], 10);
+      await state.supabase.from('fixed_items').delete().eq('id', fixedId);
+      state.fixedItems = (state.fixedItems || []).filter(f => Number(f.id) !== fixedId);
+    } 
+    // 2. Se for exclusão apenas da ocorrência deste mês para despesa recorrente
+    else if (deleteMode === 'single_recurring' && rMatch) {
+      const fixedId = parseInt(rMatch[1], 10);
+      const txDate = new Date((txToDelete.date || '') + 'T12:00:00');
+      const year = isNaN(txDate.getFullYear()) ? new Date().getFullYear() : txDate.getFullYear();
+      const month = isNaN(txDate.getMonth()) ? new Date().getMonth() : txDate.getMonth();
+
+      const dismissal = { fixed_item_id: fixedId, year, month };
+      await state.supabase.from('dismissed_recurrences').insert([dismissal]);
+      if (!state.dismissedRecurrences) state.dismissedRecurrences = [];
+      state.dismissedRecurrences.push(dismissal);
+    }
+
+    // 3. Excluir a transação da tabela transactions
     const { error } = await state.supabase.from('transactions').delete().eq('id', id);
     if (error) throw error;
 
+    // 4. Estornar saldo bancário caso a transação já estivesse efetivada
     await revertTransactionBalance(txToDelete);
 
-    loadAllData();
+    // 5. Atualizar estado em memória e persistir imediatamente no snapshot local
+    state.transactions = (state.transactions || []).filter(t => t.id != id);
+    saveLocalSnapshot();
+
+    await loadAllData();
+    showBgJobToast('Lançamento excluído com sucesso!', 2500, true);
   } catch (err) {
-    alert(err.message);
+    alert('Erro ao excluir transação: ' + err.message);
   }
 }
 
@@ -2911,6 +3032,8 @@ async function deleteAccount(id) {
   try {
     const { error } = await state.supabase.from('accounts').delete().eq('id', id);
     if (error) throw error;
+    state.accounts = (state.accounts || []).filter(a => a.id != id);
+    saveLocalSnapshot();
     loadAllData();
   } catch (err) {
     alert(err.message);
@@ -2922,6 +3045,8 @@ async function deleteCard(id) {
   try {
     const { error } = await state.supabase.from('cards').delete().eq('id', id);
     if (error) throw error;
+    state.cards = (state.cards || []).filter(c => c.id != id);
+    saveLocalSnapshot();
     loadAllData();
   } catch (err) {
     alert(err.message);
@@ -2929,11 +3054,27 @@ async function deleteCard(id) {
 }
 
 async function deleteFixed(id) {
-  if (!confirm('Excluir este item de receita/despesa recorrente?')) return;
+  const item = (state.fixedItems || []).find(f => f.id == id);
+  const desc = item ? item.description : 'este item';
+  if (!confirm(`Excluir permanentemente a conta fixa "${desc}"? Isso também removerá os lançamentos pendentes vinculados deste mês.`)) return;
   try {
+    showBgJobToast('Excluindo conta fixa...');
     const { error } = await state.supabase.from('fixed_items').delete().eq('id', id);
     if (error) throw error;
-    loadAllData();
+
+    // Remover também da tabela de transações qualquer lançamento pendente deste item no mês corrente
+    const rTag = `[R:${id}]`;
+    const pendingTxs = (state.transactions || []).filter(t => !t.is_effective && String(t.description || '').includes(rTag));
+    for (const ptx of pendingTxs) {
+      await state.supabase.from('transactions').delete().eq('id', ptx.id);
+    }
+
+    state.fixedItems = (state.fixedItems || []).filter(f => f.id != id);
+    state.transactions = (state.transactions || []).filter(t => !pendingTxs.some(p => p.id === t.id));
+    saveLocalSnapshot();
+
+    await loadAllData();
+    showBgJobToast('Conta fixa e lançamentos vinculados excluídos!', 2500, true);
   } catch (err) {
     alert(err.message);
   }
@@ -3912,11 +4053,19 @@ document.getElementById('new-transaction-form').addEventListener('submit', async
     };
 
     const txId = document.getElementById('tx-id').value;
+    const oldTx = txId ? (state.transactions || []).find(tx => tx.id == txId) : null;
+
+    // Preservar tag de recorrência se estiver editando uma transação recorrente existente
+    if (oldTx) {
+      const oldRMatch = String(oldTx.description || '').match(/\[R:\d+\]/);
+      if (oldRMatch && !newTx.description.includes(oldRMatch[0])) {
+        newTx.description = `${newTx.description} ${oldRMatch[0]}`;
+      }
+    }
 
     if (txId) {
       // MODO EDIÇÃO: Atualização com estorno seguro e saldo atômico no servidor
       showBgJobToast('Atualizando lançamento...');
-      const oldTx = state.transactions.find(tx => tx.id == txId);
       if (oldTx) {
         await revertTransactionBalance(oldTx);
       }
